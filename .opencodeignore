@@ -1,0 +1,33 @@
+# Dependencias instaladas
+**/node_modules/
+
+# Artefactos de build y compilación
+**/dist/
+**/build/
+**/.dart_tool/
+**/__pycache__/
+**/.pytest_cache/
+**/android/.gradle/
+
+# Archivos generados por herramientas
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.metadata
+**/*.iml
+
+# Lockfiles y salidas no editables manualmente
+**/package-lock.json
+**/yarn.lock
+**/pnpm-lock.yaml
+**/pubspec.lock
+
+# Configuración de IDE/sistema
+.vscode/
+**/.idea/
+**/Thumbs.db
+**/.DS_Store
+
+# Documentación/contexto no fuente
+README
+**/README.md
+Estructura

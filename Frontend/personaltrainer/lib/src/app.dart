@@ -1,0 +1,72 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'core/providers/auth_state_provider.dart';
+import 'core/providers/routine_provider.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/screens/auth_page.dart';
+import 'features/home/presentation/screens/home_page.dart';
+import 'features/onboarding/presentation/screens/onboarding_page.dart';
+import 'services/api_service.dart';
+
+class PersonalTrainerApp extends StatefulWidget {
+  const PersonalTrainerApp({super.key});
+
+  @override
+  State<PersonalTrainerApp> createState() => _PersonalTrainerAppState();
+}
+
+class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
+  late bool _isLoggedIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLoggedIn = ApiService.isAuthenticated();
+  }
+
+  void _handleLogin() {
+    setState(() {
+      _isLoggedIn = true;
+    });
+  }
+
+  void _handleLogout() {
+    setState(() {
+      _isLoggedIn = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthStateProvider()),
+        ChangeNotifierProvider(create: (_) => RoutineProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Personal TrAIner',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: _isLoggedIn
+            ? HomePage(onSessionClosed: _handleLogout)
+            : AuthPage(onLoginSuccess: _handleLogin),
+        routes: {
+          '/login': (context) => AuthPage(onLoginSuccess: _handleLogin),
+          '/home': (context) => HomePage(onSessionClosed: _handleLogout),
+          '/onboarding': (context) => const OnboardingPage(),
+        },
+        onGenerateRoute: (settings) {
+          if (settings.name == '/') {
+            return MaterialPageRoute(
+              builder: (context) => _isLoggedIn
+                  ? HomePage(onSessionClosed: _handleLogout)
+                  : AuthPage(onLoginSuccess: _handleLogin),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+  }
+}

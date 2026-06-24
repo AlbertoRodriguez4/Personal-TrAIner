@@ -1,0 +1,112 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class Actualizacion1776525684095 implements MigrationInterface {
+    name = 'Actualizacion1776525684095'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "usuario_id"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "fecha_comida"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "clasificacion_nova"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "distribucion_macronutrientes_volumetrica"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "resumen_semantico_ia"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "usuario_id"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "id_pasarela_pago"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "estado_suscripcion"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "usuario_id"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "porcentaje_grasa_estimado"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "tejido_adiposo_visceral_estimado"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "asimetria_muscular_detectada"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "vectores_esqueleticos"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "usuario_id"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "volumen_vat"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "relacion_androide_ginoide"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "indice_masa_libre_grasa_ffmi"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "t_scores_oseos"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "payload_fhir"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "usuario_id"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "fecha_inicio"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "fecha_fin"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "carga_trabajo_calculada"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "user_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "fecha_registro" date NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "calorias_consumidas" integer NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "proteinas_g" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "carbohidratos_g" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "grasas_g" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "notas" text`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "user_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "plan" character varying(30) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "estado" character varying(30) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "fecha_inicio" date NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "fecha_fin" date NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "user_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "imagen_frontal_url" text NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "imagen_lateral_url" text NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "puntuacion_postura" numeric(5,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "analisis_ia" text NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "user_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "porcentaje_grasa" numeric(5,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "masa_muscular_kg" numeric(8,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "densidad_osea" numeric(6,3) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "user_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "fecha_programada" TIMESTAMP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "tipo_entrenamiento" character varying(50) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "ejercicios" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "estado" character varying(30) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "fecha_finalizacion" TIMESTAMP`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "fecha_finalizacion"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "estado"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "ejercicios"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "tipo_entrenamiento"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "fecha_programada"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" DROP COLUMN "user_id"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "densidad_osea"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "masa_muscular_kg"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "porcentaje_grasa"`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" DROP COLUMN "user_id"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "analisis_ia"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "puntuacion_postura"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "imagen_lateral_url"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "imagen_frontal_url"`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" DROP COLUMN "user_id"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "fecha_fin"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "fecha_inicio"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "estado"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "plan"`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" DROP COLUMN "user_id"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "notas"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "grasas_g"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "carbohidratos_g"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "proteinas_g"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "calorias_consumidas"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "fecha_registro"`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" DROP COLUMN "user_id"`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "carga_trabajo_calculada" numeric(8,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "fecha_fin" TIMESTAMP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "fecha_inicio" TIMESTAMP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Sesiones_Entrenamiento" ADD "usuario_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "payload_fhir" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "t_scores_oseos" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "indice_masa_libre_grasa_ffmi" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "relacion_androide_ginoide" numeric(6,3) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "volumen_vat" numeric(8,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Densitometrias_DEXA" ADD "usuario_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "vectores_esqueleticos" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "asimetria_muscular_detectada" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "tejido_adiposo_visceral_estimado" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "porcentaje_grasa_estimado" numeric(6,2) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Evaluaciones_Posturales_Visuales" ADD "usuario_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "estado_suscripcion" character varying NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "id_pasarela_pago" character varying NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Facturacion_Suscripciones" ADD "usuario_id" uuid NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "resumen_semantico_ia" text NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "distribucion_macronutrientes_volumetrica" jsonb NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "clasificacion_nova" integer NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "fecha_comida" TIMESTAMP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "Registros_Nutricionales_Cualitativos" ADD "usuario_id" uuid NOT NULL`);
+    }
+
+}
