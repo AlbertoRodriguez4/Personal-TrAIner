@@ -1207,39 +1207,33 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
       context: context,
       barrierDismissible: false,
       builder: (c) => const AlertDialog(
-        title: Text('Buscando en tu móvil...'),
+        title: Text('Ejecutando diagnóstico profundo...'),
         content: SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
       ),
     );
+
     try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(days: 14));
-      final health = Health();
-      health.configure();
-      final types = [
-        HealthDataType.WORKOUT,
-        HealthDataType.STEPS,
-        HealthDataType.HEART_RATE,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
-        HealthDataType.DISTANCE_DELTA,
-      ];
-      String result = '';
-      for (var type in types) {
-        try {
-          final data = await health.getHealthDataFromTypes(startTime: start, endTime: now, types: [type]);
-          result += '${type.name}: ${data.length} reg.\n';
-        } catch (e) {
-          result += '${type.name}: ERROR\n';
-        }
-      }
+      final diagnosticData = await HealthService.runDiagnostic();
       if (!mounted) return;
       Navigator.pop(context); // cerrar cargando
+
+      String resultText = diagnosticData.entries
+          .map((e) => '${e.key}:\n${e.value}\n')
+          .join('\n');
+
       showDialog(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Datos en Health Connect'),
-          content: Text(result, style: const TextStyle(height: 1.5)),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('CERRAR'))],
+          title: const Text('Diagnóstico HC (90 días)'),
+          content: SingleChildScrollView(
+            child: Text(resultText, style: const TextStyle(height: 1.3, fontSize: 13)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('CERRAR'),
+            )
+          ],
         ),
       );
     } catch (e) {
