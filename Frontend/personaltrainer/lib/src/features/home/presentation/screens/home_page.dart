@@ -1691,6 +1691,7 @@ class _NutritionScreen extends StatefulWidget {
 
 class _NutritionScreenState extends State<_NutritionScreen> {
   bool _isLoadingAi = false;
+  Map<String, dynamic>? _lastScan;
 
   Future<void> _takePhoto() async {
     final picker = ImagePicker();
@@ -1707,11 +1708,13 @@ class _NutritionScreenState extends State<_NutritionScreen> {
 
       final aiResult = await ApiService.analyzeNutritionPhoto(base64Image, userId);
 
-      final kcal = (aiResult['calories'] as num?)?.toInt() ?? 0;
-      final p = (aiResult['protein_g'] as num?)?.toDouble() ?? 0.0;
-      final c = (aiResult['carbs_g'] as num?)?.toDouble() ?? 0.0;
-      final f = (aiResult['fat_g'] as num?)?.toDouble() ?? 0.0;
-      final foodName = aiResult['food_name']?.toString() ?? 'Análisis IA';
+      final kcal = (aiResult['calorias_consumidas'] as num?)?.toInt() ?? 0;
+      final p = (aiResult['proteinas_g'] as num?)?.toDouble() ?? 0.0;
+      final c = (aiResult['carbohidratos_g'] as num?)?.toDouble() ?? 0.0;
+      final f = (aiResult['grasas_g'] as num?)?.toDouble() ?? 0.0;
+      final foodName = 'Análisis IA'; // The notes are inside 'notas' which _ScanResultCard will read directly.
+      
+      _lastScan = aiResult;
 
       await ApiService.createNutritionLog(
         userId: userId,
