@@ -72,25 +72,13 @@ class HealthService {
       }
     }
 
+    // Pedir permisos siempre — Health Connect solo muestra diálogo si hace falta
+    await requestPermissions();
+
     final now = DateTime.now();
     final start = now.subtract(const Duration(days: 90));
 
     try {
-      // Comprobar permisos de WORKOUT específicamente
-      bool? hasPermissions = await _health.hasPermissions(
-        [HealthDataType.WORKOUT],
-        permissions: [HealthDataAccess.READ],
-      );
-
-      print("¿Tiene permiso WORKOUT? $hasPermissions");
-
-      if (hasPermissions != true) {
-        final granted = await requestPermissions();
-        if (!granted) {
-          print("Permisos denegados, no se puede leer WORKOUT");
-          return [];
-        }
-      }
 
       List<HealthDataPoint> healthData = await _health.getHealthDataFromTypes(
         startTime: start,
@@ -99,16 +87,13 @@ class HealthService {
       );
 
       print("===== DEBUG HEALTH CONNECT =====");
-      print("Registros brutos de entrenamientos: ${healthData.length}");
+      print("Registros brutos: ${healthData.length}");
       for (var data in healthData) {
-        print(" > Tipo: ${data.type}");
         if (data.value is WorkoutHealthValue) {
           final w = data.value as WorkoutHealthValue;
-          print("   Actividad: ${w.workoutActivityType}");
-          print("   Duración: ${w.totalDistance} m | ${w.totalEnergyBurned} kcal");
+          print(" > ${w.workoutActivityType} | ${data.dateFrom} → ${data.dateTo}");
+          print("   Fuente: ${data.sourceName} (${data.sourceId})");
         }
-        print("   Inicio: ${data.dateFrom} | Fin: ${data.dateTo}");
-        print("   Fuente: ${data.sourceName} (${data.sourceId})");
       }
       print("================================");
 
@@ -125,14 +110,9 @@ class HealthService {
   static Future<Map<String, List<HealthDataPoint>>> fetchWorkoutDetails(
       DateTime start, DateTime end) async {
     _ensureConfigured();
+    // Forzamos petición para esquivar el bug de hasPermissions de la librería
+    await requestPermissions();
     try {
-      bool? hasPermissions = await _health.hasPermissions(
-        [HealthDataType.HEART_RATE, HealthDataType.ACTIVE_ENERGY_BURNED],
-        permissions: [HealthDataAccess.READ, HealthDataAccess.READ],
-      );
-      if (hasPermissions != true) {
-        await requestPermissions();
-      }
 
       List<HealthDataPoint> hrData = await _health.getHealthDataFromTypes(
         startTime: start,
