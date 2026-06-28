@@ -770,10 +770,63 @@ class _Row extends StatelessWidget {
       );
 }
 
-class _WorkoutCard extends StatelessWidget {
+class _WorkoutCard extends StatefulWidget {
   const _WorkoutCard({required this.routinesCount, required this.onTap});
   final int routinesCount;
   final VoidCallback onTap;
+
+  @override
+  State<_WorkoutCard> createState() => _WorkoutCardState();
+}
+
+class _WorkoutCardState extends State<_WorkoutCard> {
+  bool _isLoading = true;
+  HealthDataPoint? _latestWorkout;
+  String _bpm = '--';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLatestWorkout();
+  }
+
+  Future<void> _fetchLatestWorkout() async {
+    final allWorkouts = await HealthService.fetchWorkouts();
+    final validWorkouts = allWorkouts.where((w) {
+      if (w.value is WorkoutHealthValue) {
+        return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
+      }
+      return true;
+    }).toList();
+    
+    validWorkouts.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
+
+    if (validWorkouts.isNotEmpty) {
+      final latest = validWorkouts.first;
+      if (mounted) {
+        setState(() {
+          _latestWorkout = latest;
+          _isLoading = false;
+        });
+      }
+
+      final details = await HealthService.fetchWorkoutDetails(latest.dateFrom, latest.dateTo);
+      final hrData = details['heart_rate'] ?? [];
+      if (hrData.isNotEmpty) {
+        final hrValues = hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
+        final avg = hrValues.reduce((a, b) => a + b) / hrValues.length;
+        if (mounted) {
+          setState(() {
+            _bpm = avg.round().toString();
+          });
+        }
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -783,50 +836,91 @@ class _WorkoutCard extends StatelessWidget {
     final mutedFg = DesignTokens.mutedForeground(b);
     final surface1 = DesignTokens.surface1(b);
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('ÚLTIMA ACTIVIDAD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(999)),
-                child: Row(
-                  children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFFF6900), shape: BoxShape.circle)),
-                    const SizedBox(width: 4),
-                    const Text('XIAOMI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
-                  ],
+    if (_isLoading) {
+      return Container(
+        height: 180,
+        decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(28)),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_latestWorkout == null) {
+      return const SizedBox.shrink();
+    }
+
+    final w = _latestWorkout!;
+    final duration = w.dateTo.difference(w.dateFrom);
+    final min = duration.inMinutes;
+
+    int kcal = 0;
+    double dist = 0.0;
+    String typeName = 'Entrenamiento';
+
+    if (w.value is WorkoutHealthValue) {
+      final workout = w.value as WorkoutHealthValue;
+      kcal = (workout.totalEnergyBurned ?? 0).toInt();
+      dist = (workout.totalDistance ?? 0) / 1000;
+      typeName = HealthService.translateWorkoutActivityType(workout.workoutActivityType);
+    }
+
+    final now = DateTime.now();
+    final isToday = w.dateFrom.year == now.year && w.dateFrom.month == now.month && w.dateFrom.day == now.day;
+    final isYesterday = w.dateFrom.year == now.year && w.dateFrom.month == now.month && w.dateFrom.day == now.day - 1;
+    String dateStr = isToday ? 'Hoy' : (isYesterday ? 'Ayer' : '${w.dateFrom.day}/${w.dateFrom.month}');
+    String timeStr = '${w.dateFrom.hour.toString().padLeft(2, '0')}:${w.dateFrom.minute.toString().padLeft(2, '0')}';
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => WorkoutDetailPage(workout: w)),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: DesignTokens.shadowCard(b),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('ÚLTIMA ACTIVIDAD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(999)),
+                  child: Row(
+                    children: [
+                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFFF6900), shape: BoxShape.circle)),
+                      const SizedBox(width: 4),
+                      const Text('XIAOMI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text('Carrera al aire libre', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
-          const SizedBox(height: 4),
-          Text('Hoy · 07:12', style: TextStyle(fontSize: 13, color: mutedFg, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(child: _StatPill(val: '38 min', sub: 'DURACIÓN', surface1: surface1, fg: fg, mutedFg: mutedFg)),
-              const SizedBox(width: 8),
-              Expanded(child: _StatPill(val: '152', sub: 'BPM MED', surface1: surface1, fg: fg, mutedFg: mutedFg)),
-              const SizedBox(width: 8),
-              Expanded(child: _StatPill(val: '412', sub: 'KCAL', surface1: surface1, fg: fg, mutedFg: mutedFg)),
-              const SizedBox(width: 8),
-              Expanded(child: _StatPill(val: '6.4 km', sub: 'DIST.', surface1: surface1, fg: fg, mutedFg: mutedFg)),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(typeName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+            const SizedBox(height: 4),
+            Text('$dateStr · $timeStr', style: TextStyle(fontSize: 13, color: mutedFg, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(child: _StatPill(val: '$min min', sub: 'DURACIÓN', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                const SizedBox(width: 8),
+                Expanded(child: _StatPill(val: _bpm, sub: 'BPM MED', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                const SizedBox(width: 8),
+                Expanded(child: _StatPill(val: kcal > 0 ? '$kcal' : '--', sub: 'KCAL', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                const SizedBox(width: 8),
+                Expanded(child: _StatPill(val: dist > 0 ? '${dist.toStringAsFixed(1)} km' : '--', sub: 'DIST.', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
