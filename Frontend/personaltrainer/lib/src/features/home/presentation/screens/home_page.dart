@@ -1830,8 +1830,8 @@ class _MacrosOverview extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF1F5F9), 
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 6),
+                  color: b == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                  border: Border.all(color: b == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 6),
                 ),
                 alignment: Alignment.center,
                 child: Column(
@@ -2052,44 +2052,11 @@ class _ScanResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(LucideIcons.image, size: 20, color: fg.withOpacity(0.7)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('ÚLTIMA COMIDA ESCANEADA',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-                    const SizedBox(height: 2),
-                    Text(foodName,
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text('$kcal kcal añadidas',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF047857))),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          Text('Última Comida Escaneada',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg, letterSpacing: -0.5)),
+          const SizedBox(height: 4),
+          Text(foodName,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: mutedFg)),
           if (notas.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
