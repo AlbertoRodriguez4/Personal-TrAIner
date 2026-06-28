@@ -1215,6 +1215,7 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
       final now = DateTime.now();
       final start = now.subtract(const Duration(days: 14));
       final health = Health();
+      health.configure();
       final types = [
         HealthDataType.WORKOUT,
         HealthDataType.STEPS,
