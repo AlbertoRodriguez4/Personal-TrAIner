@@ -1715,13 +1715,12 @@ class _NutritionScreenState extends State<_NutritionScreen> {
 
       await ApiService.createNutritionLog(
         userId: userId,
-        foodName: foodName,
-        calories: kcal,
-        proteinG: p,
-        carbsG: c,
-        fatG: f,
-        logDate: DateTime.now().toIso8601String(),
-        mealType: 'snack',
+        fechaRegistro: DateTime.now().toIso8601String(),
+        caloriasConsumidas: kcal,
+        proteinasG: p,
+        carbohidratosG: c,
+        grasasG: f,
+        notas: foodName,
       );
 
       if (mounted) {
