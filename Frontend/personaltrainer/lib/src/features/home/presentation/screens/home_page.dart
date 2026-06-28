@@ -1767,7 +1767,7 @@ class _NutritionScreenState extends State<_NutritionScreen> {
                 )
               : _CameraViewer(onTap: _takePhoto),
           const SizedBox(height: 16),
-          _ScanResultCard(),
+          _ScanResultCard(scanResult: _lastScan),
         ],
       ),
     );
@@ -1781,6 +1781,23 @@ class _MacrosOverview extends StatelessWidget {
     final card = DesignTokens.card(b);
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
+
+    final summary = context.watch<DailySummaryProvider>().summary;
+    final obj = summary?.objetivos;
+    final cons = summary?.consumidoHoy;
+    final faltan = summary?.cumplKcal;
+
+    final tkcal = obj?.kcal.toInt() ?? 2000;
+    final fkcal = ((tkcal - (cons?.kcal.toInt() ?? 0)).clamp(0, 9999)).toInt();
+    
+    final tprot = obj?.proteinasG.toInt() ?? 150;
+    final cprot = cons?.proteinasG.toInt() ?? 0;
+    
+    final tcarb = obj?.carbohidratosG.toInt() ?? 200;
+    final ccarb = cons?.carbohidratosG.toInt() ?? 0;
+    
+    final tfat = obj?.grasasG.toInt() ?? 70;
+    final cfat = cons?.grasasG.toInt() ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1799,7 +1816,7 @@ class _MacrosOverview extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('HOY · JUEVES 25 JUN',
+                  Text('HOY',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: mutedFg)),
                   const SizedBox(height: 8),
                   Text('Tus macros', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
@@ -1810,14 +1827,14 @@ class _MacrosOverview extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF1F5F9), // Un color suave para el rosco
+                  color: const Color(0xFFF1F5F9), 
                   border: Border.all(color: const Color(0xFFE2E8F0), width: 6),
                 ),
                 alignment: Alignment.center,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('580', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg, height: 1.0)),
+                    Text('$fkcal', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg, height: 1.0)),
                     Text('RESTAN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: mutedFg, letterSpacing: 0.5)),
                   ],
                 ),
@@ -1825,11 +1842,11 @@ class _MacrosOverview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _MacroRow(label: 'Proteína', val: 92, total: 160, color: const Color(0xFF9D7BFF), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(label: 'Proteína', val: cprot, total: tprot, color: const Color(0xFF9D7BFF), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
           const SizedBox(height: 16),
-          _MacroRow(label: 'Carbohidratos', val: 178, total: 260, color: const Color(0xFF06B6D4), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(label: 'Carbohidratos', val: ccarb, total: tcarb, color: const Color(0xFF06B6D4), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
           const SizedBox(height: 16),
-          _MacroRow(label: 'Grasas', val: 48, total: 75, color: const Color(0xFFF87171), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(label: 'Grasas', val: cfat, total: tfat, color: const Color(0xFFF87171), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
         ],
       ),
     );
@@ -2001,14 +2018,27 @@ class _CameraViewer extends StatelessWidget {
 }
 
 class _ScanResultCard extends StatelessWidget {
+  const _ScanResultCard({this.scanResult});
+  final Map<String, dynamic>? scanResult;
+
   @override
   Widget build(BuildContext context) {
+    if (scanResult == null) return const SizedBox.shrink();
+
     final b = Theme.of(context).brightness;
     final card = DesignTokens.card(b);
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final surface1 = DesignTokens.surface1(b);
     final muted = DesignTokens.muted(b);
+
+    final foodName = scanResult?['food_name']?.toString() ?? 'Análisis completado';
+    final notas = scanResult?['notas']?.toString() ?? '';
+    final p = (scanResult?['proteinas_g'] as num?)?.toDouble() ?? 0.0;
+    final c = (scanResult?['carbohidratos_g'] as num?)?.toDouble() ?? 0.0;
+    final f = (scanResult?['grasas_g'] as num?)?.toDouble() ?? 0.0;
+    final kcal = (scanResult?['calorias_consumidas'] as num?)?.toInt() ?? 0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2036,10 +2066,10 @@ class _ScanResultCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ESCANEO · HACE 2 H',
+                    Text('ÚLTIMA COMIDA ESCANEADA',
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
                     const SizedBox(height: 2),
-                    Text('Salmón, quinoa y aguacate',
+                    Text(foodName,
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
                     const SizedBox(height: 4),
@@ -2049,22 +2079,37 @@ class _ScanResultCard extends StatelessWidget {
                         color: const Color(0xFFECFDF5),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text('NOVA 1 · No procesado',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF047857))),
+                      child: Text('$kcal kcal añadidas',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF047857))),
                     ),
                   ],
                 ),
               ),
             ],
           ),
+          if (notas.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: DesignTokens.aiVia.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: DesignTokens.aiVia.withOpacity(0.2)),
+              ),
+              child: Text(
+                notas,
+                style: TextStyle(fontSize: 13, color: fg, height: 1.4),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _MacroChip(label: 'Proteína', value: '38g', pct: 0.7, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Proteína', value: '${p.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Carbos', value: '42g', pct: 0.5, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Carbos', value: '${c.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Grasas', value: '18g', pct: 0.4, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Grasas', value: '${f.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
             ],
           ),
         ],

@@ -686,7 +686,7 @@ class ApiService {
       path: '/ai/analizar-nutricion',
       body: {
         'image_base64': base64Image,
-        'prompt': 'Analiza esta comida de forma semántica y holística (no estricta). Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el contexto volumétrico visual, y determina su nivel NOVA o hiperprocesamiento.',
+        'prompt': 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).',
         'user_id': userId,
       },
     );
