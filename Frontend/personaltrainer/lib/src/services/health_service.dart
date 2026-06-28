@@ -233,4 +233,22 @@ class HealthService {
       return {'heart_rate': [], 'calories': []};
     }
   }
+  }
+
+  static String translateWorkoutActivityType(HealthWorkoutActivityType type) {
+    switch (type) {
+      case HealthWorkoutActivityType.STRENGTH_TRAINING: return 'Entrenamiento de fuerza';
+      case HealthWorkoutActivityType.WALKING: return 'Caminar';
+      case HealthWorkoutActivityType.RUNNING: return 'Correr';
+      case HealthWorkoutActivityType.BIKING: return 'Ciclismo';
+      case HealthWorkoutActivityType.SWIMMING: return 'Natación';
+      case HealthWorkoutActivityType.YOGA: return 'Yoga';
+      case HealthWorkoutActivityType.PILATES: return 'Pilates';
+      case HealthWorkoutActivityType.HIIT: return 'HIIT';
+      default:
+        final title = type.name.replaceAll('HealthWorkoutActivityType.', '').replaceAll('_', ' ').toLowerCase();
+        if (title.isEmpty) return 'Entrenamiento';
+        return '${title[0].toUpperCase()}${title.substring(1)}';
+    }
+  }
 }

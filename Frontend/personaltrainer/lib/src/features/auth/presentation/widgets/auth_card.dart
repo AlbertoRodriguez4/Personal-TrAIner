@@ -487,7 +487,7 @@ class _ModeButton extends StatelessWidget {
   }
 }
 
-class _Field extends StatelessWidget {
+class _Field extends StatefulWidget {
   final IconData icon;
   final TextEditingController controller;
   final String hint;
@@ -505,6 +505,19 @@ class _Field extends StatelessWidget {
   });
 
   @override
+  State<_Field> createState() => _FieldState();
+}
+
+class _FieldState extends State<_Field> {
+  late bool _obscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscured = widget.isPassword;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     final fg = DesignTokens.foreground(b);
@@ -520,18 +533,18 @@ class _Field extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: mutedFg),
+          Icon(widget.icon, size: 16, color: mutedFg),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
-              controller: controller,
-              obscureText: isPassword,
-              keyboardType: isEmail
+              controller: widget.controller,
+              obscureText: _obscured,
+              keyboardType: widget.isEmail
                   ? TextInputType.emailAddress
-                  : (isNumber ? TextInputType.number : TextInputType.text),
+                  : (widget.isNumber ? TextInputType.number : TextInputType.text),
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg),
               decoration: InputDecoration(
-                hintText: hint,
+                hintText: widget.hint,
                 hintStyle: TextStyle(color: mutedFg, fontWeight: FontWeight.w500),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -541,6 +554,18 @@ class _Field extends StatelessWidget {
               ),
             ),
           ),
+          if (widget.isPassword)
+            GestureDetector(
+              onTap: () => setState(() => _obscured = !_obscured),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8.0, right: 4.0),
+                child: Icon(
+                  _obscured ? Icons.visibility_off : Icons.visibility,
+                  size: 20,
+                  color: mutedFg,
+                ),
+              ),
+            ),
         ],
       ),
     );

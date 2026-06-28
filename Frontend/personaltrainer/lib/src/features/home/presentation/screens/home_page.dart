@@ -1194,10 +1194,15 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
 
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
-    final workouts = await HealthService.fetchWorkouts();
+    final allWorkouts = await HealthService.fetchWorkouts();
     if (mounted) {
       setState(() {
-        _workouts = workouts;
+        _workouts = allWorkouts.where((w) {
+          if (w.value is WorkoutHealthValue) {
+            return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
+          }
+          return true;
+        }).toList();
         _isLoading = false;
       });
     }
@@ -1342,7 +1347,7 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
                 final workout = w.value as WorkoutHealthValue;
                 kcal = (workout.totalEnergyBurned ?? 0).toInt();
                 dist = (workout.totalDistance ?? 0) / 1000;
-                typeName = workout.workoutActivityType.name.replaceAll('HealthWorkoutActivityType.', '');
+                typeName = HealthService.translateWorkoutActivityType(workout.workoutActivityType);
               }
               
               String desc = '${w.dateFrom.day}/${w.dateFrom.month} · ${w.dateFrom.hour}:${w.dateFrom.minute.toString().padLeft(2, '0')} · $min min';

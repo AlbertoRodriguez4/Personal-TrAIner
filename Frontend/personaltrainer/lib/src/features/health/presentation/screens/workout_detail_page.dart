@@ -87,12 +87,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final cardBg = DesignTokens.card(b);
     final border = DesignTokens.border(b);
 
-    final title = _workoutValue.workoutActivityType.name
-        .replaceAll('HealthWorkoutActivityType.', '')
-        .replaceAll('_', ' ')
-        .toLowerCase();
-    
-    final formattedTitle = title.isEmpty ? 'Entrenamiento' : '${title[0].toUpperCase()}${title.substring(1)}';
+    final formattedTitle = HealthService.translateWorkoutActivityType(_workoutValue.workoutActivityType);
 
     return Scaffold(
       backgroundColor: bg,
