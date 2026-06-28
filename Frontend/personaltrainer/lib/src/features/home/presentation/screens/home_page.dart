@@ -20,6 +20,7 @@ import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
 import '../../../routine/presentation/screens/routines_home_page.dart';
 import '../../models/daily_summary.dart';
 import 'backend_features_page.dart';
+import '../../../health/presentation/screens/workout_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.onSessionClosed});
@@ -1349,12 +1350,22 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: _WorkoutRow(
-                  icon: LucideIcons.activity,
-                  title: typeName,
-                  desc: desc,
-                  bpm: '--',
-                  kcal: kcal > 0 ? '$kcal' : '--',
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WorkoutDetailPage(workout: w),
+                      ),
+                    );
+                  },
+                  child: _WorkoutRow(
+                    icon: LucideIcons.activity,
+                    title: typeName,
+                    desc: desc,
+                    bpm: '--',
+                    kcal: kcal > 0 ? '$kcal' : '--',
+                  ),
                 ),
               );
             }),
