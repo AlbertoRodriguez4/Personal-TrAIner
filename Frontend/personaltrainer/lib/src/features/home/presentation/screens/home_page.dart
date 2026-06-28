@@ -1192,19 +1192,41 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
     _fetchData();
   }
 
+  Map<String, String> _workoutBpms = {};
+
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     final allWorkouts = await HealthService.fetchWorkouts();
+    
+    final validWorkouts = allWorkouts.where((w) {
+      if (w.value is WorkoutHealthValue) {
+        return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
+      }
+      return true;
+    }).toList();
+
+    validWorkouts.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
+
     if (mounted) {
       setState(() {
-        _workouts = allWorkouts.where((w) {
-          if (w.value is WorkoutHealthValue) {
-            return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
-          }
-          return true;
-        }).toList();
+        _workouts = validWorkouts;
         _isLoading = false;
       });
+    }
+
+    // Load BPMs async
+    for (var w in validWorkouts.take(4)) {
+      final details = await HealthService.fetchWorkoutDetails(w.dateFrom, w.dateTo);
+      final hrData = details['heart_rate'] ?? [];
+      if (hrData.isNotEmpty) {
+        final hrValues = hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
+        final avg = hrValues.reduce((a, b) => a + b) / hrValues.length;
+        if (mounted) {
+          setState(() {
+            _workoutBpms[w.dateFrom.toIso8601String()] = avg.round().toString();
+          });
+        }
+      }
     }
   }
 
@@ -1368,7 +1390,7 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
                     icon: LucideIcons.activity,
                     title: typeName,
                     desc: desc,
-                    bpm: '--',
+                    bpm: _workoutBpms[w.dateFrom.toIso8601String()] ?? '--',
                     kcal: kcal > 0 ? '$kcal' : '--',
                   ),
                 ),
