@@ -284,7 +284,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                       checkToShowDot: (spot, data) => spot.y == _maxHr || spot.y == _minHr,
                       getDotPainter: (spot, percent, data, index) {
                         final color = spot.y == _maxHr ? const Color(0xFFD85A30) : const Color(0xFF378ADD);
-                        return FlDotCirclePainter(radius: 4, color: color, strokeWidth: 2, strokeColor: bg);
+                        return FlDotCirclePainter(radius: 4, color: color, strokeWidth: 2, strokeColor: cardBg);
                       }
                     ),
                     belowBarData: BarAreaData(
@@ -445,8 +445,8 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final avgDur = totalDur / sameType.length;
     final avgKcal = validKcal > 0 ? totalKcal / validKcal : 0;
 
-    final durDelta = _durationMinutes - avgDur;
-    final kcalDelta = (_workoutValue.totalEnergyBurned ?? 0) - avgKcal;
+    final durDelta = (_durationMinutes - avgDur).toDouble();
+    final kcalDelta = (_workoutValue.totalEnergyBurned ?? 0).toDouble() - avgKcal;
 
     return Container(
       decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: border, width: 0.5)),
