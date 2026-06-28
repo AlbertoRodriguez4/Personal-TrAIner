@@ -10,6 +10,9 @@ import { TrainingSession } from "../../modules/training_sessions/entities/traini
 import { UserProfile } from "../../modules/user_profile/entities/user_profile.entity";
 import { CustomRoutine } from "../../modules/custom_routine/entities/custom_routine.entity";
 import { BodyAnalysisRecord } from "../../modules/body_analysis/entities/body_analysis_record.entity";
+import { Routine } from "../../modules/routine/entities/routine.entity";
+import { RoutineDay } from "../../modules/routine/entities/routine_day.entity";
+import { Exercise } from "../../modules/routine/entities/exercise.entity";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -30,6 +33,9 @@ export const AppDataSource = new DataSource({
         UserProfile,
         CustomRoutine,
         BodyAnalysisRecord,
+        Routine,
+        RoutineDay,
+        Exercise,
     ],
     migrations: ["src/infrastructure/postgres/migrations/*.ts"],
     subscribers: [],

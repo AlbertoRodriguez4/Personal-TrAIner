@@ -24,6 +24,11 @@ let UserProfile = class UserProfile {
     dexa_porcentaje_grasa;
     dexa_masa_muscular_kg;
     notas_adicionales;
+    // ===== Metas diarias (objetivos de macros) =====
+    meta_kcal;
+    meta_proteinas_g;
+    meta_carbohidratos_g;
+    meta_grasas_g;
     fecha_creacion;
     fecha_actualizacion;
 };
@@ -76,6 +81,22 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], UserProfile.prototype, "notas_adicionales", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'numeric', precision: 7, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], UserProfile.prototype, "meta_kcal", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'numeric', precision: 6, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], UserProfile.prototype, "meta_proteinas_g", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'numeric', precision: 6, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], UserProfile.prototype, "meta_carbohidratos_g", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'numeric', precision: 6, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], UserProfile.prototype, "meta_grasas_g", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' }),
     __metadata("design:type", Date)

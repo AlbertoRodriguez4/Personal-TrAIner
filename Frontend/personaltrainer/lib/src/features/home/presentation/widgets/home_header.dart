@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:provider/provider.dart';
+
+import '../../../../core/providers/theme_provider.dart';
 
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
@@ -20,27 +24,57 @@ class HomeHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Hola, $firstName',
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                fontSize: 28,
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(
+                'assets/logo.jpg',
+                height: 48,
+                width: 48,
+                fit: BoxFit.cover,
               ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Listo para entrenar con tu Coach IA hoy?',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF6B7280),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hola, $firstName',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontSize: 28,
+                        ),
+                  ),
+                  Text(
+                    'Listo para entrenar con tu Coach IA hoy?',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF6B7280),
+                        ),
+                  ),
+                ],
               ),
+            ),
+            IconButton(
+              onPressed: () => context.read<ThemeProvider>().toggleTheme(context),
+              icon: Icon(
+                Theme.of(context).brightness == Brightness.dark
+                    ? PhosphorIcons.sun()
+                    : PhosphorIcons.moon(),
+              ),
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+          ],
         ),
+        const SizedBox(height: 14),
         const SizedBox(height: 14),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Row(
             children: [

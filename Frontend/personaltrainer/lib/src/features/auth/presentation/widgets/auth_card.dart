@@ -1,6 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../services/api_service.dart';
-import 'auth_text_field.dart';
+import '../../../../core/theme/design_tokens.dart';
+import 'auth_text_field.dart'; // Mantengo la importación aunque no lo usemos, por si acaso
 
 class AuthCard extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -54,7 +58,6 @@ class _AuthCardState extends State<AuthCard> {
         if (userData == null) {
           _showMessage('No se pudo completar el registro.');
         } else {
-          // Auto-login after register
           final loginData = await ApiService.login(
             _emailController.text.trim(),
             _passwordController.text,
@@ -158,123 +161,6 @@ class _AuthCardState extends State<AuthCard> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _isLogin ? 'Iniciar sesión' : 'Crear cuenta',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _isLogin
-                  ? 'Accede a tu panel personal.'
-                  : 'Rellena tus datos para empezar.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 18),
-            if (!_isLogin) ...[
-              AuthTextField(
-                controller: _nameController,
-                label: 'Nombre completo',
-              ),
-              InkWell(
-                onTap: _pickBirthDate,
-                borderRadius: BorderRadius.circular(12),
-                child: Ink(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined, size: 18),
-                        const SizedBox(width: 10),
-                        Text(
-                          _birthDate == null
-                              ? 'Fecha de nacimiento'
-                              : '${_birthDate!.day.toString().padLeft(2, '0')}/${_birthDate!.month.toString().padLeft(2, '0')}/${_birthDate!.year}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: AuthTextField(
-                      controller: _heightController,
-                      label: 'Altura (cm)',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AuthTextField(
-                      controller: _weightController,
-                      label: 'Peso (kg)',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            AuthTextField(
-              controller: _emailController,
-              label: 'Correo electrónico',
-              keyboardType: TextInputType.emailAddress,
-            ),
-            AuthTextField(
-              controller: _passwordController,
-              label: _isLogin ? 'Contraseña' : 'Contraseña (mín. 6)',
-              isPassword: true,
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
-                child: Text(
-                  _isLoading
-                      ? 'Cargando...'
-                      : (_isLogin ? 'Entrar' : 'Crear cuenta'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  _clearFields();
-                  setState(() => _isLogin = !_isLogin);
-                },
-                child: Text(
-                  _isLogin
-                      ? '¿No tienes cuenta? Regístrate'
-                      : '¿Ya tienes cuenta? Inicia sesión',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -282,5 +168,423 @@ class _AuthCardState extends State<AuthCard> {
     _heightController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final border = DesignTokens.border(b);
+    final surface1 = DesignTokens.surface1(b);
+    final card = DesignTokens.card(b);
+
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        // Resplandor superior
+        Positioned(
+          top: -100,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: DesignTokens.aiGradientSoft,
+            ),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+              child: const SizedBox(),
+            ),
+          ),
+        ),
+        SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 56, 24, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Logo
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/logo.jpg'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                _isLogin ? 'Bienvenido de nuevo' : 'Crea tu cuenta',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: fg,
+                  letterSpacing: -0.8,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _isLogin ? 'Tu IA personal te está esperando.' : 'Empieza a entrenar con inteligencia.',
+                style: TextStyle(fontSize: 14, color: mutedFg),
+                textAlign: TextAlign.center,
+              ),
+              
+              const SizedBox(height: 28),
+              
+              // Toggle Modo
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _ModeButton(
+                        text: 'Iniciar sesión',
+                        active: _isLogin,
+                        onTap: () {
+                          _clearFields();
+                          setState(() => _isLogin = true);
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: _ModeButton(
+                        text: 'Registrarse',
+                        active: !_isLogin,
+                        onTap: () {
+                          _clearFields();
+                          setState(() => _isLogin = false);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Formulario
+              if (!_isLogin) ...[
+                _Field(icon: LucideIcons.user, controller: _nameController, hint: 'Nombre completo'),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: _pickBirthDate,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: surface1,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: border),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.calendar, size: 16, color: mutedFg),
+                        const SizedBox(width: 12),
+                        Text(
+                          _birthDate == null
+                              ? 'Fecha de nacimiento'
+                              : '${_birthDate!.day.toString().padLeft(2, '0')}/${_birthDate!.month.toString().padLeft(2, '0')}/${_birthDate!.year}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: _birthDate == null ? mutedFg : fg,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _Field(icon: LucideIcons.arrowUpToLine, controller: _heightController, hint: 'Altura (cm)', isNumber: true)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _Field(icon: Icons.monitor_weight_outlined, controller: _weightController, hint: 'Peso (kg)', isNumber: true)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              _Field(icon: LucideIcons.mail, controller: _emailController, hint: 'Correo electrónico', isEmail: true),
+              const SizedBox(height: 12),
+              _Field(icon: LucideIcons.lock, controller: _passwordController, hint: 'Contraseña', isPassword: true),
+
+              if (_isLogin) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {}, // TODO
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      '¿Olvidaste tu contraseña?',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: mutedFg),
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 24),
+
+              InkWell(
+                onTap: _isLoading ? null : _submit,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: DesignTokens.aiGradient,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: DesignTokens.shadowCard(b),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isLoading ? 'Procesando...' : (_isLogin ? 'Entrar' : 'Crear cuenta'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                      if (!_isLoading) ...[
+                        const SizedBox(width: 8),
+                        const Icon(LucideIcons.arrowRight, size: 16, color: Colors.white),
+                      ]
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(child: Divider(color: border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'O CONTINÚA CON',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: border)),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _SocialBtn(
+                      label: 'Apple',
+                      icon: Icon(PhosphorIcons.appleLogo(PhosphorIconsStyle.fill), size: 16, color: fg),
+                      cardColor: card,
+                      border: border,
+                      fg: fg,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _SocialBtn(
+                      label: 'Google',
+                      icon: const Icon(LucideIcons.chrome, size: 16, color: Color(0xFFEA4335)), // Usamos chrome aprox o asset
+                      cardColor: card,
+                      border: border,
+                      fg: fg,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _isLogin ? '¿Aún no tienes cuenta? ' : '¿Ya tienes cuenta? ',
+                    style: TextStyle(fontSize: 12, color: mutedFg),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      _clearFields();
+                      setState(() => _isLogin = !_isLogin);
+                    },
+                    child: Text(
+                      _isLogin ? 'Regístrate' : 'Inicia sesión',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              InkWell(
+                onTap: () => Navigator.of(context).pushReplacementNamed('/home'), // TODO back logic
+                child: Text(
+                  'VOLVER',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final String text;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ModeButton({required this.text, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: active
+            ? BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: DesignTokens.shadowSoft(b),
+              )
+            : null,
+        alignment: Alignment.center,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? fg : mutedFg,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  final IconData icon;
+  final TextEditingController controller;
+  final String hint;
+  final bool isPassword;
+  final bool isEmail;
+  final bool isNumber;
+
+  const _Field({
+    required this.icon,
+    required this.controller,
+    required this.hint,
+    this.isPassword = false,
+    this.isEmail = false,
+    this.isNumber = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final border = DesignTokens.border(b);
+    final surface1 = DesignTokens.surface1(b);
+    return Container(
+      decoration: BoxDecoration(
+        color: surface1,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: mutedFg),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              obscureText: isPassword,
+              keyboardType: isEmail
+                  ? TextInputType.emailAddress
+                  : (isNumber ? TextInputType.number : TextInputType.text),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(color: mutedFg, fontWeight: FontWeight.w500),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialBtn extends StatelessWidget {
+  final String label;
+  final Widget icon;
+  final Color cardColor;
+  final Color border;
+  final Color fg;
+
+  const _SocialBtn({
+    required this.label,
+    required this.icon,
+    required this.cardColor,
+    required this.border,
+    required this.fg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return InkWell(
+      onTap: () {},
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: border),
+          boxShadow: DesignTokens.shadowSoft(b),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+          ],
+        ),
+      ),
+    );
   }
 }

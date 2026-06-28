@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../services/api_service.dart';
+import '../../../../services/health_service.dart';
+import 'package:health/health.dart';
 
 class AiCoachPage extends StatefulWidget {
   const AiCoachPage({super.key});
@@ -33,6 +35,44 @@ class _AiCoachPageState extends State<AiCoachPage>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
+    _logHealthData();
+  }
+
+  Future<void> _logHealthData() async {
+    print("===== DEBUG COACH IA: Rastreo profundo de MI Fitness =====");
+    try {
+      final now = DateTime.now();
+      final start = now.subtract(const Duration(days: 7));
+      final health = Health();
+      
+      // Probar todos los tipos que soporta la app
+      final typesToTest = [
+        HealthDataType.WORKOUT,
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+        HealthDataType.ACTIVE_ENERGY_BURNED,
+        HealthDataType.DISTANCE_DELTA,
+      ];
+
+      for (var type in typesToTest) {
+        try {
+          List<HealthDataPoint> data = await health.getHealthDataFromTypes(
+            startTime: start,
+            endTime: now,
+            types: [type],
+          );
+          print("-> Tipo: ${type.name} | Registros encontrados: ${data.length}");
+          if (data.isNotEmpty) {
+            print("   Ejemplo: ${data.first.value} (del ${data.first.dateFrom} al ${data.first.dateTo})");
+          }
+        } catch (e) {
+          print("-> Tipo: ${type.name} | ERROR: $e");
+        }
+      }
+    } catch (e) {
+      print("Error crítico leyendo Health Connect: $e");
+    }
+    print("=========================================================");
   }
 
   @override
@@ -177,110 +217,123 @@ class _AiCoachPageState extends State<AiCoachPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: Color(0xFF00C897),
-                shape: BoxShape.circle,
+    return Theme(
+      data: ThemeData.dark(),
+      child: Builder(
+        builder: (context) {
+          final b = Theme.of(context).brightness; // Will be Brightness.dark
+          final bg = const Color(0xFF0B1220); // DesignTokens.background for dark
+          final card = const Color(0xFF131B2C); // DesignTokens.card for dark
+
+          return Scaffold(
+            backgroundColor: bg,
+            appBar: AppBar(
+              backgroundColor: bg,
+              elevation: 0,
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00C897),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Coach IA'),
+                ],
               ),
-            ),
-            const SizedBox(width: 10),
-            const Text('Coach IA'),
-          ],
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            onPressed: _showHistoryBottomSheet,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: _messages.length + (_isGenerating ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length && _isGenerating) {
-                  return _TypingIndicator(pulseController: _pulseController);
-                }
-                return _ChatBubble(
-                  message: _messages[index],
-                  onRemovePhoto: null,
-                );
-              },
-            ),
-          ),
-          if (_attachedPhotos.isNotEmpty)
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemBuilder: (context, index) {
-                    final photo = _attachedPhotos[index];
-                    return Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(photo.path),
-                            width: 72,
-                            height: 72,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          right: 4,
-                          top: 4,
-                          child: GestureDetector(
-                            onTap: () => setState(
-                              () => _attachedPhotos.removeAt(index),
-                            ),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black54,
-                              ),
-                              padding: const EdgeInsets.all(3),
-                              child: const Icon(
-                                Icons.close,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemCount: _attachedPhotos.length,
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.history_rounded),
+                  onPressed: _showHistoryBottomSheet,
                 ),
-              ),
+              ],
             ),
-          _buildInputArea(),
-        ],
+            body: Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: _messages.length + (_isGenerating ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length && _isGenerating) {
+                        return _TypingIndicator(pulseController: _pulseController);
+                      }
+                      return _ChatBubble(
+                        message: _messages[index],
+                        onRemovePhoto: null,
+                      );
+                    },
+                  ),
+                ),
+                if (_attachedPhotos.isNotEmpty)
+                  Container(
+                    color: card,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                    child: SizedBox(
+                      height: 72,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemBuilder: (context, index) {
+                          final photo = _attachedPhotos[index];
+                          return Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(photo.path),
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: GestureDetector(
+                                  onTap: () => setState(
+                                    () => _attachedPhotos.removeAt(index),
+                                  ),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.black54,
+                                    ),
+                                    padding: const EdgeInsets.all(3),
+                                    child: const Icon(
+                                      Icons.close,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemCount: _attachedPhotos.length,
+                      ),
+                    ),
+                  ),
+                _buildInputArea(card),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildInputArea(Color cardColor) {
     return SafeArea(
       child: Container(
-        color: Colors.white,
+        color: cardColor,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [

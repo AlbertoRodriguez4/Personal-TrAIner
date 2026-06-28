@@ -198,8 +198,8 @@ Write-Host ""
 
 # --- Backend Python ---
 Write-Host "  -> Levantando Backend Python en http://localhost:$PythonPort" -ForegroundColor Cyan
-$pythonCmd = "cd `"$PythonBackendPath`" ; Write-Host 'Backend Python iniciandose...' -ForegroundColor Cyan ; py -3.10 -m uvicorn main:app --reload --port $PythonPort ; pause"
-Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $pythonCmd
+$pythonCmd = "Write-Host 'Backend Python iniciandose...' -ForegroundColor Cyan ; py -3.10 -m uvicorn main:app --reload --port $PythonPort ; pause"
+Start-Process powershell.exe -WorkingDirectory $PythonBackendPath -ArgumentList "-NoExit", "-Command", $pythonCmd
 
 # Esperar a que Python esté listo
 if (-not (Wait-ForPort -Port $PythonPort -ServiceName "Backend Python" -TimeoutSeconds 30)) {
@@ -210,8 +210,8 @@ Start-Sleep -Seconds 2
 
 # --- Backend NestJS ---
 Write-Host "  -> Levantando Backend NestJS en http://localhost:$NestJSPort" -ForegroundColor Cyan
-$nestCmd = "cd `"$NestJSBackendPath`" ; Write-Host 'Backend NestJS iniciandose...' -ForegroundColor Cyan ; npm run start:dev ; pause"
-Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $nestCmd
+$nestCmd = "Write-Host 'Backend NestJS iniciandose...' -ForegroundColor Cyan ; npm run start:dev ; pause"
+Start-Process powershell.exe -WorkingDirectory $NestJSBackendPath -ArgumentList "-NoExit", "-Command", $nestCmd
 
 # Esperar a que NestJS esté listo
 if (-not (Wait-ForPort -Port $NestJSPort -ServiceName "Backend NestJS" -TimeoutSeconds 60)) {
@@ -222,8 +222,8 @@ Start-Sleep -Seconds 2
 
 # --- Frontend Flutter ---
 Write-Host "  -> Levantando Frontend Flutter" -ForegroundColor Cyan
-$flutterCmd = "cd `"$FlutterFrontendPath`" ; Write-Host 'Frontend Flutter iniciandose...' -ForegroundColor Cyan ; flutter run -d chrome ; pause"
-Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $flutterCmd
+$flutterCmd = "Write-Host 'Frontend Flutter iniciandose...' -ForegroundColor Cyan ; flutter run -d chrome ; pause"
+Start-Process powershell.exe -WorkingDirectory $FlutterFrontendPath -ArgumentList "-NoExit", "-Command", $flutterCmd
 
 # ============================================
 # RESUMEN

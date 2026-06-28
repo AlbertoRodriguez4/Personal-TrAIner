@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../../../core/providers/routine_provider.dart';
 import '../../models/routine.dart';
 import 'routine_builder_page.dart';
+import 'workout_session_page.dart';
 
 class RoutinesHomePage extends StatefulWidget {
   const RoutinesHomePage({super.key});
@@ -100,6 +101,14 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
     );
   }
 
+  void _openSession(BuildContext context, Routine routine) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WorkoutSessionPage(routine: routine),
+      ),
+    );
+  }
+
   Color _activityColor(String type) {
     switch (type) {
       case 'gym':
@@ -137,7 +146,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: RefreshIndicator(
         onRefresh: () => context.read<RoutineProvider>().loadRoutines(),
         child: CustomScrollView(
@@ -189,7 +198,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   Widget _buildHero(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: Theme.of(context).scaffoldBackgroundColor,
       padding: const EdgeInsets.fromLTRB(20, 48, 20, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -256,7 +265,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   Widget _buildActivitiesPreview(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: const Color(0xFFF8F9FB),
+      color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF8F9FB) : Theme.of(context).scaffoldBackgroundColor,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,9 +287,9 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
             children: _activities.map((activity) {
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: Theme.of(context).dividerColor),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
@@ -298,11 +307,14 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      activity.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                    Expanded(
+                      child: Text(
+                        activity.label,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -324,15 +336,12 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
         if (isLoading) {
           return SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 1,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 2.6,
-              ),
+            sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) => _SkeletonCard(),
+                (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _SkeletonCard(),
+                ),
                 childCount: 3,
               ),
             ),
@@ -380,30 +389,23 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
 
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 400,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 2.4,
-            ),
+          sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final routine = routines[index];
                 final color = _activityColor(routine.activityType);
-                return AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOut,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(color: Theme.of(context).dividerColor),
                     ),
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
@@ -420,17 +422,19 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              routine.activityLabel,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: color,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                            Expanded(
+                              child: Text(
+                                routine.activityLabel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: color,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            const Spacer(),
                             GestureDetector(
                               onTap: () => _confirmDelete(routine),
                               child: Icon(
@@ -465,23 +469,58 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        const Spacer(),
-                        Row(
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
                             _MetaChip(
                               icon: PhosphorIcons.calendar(),
                               label: '${routine.days.length} días',
                             ),
-                            const SizedBox(width: 10),
                             _MetaChip(
                               icon: PhosphorIcons.listBullets(),
                               label: '${routine.totalExercises} ejercicios',
                             ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () =>
-                                  _openBuilder(context, routine: routine),
-                              child: const Text('Ver y editar'),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    _openBuilder(context, routine: routine),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  side: BorderSide(color: Theme.of(context).dividerColor),
+                                  foregroundColor: Theme.of(context).textTheme.bodyMedium?.color,
+                                ),
+                                child: const Text('Editar'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => _openSession(context, routine),
+                                icon: Icon(PhosphorIcons.play(), size: 16),
+                                label: const Text('Iniciar'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF059669),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),

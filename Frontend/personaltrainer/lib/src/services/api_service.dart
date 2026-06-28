@@ -665,4 +665,26 @@ class ApiService {
     );
     return _toMap(decoded) ?? {};
   }
+
+  static Future<Map<String, dynamic>> analyzeHrSet({
+    required String uid,
+    required String eid,
+    required int dur,
+    required List<int> hr,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/telemetry/hr-set',
+      body: {'uid': uid, 'eid': eid, 'dur': dur, 'hr': hr},
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<Map<String, dynamic>> getDailySummary(String userId) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/daily/$userId',
+    );
+    return _toMap(decoded) ?? {};
+  }
 }

@@ -38,6 +38,19 @@ export class UserProfile {
   @Column({ type: 'text', nullable: true })
   notas_adicionales: string;
 
+  // ===== Metas diarias (objetivos de macros) =====
+  @Column({ type: 'numeric', precision: 7, scale: 2, nullable: true })
+  meta_kcal: number | null;
+
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
+  meta_proteinas_g: number | null;
+
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
+  meta_carbohidratos_g: number | null;
+
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
+  meta_grasas_g: number | null;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   fecha_creacion: Date;
 

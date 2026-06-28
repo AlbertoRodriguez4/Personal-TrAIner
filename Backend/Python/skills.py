@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from typing import Dict, Any
+import json
+import requests
 
 from schemas import (
+    SetTelemetryInput,
     DailyReadinessRequest,
     DailyReadinessResponse,
     ActivityStatsRequest,
@@ -269,3 +272,103 @@ async def schedule_smart_notification(request: ScheduleNotificationRequest) -> S
         HTTPException: Si el usuario no tiene tokens FCM/APNs registrados.
     """
     raise NotImplementedError("TODO: Implementar cola de notificaciones con FCM/APNs (Redis + Celery o similar)")
+
+
+# ============================================================
+# MÓDULO 4: Telemetría de Serie — Detección de fallo muscular
+# ============================================================
+
+def analyze_failure(data: SetTelemetryInput) -> dict:
+    """
+    Algoritmo determinístico de detección de fatiga muscular basado en la
+    derivada de la curva de pulsaciones del smartwatch.
+
+    Métricas fisiológicas:
+      - Pendiente de ataque (primeros 10s): subida brusca = carga pesada.
+      - Plateau cardiovascular: aplanamiento del pulso en la zona alta
+        durante el último 20% de la serie = aproximación al fallo.
+      - Estimación de RIR y clase de intensidad/zona.
+    """
+    hr = [int(x) for x in data.hr]
+    n = len(hr)
+    if n < 3:
+        return {
+            "rir_estimado": 4,
+            "pendiente_ataque": 0.0,
+            "plateau_index": 0.0,
+            "zona": "Desconocida",
+            "feedback": "Datos insuficientes para análisis.",
+        }
+
+    import statistics
+
+    delta = data.dur / max(n - 1, 1)
+
+    # 1) Pendiente de ataque: BPM ganados por segundo en los primeros 10s
+    window = max(2, int(round(10.0 / delta)))
+    seg10 = hr[: min(window, n)]
+    pendiente_ataque = 0.0
+    if len(seg10) >= 2:
+        pendiente_ataque = (seg10[-1] - seg10[0]) / ((len(seg10) - 1) * delta)
+
+    # 2) Plateau cardiovascular: std-dev del último 20% en la zona alta
+    tail_k = max(2, int(round(n * 0.20)))
+    tail = hr[n - tail_k:]
+    pico = max(hr)
+    media_tail = statistics.fmean(tail)
+    std_tail = statistics.pstdev(tail) if len(tail) > 1 else 0.0
+    # Índice normalizado: alto = pla¬teo marcado (cerca del pico y plano)
+    denom = (pico if pico > 0 else 1)
+    plateau_index = (media_tail / denom) * (1.0 - min(std_tail / 6.0, 1.0))
+
+    # 3) Derivada media en el último tercio (aplanamiento = fallo)
+    tail_der = []
+    for i in range(max(n - tail_k, 1), n - 1):
+        tail_der.append((hr[i + 1] - hr[i]) / delta)
+    der_final = statistics.fmean(tail_der) if tail_der else 0.0
+
+    # 4) Estimación de RIR por heurística combinada
+    if plateau_index >= 0.95 and der_final <= 0.4:
+        rir = 0
+    elif plateau_index >= 0.90 and der_final <= 0.9:
+        rir = 1
+    elif plateau_index >= 0.85:
+        rir = 2
+    elif pendiente_ataque >= 1.5:
+        rir = 3
+    else:
+        rir = 4
+
+    # 5) Clasificación de zona/intensidad (FCM por defecto 190)
+    fcm = 190
+    pct_pico = pico / fcm
+    if pct_pico >= 0.95:
+        zona = "Z5 M\u00e1xima"
+    elif pct_pico >= 0.88:
+        zona = "Z4 Umbral"
+    elif pct_pico >= 0.80:
+        zona = "Z3 Tempo"
+    elif pct_pico >= 0.70:
+        zona = "Z2 Aer\u00f3bica"
+    else:
+        zona = "Z1 Recuperaci\u00f3n"
+
+    # 6) Feedback textual conciso
+    if rir == 0:
+        feedback = "Fallo muscular alcanzado: plateau cardiovascular claro en el \u00faltimo tramo."
+    elif rir <= 2:
+        feedback = f"Intensidad alta (RIR {rir}); cercano al fallo, carga adecuada para hipertrofia."
+    elif pendiente_ataque >= 2.0:
+        feedback = f"Pendiente de ataque elevada ({pendiente_ataque:.1f} bpm/s): serie pesada, RIR {rir}."
+    else:
+        feedback = f"Serie subm\u00e1xima (RIR {rir}); podr\u00edas subir carga o repeticiones."
+
+    return {
+        "rir_estimado": int(rir),
+        "pendiente_ataque": round(pendiente_ataque, 3),
+        "plateau_index": round(plateau_index, 3),
+        "pico_bpm": int(pico),
+        "media_bpm": int(statistics.fmean(hr)),
+        "zona": zona,
+        "feedback": feedback,
+    }

@@ -8,6 +8,8 @@ import '../../models/exercise.dart';
 import '../../models/routine.dart';
 import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
+import '../widgets/exercise_catalog_sheet.dart';
+import '../../models/exercise_catalog.dart';
 
 class RoutineBuilderPage extends StatefulWidget {
   const RoutineBuilderPage({super.key, this.routine, this.onSave});
@@ -241,6 +243,24 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
     Exercise? exercise,
     int exerciseIndex = -1,
   }) async {
+    Exercise? templateExercise = exercise;
+
+    if (templateExercise == null) {
+      final catalogItem = await showModalBottomSheet<ExerciseCatalog>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const ExerciseCatalogSheet(),
+      );
+
+      if (catalogItem == null) return;
+
+      templateExercise = Exercise(
+        name: catalogItem.nombre,
+        notes: catalogItem.descripcion,
+      );
+    }
+
     final result = await showModalBottomSheet<Exercise>(
       context: context,
       isScrollControlled: true,
@@ -250,7 +270,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
       ),
       builder: (_) => ExerciseBottomSheet(
         activityType: _activityType,
-        exercise: exercise,
+        exercise: templateExercise,
       ),
     );
     if (result != null) {

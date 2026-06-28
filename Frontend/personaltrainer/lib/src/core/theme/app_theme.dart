@@ -1,152 +1,150 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'design_tokens.dart';
+
 class AppTheme {
   AppTheme._();
 
-  // Paleta minimalista blanca y bordes planos
-  static const Color _bg = Colors.white;
-  static const Color _surface = Colors.white;
-  static const Color _ink = Color(0xFF0B1220);
-  static const Color _muted = Color(0xFF6B7280);
-  static const Color _border = Color(0xFFE5E7EB);
+  static ThemeData light() => _build(Brightness.light);
+  static ThemeData dark() => _build(Brightness.dark);
 
-  // Paleta de identidad Routinely
-  static const Color primary = Color(0xFF059669); // Verde esmeralda
-  static const Color primaryLight = Color(0xFFD1FAE5);
-  static const Color secondary = Color(0xFF2563EB); // Azul
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
+  static ThemeData _build(Brightness b) {
+    final background = DesignTokens.background(b);
+    final foreground = DesignTokens.foreground(b);
+    final card = DesignTokens.card(b);
+    final muted = DesignTokens.muted(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final border = DesignTokens.border(b);
+    final ring = DesignTokens.ring(b);
+    final destructive = DesignTokens.destructive(b);
 
-  // Colores de actividad
-  static const Color gym = Color(0xFF059669);
-  static const Color cardio = Color(0xFF2563EB);
-  static const Color calistenia = Color(0xFFD97706);
-  static const Color yoga = Color(0xFF7C3AED);
-  static const Color deportes = Color(0xFFEC4899);
-
-  static ThemeData light() {
     final baseTextTheme = TextTheme(
       displaySmall: GoogleFonts.outfit(
         fontSize: 32,
         fontWeight: FontWeight.w800,
         letterSpacing: -1.0,
-        color: _ink,
+        color: foreground,
         height: 1.2,
+      ),
+      displayMedium: GoogleFonts.outfit(
+        fontSize: 40,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -1.2,
+        color: foreground,
       ),
       headlineMedium: GoogleFonts.outfit(
         fontSize: 24,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.5,
-        color: _ink,
+        color: foreground,
       ),
       headlineSmall: GoogleFonts.outfit(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        color: _ink,
+        color: foreground,
       ),
       titleLarge: GoogleFonts.manrope(
         fontSize: 17,
         fontWeight: FontWeight.w600,
-        color: _ink,
+        color: foreground,
       ),
       titleMedium: GoogleFonts.manrope(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: _ink,
+        color: foreground,
       ),
       bodyLarge: GoogleFonts.manrope(
         fontSize: 16,
-        color: _ink,
+        color: foreground,
         height: 1.5,
       ),
       bodyMedium: GoogleFonts.manrope(
         fontSize: 14,
-        color: _ink,
+        color: foreground,
         height: 1.4,
       ),
       bodySmall: GoogleFonts.manrope(
         fontSize: 12,
-        color: _muted,
+        color: mutedFg,
         height: 1.4,
       ),
       labelMedium: GoogleFonts.manrope(
         fontSize: 12,
         fontWeight: FontWeight.w600,
-        color: _muted,
+        color: mutedFg,
+      ),
+      labelSmall: GoogleFonts.manrope(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.4,
+        color: mutedFg,
       ),
     );
 
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: _bg,
-      colorScheme: const ColorScheme.light(
-        primary: primary,
-        onPrimary: Colors.white,
-        secondary: secondary,
-        onSecondary: Colors.white,
-        surface: _surface,
-        onSurface: _ink,
-        outline: _border,
-        error: error,
+      brightness: b,
+      scaffoldBackgroundColor: background,
+      colorScheme: ColorScheme(
+        brightness: b,
+        primary: foreground,
+        onPrimary: background,
+        secondary: mutedFg,
+        onSecondary: background,
+        surface: card,
+        onSurface: foreground,
+        error: destructive,
+        onError: background,
       ),
       textTheme: baseTextTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: _bg,
-        foregroundColor: _ink,
+        backgroundColor: background,
+        foregroundColor: foreground,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: GoogleFonts.outfit(
           fontSize: 18,
           fontWeight: FontWeight.w700,
-          color: _ink,
+          color: foreground,
         ),
       ),
-      cardTheme: const CardThemeData(
-        color: _surface,
+      cardTheme: CardThemeData(
+        color: card,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          side: BorderSide(color: _border),
+          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+          side: BorderSide(color: border),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: _surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
+        fillColor: card,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _border),
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+          borderSide: BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _border),
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+          borderSide: BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: primary, width: 1.6),
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+          borderSide: BorderSide(color: ring, width: 1.6),
         ),
-        hintStyle: GoogleFonts.manrope(
-          fontSize: 14,
-          color: const Color(0xFF9CA3AF),
-        ),
-        labelStyle: GoogleFonts.manrope(
-          fontSize: 14,
-          color: _muted,
-        ),
+        hintStyle: GoogleFonts.manrope(fontSize: 14, color: mutedFg),
+        labelStyle: GoogleFonts.manrope(fontSize: 14, color: mutedFg),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
+          backgroundColor: foreground,
+          foregroundColor: background,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           textStyle: GoogleFonts.manrope(
@@ -157,10 +155,10 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: _ink,
-          side: const BorderSide(color: _border),
+          foregroundColor: foreground,
+          side: BorderSide(color: border),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           textStyle: GoogleFonts.manrope(
@@ -169,27 +167,20 @@ class AppTheme {
           ),
         ),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
-        shape: StadiumBorder(),
-      ),
+      dividerColor: border,
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: _ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      dialogTheme: const DialogThemeData(
+        backgroundColor: foreground,
+        contentTextStyle: GoogleFonts.manrope(color: background),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(20)),
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
         ),
       ),
-      dividerColor: _border,
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: _surface,
-        selectedItemColor: primary,
-        unselectedItemColor: _muted,
-        type: BottomNavigationBarType.fixed,
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.circular(DesignTokens.cardRadius),
+        ),
       ),
     );
   }

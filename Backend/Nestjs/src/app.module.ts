@@ -30,11 +30,18 @@ import { UserProfileController } from './modules/user_profile/controller/user_pr
 import { UserProfileService } from './modules/user_profile/service/user_profile.service';
 import { AiController } from './modules/ai/controller/ai.controller';
 import { AiService } from './modules/ai/service/ai.service';
+import { TelemetryController } from './modules/telemetry/controller/telemetry.controller';
+import { TelemetryService } from './modules/telemetry/service/telemetry.service';
 import { Routine } from './modules/routine/entities/routine.entity';
 import { RoutineDay } from './modules/routine/entities/routine_day.entity';
 import { Exercise } from './modules/routine/entities/exercise.entity';
 import { RoutineController } from './modules/routine/controller/routine.controller';
 import { RoutineService } from './modules/routine/service/routine.service';
+import { DailySummaryController } from './modules/daily_summary/controller/daily_summary.controller';
+import { DailySummaryService } from './modules/daily_summary/service/daily_summary.service';
+import { ExerciseCatalog } from './modules/exercises_catalog/entities/exercise_catalog.entity';
+import { ExerciseCatalogController } from './modules/exercises_catalog/controller/exercise_catalog.controller';
+import { ExerciseCatalogService } from './modules/exercises_catalog/service/exercise_catalog.service';
 
 @Module({
   imports: [
@@ -46,10 +53,10 @@ import { RoutineService } from './modules/routine/service/routine.service';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise], 
+      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog], 
       synchronize: false, 
     }),
-    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise]), 
+    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog]), 
   ],
   controllers: [
     UserController,
@@ -63,6 +70,9 @@ import { RoutineService } from './modules/routine/service/routine.service';
     CustomRoutineController,
     BodyAnalysisController,
     RoutineController,
+    TelemetryController,
+    DailySummaryController,
+    ExerciseCatalogController,
   ],
   providers: [
     UserService,
@@ -76,6 +86,9 @@ import { RoutineService } from './modules/routine/service/routine.service';
     CustomRoutineService,
     BodyAnalysisService,
     RoutineService,
+    TelemetryService,
+    DailySummaryService,
+    ExerciseCatalogService,
   ],
 })
 export class AppModule {}

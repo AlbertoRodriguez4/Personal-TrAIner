@@ -39,11 +39,18 @@ const user_profile_controller_1 = require("./modules/user_profile/controller/use
 const user_profile_service_1 = require("./modules/user_profile/service/user_profile.service");
 const ai_controller_1 = require("./modules/ai/controller/ai.controller");
 const ai_service_1 = require("./modules/ai/service/ai.service");
+const telemetry_controller_1 = require("./modules/telemetry/controller/telemetry.controller");
+const telemetry_service_1 = require("./modules/telemetry/service/telemetry.service");
 const routine_entity_1 = require("./modules/routine/entities/routine.entity");
 const routine_day_entity_1 = require("./modules/routine/entities/routine_day.entity");
 const exercise_entity_1 = require("./modules/routine/entities/exercise.entity");
 const routine_controller_1 = require("./modules/routine/controller/routine.controller");
 const routine_service_1 = require("./modules/routine/service/routine.service");
+const daily_summary_controller_1 = require("./modules/daily_summary/controller/daily_summary.controller");
+const daily_summary_service_1 = require("./modules/daily_summary/service/daily_summary.service");
+const exercise_catalog_entity_1 = require("./modules/exercises_catalog/entities/exercise_catalog.entity");
+const exercise_catalog_controller_1 = require("./modules/exercises_catalog/controller/exercise_catalog.controller");
+const exercise_catalog_service_1 = require("./modules/exercises_catalog/service/exercise_catalog.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -58,10 +65,10 @@ exports.AppModule = AppModule = __decorate([
                 username: process.env.DB_USERNAME,
                 password: process.env.DB_PASSWORD,
                 database: process.env.DB_DATABASE,
-                entities: [user_entity_1.User, dexa_scan_entity_1.DexaScan, posture_evaluation_entity_1.PostureEvaluation, nutrition_log_entity_1.NutritionLog, training_session_entity_1.TrainingSession, subscription_entity_1.Subscription, user_profile_entity_1.UserProfile, custom_routine_entity_1.CustomRoutine, body_analysis_record_entity_1.BodyAnalysisRecord, routine_entity_1.Routine, routine_day_entity_1.RoutineDay, exercise_entity_1.Exercise],
+                entities: [user_entity_1.User, dexa_scan_entity_1.DexaScan, posture_evaluation_entity_1.PostureEvaluation, nutrition_log_entity_1.NutritionLog, training_session_entity_1.TrainingSession, subscription_entity_1.Subscription, user_profile_entity_1.UserProfile, custom_routine_entity_1.CustomRoutine, body_analysis_record_entity_1.BodyAnalysisRecord, routine_entity_1.Routine, routine_day_entity_1.RoutineDay, exercise_entity_1.Exercise, exercise_catalog_entity_1.ExerciseCatalog],
                 synchronize: false,
             }),
-            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, dexa_scan_entity_1.DexaScan, posture_evaluation_entity_1.PostureEvaluation, nutrition_log_entity_1.NutritionLog, training_session_entity_1.TrainingSession, subscription_entity_1.Subscription, user_profile_entity_1.UserProfile, custom_routine_entity_1.CustomRoutine, body_analysis_record_entity_1.BodyAnalysisRecord, routine_entity_1.Routine, routine_day_entity_1.RoutineDay, exercise_entity_1.Exercise]),
+            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, dexa_scan_entity_1.DexaScan, posture_evaluation_entity_1.PostureEvaluation, nutrition_log_entity_1.NutritionLog, training_session_entity_1.TrainingSession, subscription_entity_1.Subscription, user_profile_entity_1.UserProfile, custom_routine_entity_1.CustomRoutine, body_analysis_record_entity_1.BodyAnalysisRecord, routine_entity_1.Routine, routine_day_entity_1.RoutineDay, exercise_entity_1.Exercise, exercise_catalog_entity_1.ExerciseCatalog]),
         ],
         controllers: [
             user_controller_1.UserController,
@@ -75,6 +82,9 @@ exports.AppModule = AppModule = __decorate([
             custom_routine_controller_1.CustomRoutineController,
             body_analysis_controller_1.BodyAnalysisController,
             routine_controller_1.RoutineController,
+            telemetry_controller_1.TelemetryController,
+            daily_summary_controller_1.DailySummaryController,
+            exercise_catalog_controller_1.ExerciseCatalogController,
         ],
         providers: [
             user_service_1.UserService,
@@ -88,6 +98,9 @@ exports.AppModule = AppModule = __decorate([
             custom_routine_service_1.CustomRoutineService,
             body_analysis_service_1.BodyAnalysisService,
             routine_service_1.RoutineService,
+            telemetry_service_1.TelemetryService,
+            daily_summary_service_1.DailySummaryService,
+            exercise_catalog_service_1.ExerciseCatalogService,
         ],
     })
 ], AppModule);

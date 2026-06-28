@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conlist
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime
@@ -208,3 +208,24 @@ class ScheduleNotificationResponse(BaseModel):
     notification_id: str = Field(..., description="Identificador de la notificación programada")
     scheduled_for: str = Field(..., description="Fecha/hora ISO 8601 programada para el envío")
     status: str = Field(..., description="Estado de la programación: 'scheduled', 'failed'")
+
+
+# ============================================================
+# MÓDULO 4: Telemetría de Serie (HR de smartwatch)
+# ============================================================
+
+class SetTelemetryInput(BaseModel):
+    uid: str = Field(..., description="ID usuario")
+    eid: str = Field(..., description="ID ejercicio")
+    dur: int = Field(..., ge=1, description="Duración de la serie en segundos")
+    hr: conlist(int, min_length=1) = Field(..., description="Lista de pulsaciones BPM registradas")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "uid": "usr_abc123",
+                "eid": "ex_bench_press",
+                "dur": 40,
+                "hr": [95, 102, 110, 118, 126, 134, 141, 145, 147, 148, 148, 148, 150, 150, 151, 169, 176, 178, 181, 184]
+            }
+        }

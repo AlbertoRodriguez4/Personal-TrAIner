@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
+from schemas import SetTelemetryInput
+from skills import analyze_failure
 # Inicializamos la API
 app = FastAPI()
 
@@ -384,6 +386,15 @@ async def analyze_body(request: BodyAnalysisRequest):
         raise HTTPException(status_code=500, detail=f"El modelo no generó un JSON válido. Respuesta bruta: {generated_text}")
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"No se pudo conectar a Ollama: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ai/analyze-set")
+async def analyze_set(data: SetTelemetryInput):
+    try:
+        return analyze_failure(data)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Formato inválido: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -13,6 +13,9 @@ const training_session_entity_1 = require("../../modules/training_sessions/entit
 const user_profile_entity_1 = require("../../modules/user_profile/entities/user_profile.entity");
 const custom_routine_entity_1 = require("../../modules/custom_routine/entities/custom_routine.entity");
 const body_analysis_record_entity_1 = require("../../modules/body_analysis/entities/body_analysis_record.entity");
+const routine_entity_1 = require("../../modules/routine/entities/routine.entity");
+const routine_day_entity_1 = require("../../modules/routine/entities/routine_day.entity");
+const exercise_entity_1 = require("../../modules/routine/entities/exercise.entity");
 exports.AppDataSource = new typeorm_1.DataSource({
     type: "postgres",
     host: process.env.DB_HOST || "localhost",
@@ -32,6 +35,9 @@ exports.AppDataSource = new typeorm_1.DataSource({
         user_profile_entity_1.UserProfile,
         custom_routine_entity_1.CustomRoutine,
         body_analysis_record_entity_1.BodyAnalysisRecord,
+        routine_entity_1.Routine,
+        routine_day_entity_1.RoutineDay,
+        exercise_entity_1.Exercise,
     ],
     migrations: ["src/infrastructure/postgres/migrations/*.ts"],
     subscribers: [],
