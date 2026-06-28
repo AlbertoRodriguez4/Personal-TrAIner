@@ -92,7 +92,8 @@ class HealthService {
         if (data.value is WorkoutHealthValue) {
           final w = data.value as WorkoutHealthValue;
           print(" > ${w.workoutActivityType} | ${data.dateFrom} → ${data.dateTo}");
-          print("   Fuente: ${data.sourceName} (${data.sourceId})");
+          print("   Fuente: ${data.sourceName}");
+          print("   workoutSummary: ${data.workoutSummary}");
         }
       }
       print("================================");
