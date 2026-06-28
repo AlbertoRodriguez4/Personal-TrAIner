@@ -1,9 +1,11 @@
 import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:health/health.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../services/health_service.dart';
 import '../../../../core/providers/theme_provider.dart';
@@ -1679,12 +1681,66 @@ class _MetaBig extends StatelessWidget {
 
 /* ============================== NUTRICIÓN ============================== */
 
-class _NutritionScreen extends StatelessWidget {
+class _NutritionScreen extends StatefulWidget {
   const _NutritionScreen({required this.onOpen});
   final VoidCallback onOpen;
 
   @override
+  State<_NutritionScreen> createState() => _NutritionScreenState();
+}
+
+class _NutritionScreenState extends State<_NutritionScreen> {
+  bool _isLoadingAi = false;
+
+  Future<void> _takePhoto() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.camera);
+    if (file == null) return;
+
+    if (!mounted) return;
+    setState(() => _isLoadingAi = true);
+
+    try {
+      final bytes = await file.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final userId = ApiService.getCurrentUserId() ?? '';
+
+      final aiResult = await ApiService.analyzeNutritionPhoto(base64Image, userId);
+
+      final kcal = (aiResult['calories'] as num?)?.toInt() ?? 0;
+      final p = (aiResult['protein_g'] as num?)?.toDouble() ?? 0.0;
+      final c = (aiResult['carbs_g'] as num?)?.toDouble() ?? 0.0;
+      final f = (aiResult['fat_g'] as num?)?.toDouble() ?? 0.0;
+      final foodName = aiResult['food_name']?.toString() ?? 'Análisis IA';
+
+      await ApiService.createNutritionLog(
+        userId: userId,
+        foodName: foodName,
+        calories: kcal,
+        proteinG: p,
+        carbsG: c,
+        fatG: f,
+        logDate: DateTime.now().toIso8601String(),
+        mealType: 'snack',
+      );
+
+      if (mounted) {
+        await context.read<DailySummaryProvider>().load();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error procesando imagen: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingAi = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       child: Column(
@@ -1692,7 +1748,25 @@ class _NutritionScreen extends StatelessWidget {
         children: [
           _MacrosOverview(),
           const SizedBox(height: 16),
-          _CameraViewer(onTap: onOpen),
+          _isLoadingAi
+              ? Container(
+                  height: 240,
+                  decoration: BoxDecoration(
+                    color: DesignTokens.card(b),
+                    borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text('Procesando ingredientes...', style: TextStyle(color: DesignTokens.foreground(b), fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text('Red neuronal multicapa', style: TextStyle(color: DesignTokens.mutedForeground(b), fontSize: 12)),
+                    ],
+                  ),
+                )
+              : _CameraViewer(onTap: _takePhoto),
           const SizedBox(height: 16),
           _ScanResultCard(),
         ],

@@ -523,10 +523,9 @@ class _FieldState extends State<_Field> {
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final border = DesignTokens.border(b);
-    final surface1 = DesignTokens.surface1(b);
     return Container(
       decoration: BoxDecoration(
-        color: surface1,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: border),
       ),
