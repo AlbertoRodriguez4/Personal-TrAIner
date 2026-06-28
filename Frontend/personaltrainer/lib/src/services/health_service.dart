@@ -233,7 +233,6 @@ class HealthService {
       return {'heart_rate': [], 'calories': []};
     }
   }
-  }
 
   static String translateWorkoutActivityType(HealthWorkoutActivityType type) {
     switch (type) {
@@ -244,7 +243,7 @@ class HealthService {
       case HealthWorkoutActivityType.SWIMMING: return 'Natación';
       case HealthWorkoutActivityType.YOGA: return 'Yoga';
       case HealthWorkoutActivityType.PILATES: return 'Pilates';
-      case HealthWorkoutActivityType.HIIT: return 'HIIT';
+      case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING: return 'HIIT';
       default:
         final title = type.name.replaceAll('HealthWorkoutActivityType.', '').replaceAll('_', ' ').toLowerCase();
         if (title.isEmpty) return 'Entrenamiento';
