@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Design tokens extraídos del design system de Lovable (styles.css),
 /// traducidos de OKLCH a Color (aproximación RGB).
 /// Mantén el mismo ADN visual: minimalist, Apple-like, glassmorphism,
 /// gradiente AI y modo claro/oscuro.
+///
+/// Los tokens de esta sección son el dialecto "conceptual oscura" ya adoptado
+/// por el proyecto (púrpura IA). La tabla OKLCH completa (cian) vive en
+/// `flutter_design_context.md` como referencia.
 class DesignTokens {
   DesignTokens._();
 
@@ -70,6 +75,63 @@ class DesignTokens {
   static const Color chart3 = Color(0xFF264653);
   static const Color chart4 = Color(0xFFE9C46A);
   static const Color chart5 = Color(0xFFF4A261);
+
+  // ===== Progress (progress.tsx) =====
+  static const Color progressBlue = Color(0xFF3B82F6);
+  static const Color progressBlueSoft = Color(0xFF60A5FA);
+  static const Color progressGreen = Color(0xFF22C55E);
+  static const Color progressRed = Color(0xFFEF4444);
+  static const Color progressOrange = Color(0xFFF59E0B);
+  static const Color progressGray = Color(0xFF2A2F3C);
+
+  // ===== Recovery (recovery.tsx) =====
+  // aiFrom/Via/To reutilizan los del gradiente IA (púrpura).
+  static const Color recoveryGlassFrom = Color(0xFFEEDBFC);
+  static const Color recoveryGlassTo = Color(0xFFDCEBFB);
+  static const Color recoveryAlertFrom = Color(0xFFFBE8B0);
+  static const Color recoveryAlertTo = Color(0xFFF4D785);
+  static const Color recoveryAlertText = Color(0xFF9A3412);
+  static const Color recoveryAlertIcon = Color(0xFFC2410C);
+  static const Color recoveryStageAwake = Color(0xFF3A3F4D);
+
+  static const LinearGradient recoveryHeroGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [recoveryGlassFrom, recoveryGlassTo],
+  );
+  static const LinearGradient recoveryAlertGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [recoveryAlertFrom, recoveryAlertTo],
+  );
+
+  // ===== Devices (devices.tsx) =====
+  static const Color deviceLive = Color(0xFF10B981);
+  static const Color deviceBadgeDot = Color(0xFFFF6900);
+  static const Color deviceBadgeBg = Color(0xFF1E1E1E);
+  static const Color deviceHttpEnv = Color(0xFF1E1E1E); // alias para fondo de badge
+
+  // ===== Focus (focus.tsx) =====
+  static const Color focusFgCyan = Color(0xFF22D3EE);
+  static const Color focusFgCyan2 = Color(0xFF06B6D4);
+  static const Color focusFgTeal = Color(0xFF14B8A6);
+  static const Color restGradFrom = Color(0xFF818CF8);
+  static const Color restGradTo = Color(0xFFC084FC);
+  static const Color hrZoneRecovery = Color(0xFF38BDF8); // sky-400
+  static const Color hrZoneCardio = Color(0xFF34D399); // emerald-400
+  static const Color hrZoneHigh = Color(0xFFFBBF24); // amber-400
+  static const Color hrZonePeak = Color(0xFFFB7185); // rose-400
+
+  static const LinearGradient focusHrGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [focusFgCyan, focusFgCyan2, focusFgTeal],
+  );
+  static const LinearGradient restGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [restGradFrom, restGradTo],
+  );
 
   // ===== Helpers por brightness =====
   static Color background(Brightness b) =>
@@ -141,4 +203,49 @@ class DesignTokens {
           offset: const Offset(0, 1),
         ),
       ];
+
+  // ===== Tipografía helper (titleFont / bodyFont de las rutas) =====
+  // Equivalente a `const titleFont = { fontFamily: "Outfit...", fontWeight: 800,
+  // letterSpacing: -0.5 }` usado inline en progress/recovery/devices.
+  static TextStyle titleFont({
+    double fontSize = 16,
+    Color? color,
+    double? letterSpacing = -0.5,
+    FontWeight weight = FontWeight.w800,
+    double? height,
+  }) =>
+      GoogleFonts.outfit(
+        fontSize: fontSize,
+        fontWeight: weight,
+        letterSpacing: letterSpacing,
+        color: color,
+        height: height,
+      );
+
+  static TextStyle bodyFont({
+    double fontSize = 14,
+    Color? color,
+    FontWeight weight = FontWeight.w400,
+    double? letterSpacing,
+    double? height,
+  }) =>
+      GoogleFonts.manrope(
+        fontSize: fontSize,
+        fontWeight: weight,
+        color: color,
+        letterSpacing: letterSpacing,
+        height: height,
+      );
+
+  /// Label style consistente: 11px / w600 / uppercase / ls 1.4.
+  static TextStyle labelSmall({
+    Color? color,
+    double fontSize = 11,
+  }) =>
+      GoogleFonts.manrope(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.4,
+        color: color,
+      );
 }
