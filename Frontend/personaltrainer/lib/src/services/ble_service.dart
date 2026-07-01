@@ -10,6 +10,10 @@ import '../models/heart_rate_data.dart';
 final Guid _hrServiceUuid = Guid('180D');
 final Guid _hrMeasurementUuid = Guid('2A37');
 
+/// UUID estándar Bluetooth SIG para Battery Level (BAS).
+final Guid _batteryServiceUuid = Guid('180F');
+final Guid _batteryLevelUuid = Guid('2A19');
+
 /// Clase legacy mantenida para compatibilidad con WorkoutSessionProvider.
 class HrSample {
   final int bpm;
@@ -411,6 +415,104 @@ class BleService {
   }
 
   // ═══════════════════════════════════════════════════════════════════
+  //  BATERÍA Y DISPOSITIVOS DETECTADOS (para la pantalla Device Sync)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /// Escanea dispositivos BLE cercanos (**sin** filtrar por servicio) para
+  /// detectar smartwatches/wearables que no anuncian UUIDs estándar en sus
+  /// paquetes de publicidad. Devuelve todos los dispositivos con nombre
+  /// visible dentro del timeout indicado.
+  Future<List<BleScannedDevice>> scanNearbyDevices({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    try {
+      final supported = await FlutterBluePlus.isSupported;
+      if (!supported) return const [];
+      if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+        return const [];
+      }
+    } catch (_) {
+      return const [];
+    }
+
+    final found = <String, BleScannedDevice>{};
+    final completer = Completer<List<BleScannedDevice>>();
+    StreamSubscription<List<ScanResult>>? sub;
+
+    sub = FlutterBluePlus.onScanResults.listen(
+      (results) {
+        for (final r in results) {
+          final name = r.device.platformName;
+          final id = r.device.remoteId.toString();
+          if (name.isEmpty) continue;
+          final key = id;
+          if (found.containsKey(key)) continue;
+          final serviceUuids = r.advertisementData.serviceUuids;
+          found[key] = BleScannedDevice(
+            name: name,
+            remoteId: id,
+            rssi: r.rssi,
+            offersHeartRate: serviceUuids.any((u) => u == _hrServiceUuid),
+            offersBattery:
+                serviceUuids.any((u) => u == _batteryServiceUuid),
+          );
+          debugPrint('[BLE] Detectado: $name ($id) RSSI=${r.rssi}');
+        }
+      },
+      onDone: () {
+        if (!completer.isCompleted) completer.complete(found.values.toList());
+      },
+    );
+
+    try {
+      // Sin withServices → escaneo amplio de todos los dispositivos BLE.
+      await FlutterBluePlus.startScan(
+        timeout: timeout,
+      );
+    } catch (e) {
+      debugPrint('[BLE] Error iniciando escaneo amplio: $e');
+      sub?.cancel();
+      return found.values.toList();
+    }
+
+    final list = await completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => found.values.toList(),
+    );
+    await sub.cancel();
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    debugPrint('[BLE] Escaneo amplio finalizado: ${list.length} dispositivos');
+    return list;
+  }
+
+  /// Lee el nivel de batería (0–100) del wearable actualmente conectado.
+  /// Si no hay dispositivo conectado o el servicio BAS no está expuesto,
+  /// retorna null.
+  Future<int?> readBatteryLevel() async {
+    final device = _device;
+    if (device == null || !device.isConnected) return null;
+    try {
+      final services = await device.discoverServices();
+      final bas = services.firstWhere(
+        (s) => s.serviceUuid == _batteryServiceUuid,
+        orElse: () => throw Exception('Battery Service no encontrado'),
+      );
+      final char = bas.characteristics.firstWhere(
+        (c) => c.characteristicUuid == _batteryLevelUuid,
+        orElse: () => throw Exception('Battery Level char no encontrado'),
+      );
+      final value = await char.read();
+      if (value.isNotEmpty) return value.first.clamp(0, 100);
+      return null;
+    } catch (e) {
+      debugPrint('[BLE] readBatteryLevel error: $e');
+      return null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   //  DESCONEXIÓN Y LIMPIEZA
   // ═══════════════════════════════════════════════════════════════════
 
@@ -453,4 +555,20 @@ enum BleConnectionState {
   connecting,
   connected,
   reconnecting,
+}
+
+/// Dispositivo BLE detectado durante un escaneo (sin conexión).
+class BleScannedDevice {
+  const BleScannedDevice({
+    required this.name,
+    required this.remoteId,
+    required this.rssi,
+    required this.offersHeartRate,
+    required this.offersBattery,
+  });
+  final String name;
+  final String remoteId;
+  final int rssi;
+  final bool offersHeartRate;
+  final bool offersBattery;
 }

@@ -79,7 +79,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildScreen(List routines) {
     switch (_tab) {
       case 'coach':
-        return const AiCoachPage(embedded: true);
+        return _CoachScreen(onOpen: () => _openAiCoach(context));
       case 'nutrition':
         return _NutritionScreen(onOpen: () => _openBackend(context));
       case 'clinic':
@@ -89,7 +89,6 @@ class _HomePageState extends State<HomePage> {
           routinesCount: routines.length,
           onOpenRoutines: _openRoutines,
           onOpenAiCoach: _openAiCoach,
-          onOpenBackend: _openBackend,
           onLogout: _logout,
         );
     }
@@ -184,14 +183,44 @@ class _Header extends StatelessWidget {
             onTap: () => Navigator.pushNamed(context, '/devices'),
             child: const _LiveSync(),
           ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/devices'),
+            child: const _StepsPill(),
+          ),
         ],
       ),
     );
   }
 }
 
-class _LiveSync extends StatelessWidget {
+class _LiveSync extends StatefulWidget {
   const _LiveSync();
+
+  @override
+  State<_LiveSync> createState() => _LiveSyncState();
+}
+
+class _LiveSyncState extends State<_LiveSync> {
+  int? _hr;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    await HealthService.requestPermissions();
+    final hr = await HealthService.fetchLatestHeartRate();
+    if (mounted) {
+      setState(() {
+        _hr = hr;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,70 +229,148 @@ class _LiveSync extends StatelessWidget {
     final mutedFg = DesignTokens.mutedForeground(b);
     final surface1 = DesignTokens.surface1(b);
     final border = DesignTokens.border(b);
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: surface1,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const AiPulseEffect(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Color(0xFF10B981),
-                        shape: BoxShape.circle,
-                      ),
-                      child: SizedBox(width: 8, height: 8),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: surface1,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const AiPulseEffect(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
                     ),
+                    child: SizedBox(width: 8, height: 8),
                   ),
-                  AiRingEffect(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withOpacity(0.4),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const SizedBox(width: 8, height: 8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(LucideIcons.heart, size: 14, color: fg.withOpacity(0.7)),
-            const SizedBox(width: 4),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
-                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
-                children: [
-                  const TextSpan(text: '64'),
-                  TextSpan(
-                    text: 'bpm',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: mutedFg,
+                AiRingEffect(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.4),
+                      shape: BoxShape.circle,
                     ),
+                    child: const SizedBox(width: 8, height: 8),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Icon(LucideIcons.heart, size: 14, color: fg.withOpacity(0.7)),
+          const SizedBox(width: 4),
+          RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+              children: [
+                TextSpan(text: _loading ? '--' : (_hr == null ? '--' : '$_hr')),
+                TextSpan(
+                  text: 'bpm',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: mutedFg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepsPill extends StatefulWidget {
+  const _StepsPill();
+
+  @override
+  State<_StepsPill> createState() => _StepsPillState();
+}
+
+class _StepsPillState extends State<_StepsPill> {
+  int _steps = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    await HealthService.requestPermissions();
+    final steps = await HealthService.fetchTodaySteps();
+    if (mounted) {
+      setState(() {
+        _steps = steps;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final surface1 = DesignTokens.surface1(b);
+    final border = DesignTokens.border(b);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: surface1,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.footprints, size: 14, color: fg.withOpacity(0.7)),
+          const SizedBox(width: 4),
+          RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+              children: [
+                TextSpan(
+                  text: _loading
+                      ? '--'
+                      : (_steps >= 1000
+                          ? '${(_steps / 1000).toStringAsFixed(1)}k'
+                          : '$_steps'),
+                ),
+                TextSpan(
+                  text: 'pasos',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: mutedFg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -276,14 +383,12 @@ class _DashboardScreen extends StatelessWidget {
     required this.routinesCount,
     required this.onOpenRoutines,
     required this.onOpenAiCoach,
-    required this.onOpenBackend,
     required this.onLogout,
   });
 
   final int routinesCount;
   final void Function(BuildContext) onOpenRoutines;
   final void Function(BuildContext) onOpenAiCoach;
-  final void Function(BuildContext) onOpenBackend;
   final Future<void> Function(BuildContext) onLogout;
 
   @override
@@ -306,12 +411,6 @@ class _DashboardScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _NewSectionsRow(),
           const SizedBox(height: 16),
-          _QuickActions(
-            onScan: () => onOpenBackend(context),
-            onPosture: () => onOpenBackend(context),
-            onUpload: () => onOpenBackend(context),
-          ),
-          const SizedBox(height: 16),
           GestureDetector(
             onTap: () => Navigator.pushNamed(context, '/progress'),
             child: _DailySummary(summary: summary, loading: summaryProv.isLoading, error: summaryProv.error),
@@ -325,8 +424,6 @@ class _DashboardScreen extends StatelessWidget {
             onLongPress: () => Navigator.pushNamed(context, '/focus'),
           ),
           const SizedBox(height: 16),
-          _AiCard(onTalk: () => onOpenAiCoach(context)),
-          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => onLogout(context),
             icon: const Icon(LucideIcons.logOut, size: 18),
@@ -393,15 +490,75 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _PredictiveAlert extends StatelessWidget {
+class _PredictiveAlert extends StatefulWidget {
+  @override
+  State<_PredictiveAlert> createState() => _PredictiveAlertState();
+}
+
+class _PredictiveAlertState extends State<_PredictiveAlert> {
+  ReadinessSummary? _readiness;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    HealthService.fetchSleepAndReadiness().then((r) {
+      if (mounted) {
+        setState(() {
+          _readiness = r;
+          _loading = false;
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Container(
+        height: 72,
+        decoration: BoxDecoration(
+          gradient: DesignTokens.warnSoft,
+          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final title = _readiness?.alertTitle ?? 'ESTADO � SIN DATOS HC';
+    final body = _readiness?.alertBody ??
+        'Activa Health Connect para ver tu alerta de readiness.';
+    final level = _readiness?.level ?? ReadinessLevel.ok;
+
+    final iconColor = level == ReadinessLevel.fatigue
+        ? const Color(0xFFC2410C)
+        : level == ReadinessLevel.warning
+            ? const Color(0xFFD97706)
+            : const Color(0xFF059669);
+    final titleColor = level == ReadinessLevel.fatigue
+        ? const Color(0xFF9A3412)
+        : level == ReadinessLevel.warning
+            ? const Color(0xFF92400E)
+            : const Color(0xFF065F46);
+    final iconData = level == ReadinessLevel.ok
+        ? LucideIcons.checkCircle
+        : LucideIcons.alertTriangle;
+
     final b = Theme.of(context).brightness;
     final fg = DesignTokens.foreground(b);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: DesignTokens.warnSoft,
+        gradient: level == ReadinessLevel.ok
+            ? DesignTokens.aiGradientSoft
+            : DesignTokens.warnSoft,
         borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
         boxShadow: DesignTokens.shadowCard(b),
       ),
@@ -417,8 +574,7 @@ class _PredictiveAlert extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: DesignTokens.shadowSoft(b),
             ),
-            child: const Icon(LucideIcons.alertTriangle,
-                size: 16, color: Color(0xFFC2410C)),
+            child: Icon(iconData, size: 16, color: iconColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -426,30 +582,22 @@ class _PredictiveAlert extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ALERTA · TRANSFORMER IA',
+                  title,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1.4,
-                    color: const Color(0xFF9A3412).withOpacity(0.8),
+                    color: titleColor.withOpacity(0.85),
                   ),
                 ),
                 const SizedBox(height: 4),
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: fg,
-                      height: 1.35,
-                    ),
-                    children: [
-                      const TextSpan(text: 'Patrones de '),
-                      TextSpan(text: 'VFC', style: TextStyle(fontWeight: FontWeight.w700)),
-                      const TextSpan(text: ' indican fatiga sistémica. Carga de hoy '),
-                      TextSpan(text: 'reducida un 20%', style: TextStyle(fontWeight: FontWeight.w700)),
-                      const TextSpan(text: '.'),
-                    ],
+                Text(
+                  body,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: fg,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -457,99 +605,10 @@ class _PredictiveAlert extends StatelessWidget {
           ),
         ],
       ),
-    );
+);
   }
 }
 
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.onScan,
-    required this.onPosture,
-    required this.onUpload,
-  });
-
-  final VoidCallback onScan;
-  final VoidCallback onPosture;
-  final VoidCallback onUpload;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Escanear', 'Comida', LucideIcons.camera, onScan),
-      ('Evaluar', 'Postura', LucideIcons.scanLine, onPosture),
-      ('Subir', 'Analítica', LucideIcons.fileText, onUpload),
-    ];
-    return Row(
-      children: [
-        for (int i = 0; i < items.length; i++) ...[
-          Expanded(child: _ActionTile(
-            label: items[i].$1,
-            sub: items[i].$2,
-            icon: items[i].$3,
-            onTap: items[i].$4,
-          )),
-          if (i < items.length - 1) const SizedBox(width: 12),
-        ],
-      ],
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.label,
-    required this.sub,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final String sub;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    return Material(
-      color: card,
-      borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-            boxShadow: DesignTokens.shadowSoft(b),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 16, color: fg),
-              ),
-              const SizedBox(height: 12),
-              Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
-              Text(sub, style: TextStyle(fontSize: 11, color: mutedFg)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _DailySummary extends StatelessWidget {
   const _DailySummary({required this.summary, required this.loading, required this.error});
@@ -630,88 +689,6 @@ class _DailySummary extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        // Macros Hoy
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: card,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: DesignTokens.shadowCard(b),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('MACROS · HOY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-                  Text('${s.consumidoHoy.kcal.toInt()} / ${s.objetivos.kcal.toInt()} kcal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Barra de progreso global
-              Container(
-                height: 8,
-                decoration: BoxDecoration(color: DesignTokens.muted(b), borderRadius: BorderRadius.circular(999)),
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: pctK,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: DesignTokens.aiGradient,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Chips individuales
-              Row(
-                children: [
-                  Expanded(
-                    child: _MacroBox(
-                      label: 'PROTEÍNA',
-                      val: s.consumidoHoy.proteinasG.toInt(),
-                      total: s.objetivos.proteinasG.toInt(),
-                      color: const Color(0xFF9D7BFF),
-                      surface1: surface1,
-                      fg: fg,
-                      mutedFg: mutedFg,
-                      muted: DesignTokens.muted(b),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MacroBox(
-                      label: 'CARBOHIDRATOS',
-                      val: s.consumidoHoy.carbohidratosG.toInt(),
-                      total: s.objetivos.carbohidratosG.toInt(),
-                      color: const Color(0xFF06B6D4),
-                      surface1: surface1,
-                      fg: fg,
-                      mutedFg: mutedFg,
-                      muted: DesignTokens.muted(b),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MacroBox(
-                      label: 'GRASAS',
-                      val: s.consumidoHoy.grasasG.toInt(),
-                      total: s.objetivos.grasasG.toInt(),
-                      color: const Color(0xFFF87171),
-                      surface1: surface1,
-                      fg: fg,
-                      mutedFg: mutedFg,
-                      muted: DesignTokens.muted(b),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ],
     );
@@ -1259,160 +1236,6 @@ class _MiniMacroChip extends StatelessWidget {
   }
 }
 
-class _AiCard extends StatelessWidget {
-  const _AiCard({required this.onTalk});
-  final VoidCallback onTalk;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: DesignTokens.card(b),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
-      child: Stack(
-        children: [
-          // Fondo brillante AI 1
-          Positioned(
-            right: -64,
-            top: -64,
-            child: Container(
-              width: 224,
-              height: 224,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: DesignTokens.aiGradientSoft,
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: const SizedBox(),
-              ),
-            ),
-          ),
-          // Fondo brillante AI 2
-          Positioned(
-            left: -40,
-            bottom: -80,
-            child: Container(
-              width: 192,
-              height: 192,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: DesignTokens.aiGradientSoft,
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: const SizedBox(),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: DesignTokens.aiGradient,
-                        shape: BoxShape.circle,
-                        boxShadow: DesignTokens.shadowSoft(b),
-                      ),
-                      child: const Icon(LucideIcons.sparkles, size: 14, color: Colors.white),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'TU IA · AHORA',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.4,
-                        color: fg.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: fg, height: 1.35),
-                    children: [
-                      const TextSpan(text: 'Dormiste poco hoy. He adaptado tu rutina de fuerza para priorizar la '),
-                      WidgetSpan(
-                        child: AiGradientText(
-                          'recuperación',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: fg),
-                        ),
-                      ),
-                      const TextSpan(text: '.'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    InkWell(
-                      onTap: () {}, // Futura funcionalidad: Ver ajustes
-                      child: Row(
-                        children: [
-                          Text(
-                            'Ver ajustes',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg.withOpacity(0.8)),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(LucideIcons.chevronRight, size: 16, color: fg.withOpacity(0.8)),
-                        ],
-                      ),
-                    ),
-                    InkWell(
-                      onTap: onTalk,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: fg,
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: DesignTokens.shadowCard(b),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.mic, size: 16, color: DesignTokens.background(b)),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Hablar con IA',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: DesignTokens.background(b),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/* ============================== COACH / ENTRENADOR ============================== */
 
 class _CoachScreen extends StatelessWidget {
   const _CoachScreen({required this.onOpen});

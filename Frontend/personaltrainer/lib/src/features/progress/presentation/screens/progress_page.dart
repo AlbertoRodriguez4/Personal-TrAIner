@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../services/health_service.dart';
 import '../../models/calendar_day_summary.dart';
 
 /// Pantalla de Progreso — réplica de `progress.tsx` (3 tabs:
@@ -577,11 +578,124 @@ class _KcalBlock extends StatelessWidget {
 
 /* ─────────────────────── 2. Training ─────────────────────── */
 
-class _TrainingCalendar extends StatelessWidget {
+class _TrainingCalendar extends StatefulWidget {
   const _TrainingCalendar({required this.monthLabel, required this.days, required this.weeklyVolume});
   final String monthLabel;
   final List<CalendarDaySummary> days;
   final List<WeeklyVolumeItem> weeklyVolume;
+
+  @override
+  State<_TrainingCalendar> createState() => _TrainingCalendarState();
+}
+
+class _TrainingCalendarState extends State<_TrainingCalendar> {
+  int? _openDay;
+  List<DayWorkoutSummary> _openDayWorkouts = const [];
+  bool _loadingDay = false;
+
+  Future<void> _openDaySheet(int day) async {
+    setState(() {
+      _openDay = day;
+      _loadingDay = true;
+      _openDayWorkouts = const [];
+    });
+    final workouts = await HealthService.fetchWorkoutsForDay(day);
+    if (!mounted) return;
+    setState(() => _openDayWorkouts = workouts);
+    if (!mounted) return;
+    setState(() => _loadingDay = false);
+    if (!mounted) return;
+    _showDaySheet();
+  }
+
+  void _showDaySheet() {
+    final day = _openDay;
+    if (day == null) return;
+    final b = Theme.of(context).brightness;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: DesignTokens.card(b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetCtx) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: DesignTokens.surface2of(b),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ENTRENOS DEL DÍA',
+                              style: DesignTokens.labelSmall(
+                                  color: DesignTokens.mutedForeground(b))),
+                          const SizedBox(height: 4),
+                          Text('$day de ${widget.monthLabel}',
+                              style: DesignTokens.titleFont(
+                                  fontSize: 22,
+                                  color: DesignTokens.foreground(b))),
+                        ],
+                      ),
+                    ),
+                    _RoundIconButton(
+                      icon: LucideIcons.x,
+                      size: 36,
+                      fillColor: DesignTokens.surface1(b),
+                      onTap: () => Navigator.pop(sheetCtx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (_loadingDay)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                else if (_openDayWorkouts.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Sin entrenamientos registrados este día.',
+                      style: DesignTokens.bodyFont(
+                          fontSize: 13,
+                          color: DesignTokens.mutedForeground(b)),
+                    ),
+                  )
+                else
+                  for (final w in _openDayWorkouts) ...[
+                    _WorkoutTile(workout: w),
+                    if (w != _openDayWorkouts.last) const SizedBox(height: 10),
+                  ],
+              ],
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) setState(() => _openDay = null);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -600,22 +714,94 @@ class _TrainingCalendar extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _MonthHeader(title: monthLabel),
+                _MonthHeader(title: widget.monthLabel),
                 const SizedBox(height: 16),
                 const _Weekdays(),
                 const SizedBox(height: 8),
-                _TrainingGrid(days: days),
+                _TrainingGrid(
+                  days: widget.days,
+                  onDayTap: (day, hasWorkout) {
+                    if (hasWorkout) _openDaySheet(day);
+                  },
+                ),
                 const SizedBox(height: 16),
                 _Legend(const [
                   (color: DesignTokens.progressBlue, label: 'Completado'),
                   (color: DesignTokens.progressOrange, label: 'Programado'),
                   (color: DesignTokens.progressGray, label: 'Descanso'),
                 ]),
+                const SizedBox(height: 8),
+                Text(
+                  'Toca un día con entreno para ver el resumen',
+                  style: DesignTokens.bodyFont(
+                      fontSize: 11,
+                      color: DesignTokens.mutedForeground(b)),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          _WeeklyVolumeChart(weeks: weeklyVolume),
+          _WeeklyVolumeChart(weeks: widget.weeklyVolume),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutTile extends StatelessWidget {
+  const _WorkoutTile({required this.workout});
+  final DayWorkoutSummary workout;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DesignTokens.surface1(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: DesignTokens.progressBlue.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(LucideIcons.dumbbell,
+                size: 18, color: DesignTokens.progressBlue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(workout.title,
+                    style: DesignTokens.bodyFont(
+                        fontSize: 14,
+                        weight: FontWeight.w700,
+                        color: DesignTokens.foreground(b))),
+                const SizedBox(height: 4),
+                Text(
+                  '${workout.timeRange} · ${workout.durationMinutes} min'
+                  '${workout.totalEnergyCalories != null ? " · ${workout.totalEnergyCalories} kcal" : ""}'
+                  '${workout.totalDistanceMeters != null && workout.totalDistanceMeters! > 0 ? " · ${(workout.totalDistanceMeters! / 1000).toStringAsFixed(2)} km" : ""}',
+                  style: DesignTokens.bodyFont(
+                      fontSize: 12,
+                      color: DesignTokens.mutedForeground(b)),
+                ),
+                const SizedBox(height: 4),
+                Text('Fuente: ${workout.sourceName}',
+                    style: DesignTokens.bodyFont(
+                        fontSize: 10,
+                        color: DesignTokens.mutedForeground(b))),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -623,8 +809,9 @@ class _TrainingCalendar extends StatelessWidget {
 }
 
 class _TrainingGrid extends StatelessWidget {
-  const _TrainingGrid({required this.days});
+  const _TrainingGrid({required this.days, required this.onDayTap});
   final List<CalendarDaySummary> days;
+  final void Function(int day, bool hasWorkout) onDayTap;
 
   @override
   Widget build(BuildContext context) {
@@ -638,45 +825,75 @@ class _TrainingGrid extends StatelessWidget {
       childAspectRatio: 1,
       children: [
         for (final d in days)
-          Container(
-            decoration: BoxDecoration(
-              color: DesignTokens.surface1(b),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: DesignTokens.border(b)),
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 6,
-                  top: 4,
-                  child: Text(d.date.toString(),
-                      style: DesignTokens.bodyFont(
-                          fontSize: 10,
-                          weight: FontWeight.w600,
-                          color: d.status == CalendarDayStatus.future
-                              ? DesignTokens.mutedForeground(b)
-                              : DesignTokens.foreground(b))),
+          GestureDetector(
+            onTap: d.status == CalendarDayStatus.future || d.sessionsCompleted == 0
+                ? null
+                : () => onDayTap(d.date, d.sessionsCompleted > 0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: d.sessionsCompleted > 0
+                    ? DesignTokens.progressBlue.withOpacity(0.08)
+                    : DesignTokens.surface1(b),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: d.sessionsCompleted > 0
+                      ? DesignTokens.progressBlue.withOpacity(0.35)
+                      : DesignTokens.border(b),
                 ),
-                Positioned(
-                  bottom: 6,
-                  right: 6,
-                  child: _iconFor(d, b),
-                ),
-                if (d.status != CalendarDayStatus.rest && d.status != CalendarDayStatus.future)
+              ),
+              child: Stack(
+                children: [
                   Positioned(
-                    bottom: 4,
-                    left: 4,
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: d.status == CalendarDayStatus.done ? DesignTokens.progressBlue : DesignTokens.progressOrange,
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: d.status == CalendarDayStatus.done ? DesignTokens.progressBlue : DesignTokens.progressOrange, blurRadius: 6)],
+                    left: 6,
+                    top: 4,
+                    child: Text(d.date.toString(),
+                        style: DesignTokens.bodyFont(
+                            fontSize: 10,
+                            weight: FontWeight.w600,
+                            color: d.status == CalendarDayStatus.future
+                                ? DesignTokens.mutedForeground(b)
+                                : DesignTokens.foreground(b))),
+                  ),
+                  if (d.sessionsCompleted > 0)
+                    Positioned(
+                      top: 4,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: DesignTokens.progressBlue,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'x${d.sessionsCompleted}',
+                          style: DesignTokens.bodyFont(
+                              fontSize: 8,
+                              weight: FontWeight.w700,
+                              color: Colors.white),
+                        ),
                       ),
                     ),
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: _iconFor(d, b),
                   ),
-              ],
+                  if (d.status != CalendarDayStatus.rest && d.status != CalendarDayStatus.future)
+                    Positioned(
+                      bottom: 4,
+                      left: 4,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: d.status == CalendarDayStatus.done ? DesignTokens.progressBlue : DesignTokens.progressOrange,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: d.status == CalendarDayStatus.done ? DesignTokens.progressBlue : DesignTokens.progressOrange, blurRadius: 6)],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
       ],
@@ -713,10 +930,10 @@ class _WeeklyVolumeChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            children: [
-              Expanded(
+Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
                   child: Text(
                     'Volumen semanal · Tonelaje'.toUpperCase(),
                     style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b)),
@@ -808,10 +1025,10 @@ class _UnifiedInsights extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  children: [
-                    Expanded(child: Text('Entrenamientos completados'.toUpperCase(), style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b)))),
+Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: Text('Entrenamientos completados'.toUpperCase(), style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b)))),
                     Text('últimas 8 semanas', style: DesignTokens.bodyFont(fontSize: 11, color: DesignTokens.mutedForeground(b))),
                   ],
                 ),
