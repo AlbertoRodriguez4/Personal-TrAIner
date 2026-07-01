@@ -98,7 +98,7 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
                           onPickCapture: _pickImage,
                           onPickGallery: _pickImageGallery,
                           file: _file,
-                          ctaLabel: 'Tomar / elegir',
+                          ctaLabel: 'Tomar foto / elegir galería',
                           onAnalyze: (f) => widget.onAnalyze?.call(f, ClinicImportMode.image),
                         ),
                       ClinicImportMode.manual => _ManualForm(onSave: widget.onManualSave),
@@ -244,9 +244,42 @@ class _FileDrop extends StatelessWidget {
   final VoidCallback? onPick, onPickCapture, onPickGallery;
   final void Function(File) onAnalyze;
 
-  void _onTap() {
+  void _onTap(BuildContext context) {
     if (onPickCapture != null && onPickGallery != null) {
-      // Prefer camera if available; fall back to gallery handled by caller separately.
+      // Ambos disponibles: ofrecer elección (cámara o galería).
+      final b = Theme.of(context).brightness;
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: DesignTokens.card(b),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(LucideIcons.camera, color: DesignTokens.foreground(b)),
+                title: Text('Tomar foto', style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onPickCapture!();
+                },
+              ),
+              ListTile(
+                leading: Icon(LucideIcons.image, color: DesignTokens.foreground(b)),
+                title: Text('Elegir de galería', style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onPickGallery!();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    } else if (onPickCapture != null) {
       onPickCapture!();
     } else if (onPick != null) {
       onPick!();
@@ -260,7 +293,7 @@ class _FileDrop extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InkWell(
-          onTap: _onTap,
+          onTap: () => _onTap(context),
           child: Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
@@ -375,11 +408,21 @@ class _ManualForm extends StatefulWidget {
 class _ManualFormState extends State<_ManualForm> {
   final _ctrls = <String, TextEditingController>{};
 
+  /// Registro estático para que [_ManualFieldTile] (StatelessWidget) pueda
+  /// resolver su controlador sin recibirlo por parámetro. Se mantiene durante
+  /// el ciclo de vida del State padre.
+  static final Map<String, TextEditingController> _activeCtrls = {};
+
+  static TextEditingController _controllerFor(String key) =>
+      _activeCtrls[key] ?? TextEditingController();
+
   @override
   void initState() {
     super.initState();
     for (final f in _ManualFields.data) {
-      _ctrls[f.$1] = TextEditingController();
+      final c = TextEditingController();
+      _ctrls[f.$1] = c;
+      _activeCtrls[f.$1] = c;
     }
   }
 
@@ -387,6 +430,9 @@ class _ManualFormState extends State<_ManualForm> {
   void dispose() {
     for (final c in _ctrls.values) {
       c.dispose();
+    }
+    for (final k in _ctrls.keys) {
+      _activeCtrls.remove(k);
     }
     super.dispose();
   }
@@ -402,66 +448,40 @@ class _ManualFormState extends State<_ManualForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: DesignTokens.card(b),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: DesignTokens.shadowSoft(b),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Valores clave'.toUpperCase(),
-                  style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 5.5,
+        Expanded(
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: DesignTokens.card(b),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: DesignTokens.shadowSoft(b),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final f in _ManualFields.data)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(f.$2, style: DesignTokens.bodyFont(fontSize: 11, color: DesignTokens.mutedForeground(b))),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: DesignTokens.surface1(b),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: DesignTokens.border(b)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _ctrls[f.$1],
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: DesignTokens.bodyFont(fontSize: 14, weight: FontWeight.w600, color: DesignTokens.foreground(b)),
-                                  decoration: InputDecoration(
-                                    isCollapsed: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    border: InputBorder.none,
-                                    hintText: f.$3.isEmpty ? '' : f.$4,
-                                    hintStyle: DesignTokens.bodyFont(fontSize: 14, color: DesignTokens.mutedForeground(b).withOpacity(0.6)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(f.$3, style: DesignTokens.bodyFont(fontSize: 10, color: DesignTokens.mutedForeground(b))),
-                            ],
-                          ),
-                        ),
-                      ],
+                  Text('Valores clave'.toUpperCase(),
+                      style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
+                  const SizedBox(height: 12),
+                  // Filas de 2 en 2 (última fila con 1 sola celda centrada si es impar).
+                  for (var i = 0; i < _ManualFields.data.length; i += 2)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: i + 2 < _ManualFields.data.length ? 12 : 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _ManualFieldTile(field: _ManualFields.data[i])),
+                          const SizedBox(width: 12),
+                          if (i + 1 < _ManualFields.data.length)
+                            Expanded(child: _ManualFieldTile(field: _ManualFields.data[i + 1]))
+                          else
+                            const Expanded(child: SizedBox()),
+                        ],
+                      ),
                     ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -482,6 +502,58 @@ class _ManualFormState extends State<_ManualForm> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ManualFieldTile extends StatelessWidget {
+  const _ManualFieldTile({required this.field});
+  final (String, String, String, String) field;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    // El controlador se resuelve vía finder estático mantenido en el State padre.
+    final controller = _ManualFormState._controllerFor(field.$1);
+    return SizedBox(
+      height: 72,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(field.$2, style: DesignTokens.bodyFont(fontSize: 11, color: DesignTokens.mutedForeground(b))),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: DesignTokens.surface1(b),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: DesignTokens.border(b)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: DesignTokens.bodyFont(fontSize: 14, weight: FontWeight.w600, color: DesignTokens.foreground(b)),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                        hintText: field.$3.isEmpty ? '' : field.$4,
+                        hintStyle: DesignTokens.bodyFont(fontSize: 14, color: DesignTokens.mutedForeground(b).withOpacity(0.6)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(field.$3, style: DesignTokens.bodyFont(fontSize: 10, color: DesignTokens.mutedForeground(b))),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -79,11 +79,11 @@ class _HomePageState extends State<HomePage> {
   Widget _buildScreen(List routines) {
     switch (_tab) {
       case 'coach':
-        return _CoachScreen(onOpen: () => _openAiCoach(context));
+        return const AiCoachPage(embedded: true);
       case 'nutrition':
         return _NutritionScreen(onOpen: () => _openBackend(context));
       case 'clinic':
-        return _ClinicScreen(onOpen: () => _openBackend(context));
+        return _ClinicScreen(onOpen: () => Navigator.pushNamed(context, '/clinic/import'));
       default:
         return _DashboardScreen(
           routinesCount: routines.length,
@@ -180,7 +180,10 @@ class _Header extends StatelessWidget {
             color: fg,
           ),
           const SizedBox(width: 12),
-          const _LiveSync(),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/devices'),
+            child: const _LiveSync(),
+          ),
         ],
       ),
     );
@@ -299,17 +302,27 @@ class _DashboardScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _PredictiveAlert(),
           const SizedBox(height: 16),
+          _AICoachCTA(onTalk: () => onOpenAiCoach(context)),
+          const SizedBox(height: 16),
+          _NewSectionsRow(),
+          const SizedBox(height: 16),
           _QuickActions(
             onScan: () => onOpenBackend(context),
             onPosture: () => onOpenBackend(context),
             onUpload: () => onOpenBackend(context),
           ),
           const SizedBox(height: 16),
-          _DailySummary(summary: summary, loading: summaryProv.isLoading, error: summaryProv.error),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/progress'),
+            child: _DailySummary(summary: summary, loading: summaryProv.isLoading, error: summaryProv.error),
+          ),
+          const SizedBox(height: 16),
+          _MacrosMini(summary: summary),
           const SizedBox(height: 16),
           _WorkoutCard(
             routinesCount: summary?.rutinasCount ?? routinesCount,
             onTap: () => onOpenRoutines(context),
+            onLongPress: () => Navigator.pushNamed(context, '/focus'),
           ),
           const SizedBox(height: 16),
           _AiCard(onTalk: () => onOpenAiCoach(context)),
@@ -773,9 +786,10 @@ class _Row extends StatelessWidget {
 }
 
 class _WorkoutCard extends StatefulWidget {
-  const _WorkoutCard({required this.routinesCount, required this.onTap});
+  const _WorkoutCard({required this.routinesCount, required this.onTap, this.onLongPress});
   final int routinesCount;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   State<_WorkoutCard> createState() => _WorkoutCardState();
@@ -878,6 +892,7 @@ class _WorkoutCardState extends State<_WorkoutCard> {
           MaterialPageRoute(builder: (_) => WorkoutDetailPage(workout: w)),
         );
       },
+      onLongPress: widget.onLongPress,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -946,6 +961,298 @@ class _StatPill extends StatelessWidget {
           Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: fg)),
           const SizedBox(height: 2),
           Text(sub, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: mutedFg)),
+        ],
+      ),
+    );
+  }
+}
+
+/* ───────────────── AICoachCTA (réplica de index.tsx AICoachCTA) ───────────────── */
+
+class _AICoachCTA extends StatelessWidget {
+  const _AICoachCTA({required this.onTalk});
+  final VoidCallback onTalk;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final bg = DesignTokens.background(b);
+
+    return GestureDetector(
+      onTap: onTalk,
+      child: Container(
+        padding: const EdgeInsets.all(1),
+        decoration: BoxDecoration(
+          gradient: DesignTokens.aiGradient,
+          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+          boxShadow: DesignTokens.shadowCard(b),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(DesignTokens.cardRadius - 1),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              color: bg.withOpacity(0.85),
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: DesignTokens.aiGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: DesignTokens.shadowSoft(b),
+                    ),
+                    child: const Icon(LucideIcons.sparkles, size: 20, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('TU COACH · IA',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+                        const SizedBox(height: 2),
+                        Text('Pregunta cualquier cosa',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg, height: 1.2, letterSpacing: -0.3)),
+                        const SizedBox(height: 2),
+                        Text('Rutinas, macros o recuperación',
+                            style: TextStyle(fontSize: 12, color: mutedFg)),
+                      ],
+                    ),
+                  ),
+                  Icon(LucideIcons.chevronRight, size: 20, color: mutedFg),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ───────────────── NewSectionsRow (3 tarjetas de navegación) ───────────────── */
+
+class _NewSectionsRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final tiles = [
+      (
+        icon: LucideIcons.heart,
+        title: 'Recuperación',
+        sub: 'Sueño & VFC IA',
+        onTap: () => Navigator.pushNamed(context, '/recovery'),
+      ),
+      (
+        icon: LucideIcons.activity,
+        title: 'Dispositivos',
+        sub: 'Sync Center',
+        onTap: () => Navigator.pushNamed(context, '/devices'),
+      ),
+      (
+        icon: LucideIcons.trendingUp,
+        title: 'Progreso',
+        sub: 'Calendarios & Insights',
+        onTap: () => Navigator.pushNamed(context, '/progress'),
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _NavTile(tile: tiles[0])),
+            const SizedBox(width: 12),
+            Expanded(child: _NavTile(tile: tiles[1])),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _NavTile(tile: tiles[2]),
+      ],
+    );
+  }
+}
+
+class _NavTile extends StatelessWidget {
+  const _NavTile({required this.tile});
+  final ({IconData icon, String title, String sub, VoidCallback onTap}) tile;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final card = DesignTokens.card(b);
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    return Material(
+      color: card,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: tile.onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(tile.icon, size: 18, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(tile.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+                    const SizedBox(height: 2),
+                    Text(tile.sub, style: TextStyle(fontSize: 11, color: mutedFg)),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.chevronRight, size: 18, color: mutedFg),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ───────────────── MacrosMini (réplica de index.tsx MacrosMini) ───────────────── */
+
+class _MacrosMini extends StatelessWidget {
+  const _MacrosMini({required this.summary});
+  final DailySummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final card = DesignTokens.card(b);
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final surface1 = DesignTokens.surface1(b);
+    final muted = DesignTokens.muted(b);
+
+    if (summary == null) {
+      return Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: muted,
+          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        ),
+      );
+    }
+
+    final s = summary!;
+    final pctK = (s.cumplKcal.porcentaje / 100).clamp(0.0, 1.0);
+    final kcalConsum = s.consumidoHoy.kcal.toInt();
+    final kcalObj = s.objetivos.kcal.toInt();
+
+    final macros = [
+      (label: 'PROTEÍNA', val: s.consumidoHoy.proteinasG.toInt(), total: s.objetivos.proteinasG.toInt(), color: const Color(0xFF9D7BFF)),
+      (label: 'CARBOHIDRATOS', val: s.consumidoHoy.carbohidratosG.toInt(), total: s.objetivos.carbohidratosG.toInt(), color: const Color(0xFF06B6D4)),
+      (label: 'GRASAS', val: s.consumidoHoy.grasasG.toInt(), total: s.objetivos.grasasG.toInt(), color: const Color(0xFFF87171)),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        boxShadow: DesignTokens.shadowCard(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('MACROS · HOY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+              Text('$kcalConsum / $kcalObj kcal', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg.withOpacity(0.7))),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 8,
+            decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: pctK,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              for (var i = 0; i < macros.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(child: _MiniMacroChip(m: macros[i], surface1: surface1, fg: fg, mutedFg: mutedFg, muted: muted)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMacroChip extends StatelessWidget {
+  const _MiniMacroChip({required this.m, required this.surface1, required this.fg, required this.mutedFg, required this.muted});
+  final ({String label, int val, int total, Color color}) m;
+  final Color surface1;
+  final Color fg;
+  final Color mutedFg;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = m.total > 0 ? (m.val / m.total).clamp(0.0, 1.0) : 0.0;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: surface1, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(m.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: mutedFg)),
+          const SizedBox(height: 4),
+          RichText(
+            text: TextSpan(
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: fg),
+              children: [
+                TextSpan(text: '${m.val}'),
+                TextSpan(text: '/${m.total}g', style: TextStyle(fontSize: 11, color: mutedFg, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 4,
+            width: double.infinity,
+            decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: pct,
+              child: Container(decoration: BoxDecoration(color: m.color, borderRadius: BorderRadius.circular(999))),
+            ),
+          ),
         ],
       ),
     );
