@@ -20,6 +20,8 @@ import '../../../../core/ui/metric_ring.dart';
 import '../../../../services/api_service.dart';
 import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
 import '../../../routine/presentation/screens/routines_home_page.dart';
+import '../../../routine/presentation/screens/routine_builder_page.dart';
+import '../../../progress/presentation/screens/progress_page.dart';
 import '../../models/daily_summary.dart';
 import 'backend_features_page.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
@@ -82,8 +84,10 @@ class _HomePageState extends State<HomePage> {
         return _CoachScreen(onOpen: () => _openAiCoach(context));
       case 'nutrition':
         return _NutritionScreen(onOpen: () => _openBackend(context));
-      case 'clinic':
-        return _ClinicScreen(onOpen: () => Navigator.pushNamed(context, '/clinic/import'));
+      case 'progress':
+        return const ProgressRoute(isTab: true);
+      case 'health':
+        return const _HealthScreen();
       default:
         return _DashboardScreen(
           routinesCount: routines.length,
@@ -409,14 +413,10 @@ class _DashboardScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _AICoachCTA(onTalk: () => onOpenAiCoach(context)),
           const SizedBox(height: 16),
-          _NewSectionsRow(),
-          const SizedBox(height: 16),
           GestureDetector(
             onTap: () => Navigator.pushNamed(context, '/progress'),
             child: _DailySummary(summary: summary, loading: summaryProv.isLoading, error: summaryProv.error),
           ),
-          const SizedBox(height: 16),
-          _MacrosMini(summary: summary),
           const SizedBox(height: 16),
           _WorkoutCard(
             routinesCount: summary?.rutinasCount ?? routinesCount,
@@ -1036,9 +1036,9 @@ class _AICoachCTA extends StatelessWidget {
   }
 }
 
-/* ───────────────── NewSectionsRow (3 tarjetas de navegación) ───────────────── */
+/* ───────────────── HealthHubGrid (reemplazo de NewSectionsRow) ───────────────── */
 
-class _NewSectionsRow extends StatelessWidget {
+class _HealthHubGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tiles = [
@@ -1055,10 +1055,10 @@ class _NewSectionsRow extends StatelessWidget {
         onTap: () => Navigator.pushNamed(context, '/devices'),
       ),
       (
-        icon: LucideIcons.trendingUp,
-        title: 'Progreso',
-        sub: 'Calendarios & Insights',
-        onTap: () => Navigator.pushNamed(context, '/progress'),
+        icon: LucideIcons.upload,
+        title: 'Clínica',
+        sub: 'Importar datos',
+        onTap: () => Navigator.pushNamed(context, '/clinic/import'),
       ),
     ];
     return Column(
@@ -1072,7 +1072,13 @@ class _NewSectionsRow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _NavTile(tile: tiles[2]),
+        Row(
+          children: [
+            Expanded(child: _NavTile(tile: tiles[2])),
+            const SizedBox(width: 12),
+            Expanded(child: const SizedBox()),
+          ],
+        ),
       ],
     );
   }
@@ -1130,133 +1136,7 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-/* ───────────────── MacrosMini (réplica de index.tsx MacrosMini) ───────────────── */
 
-class _MacrosMini extends StatelessWidget {
-  const _MacrosMini({required this.summary});
-  final DailySummary? summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    final surface1 = DesignTokens.surface1(b);
-    final muted = DesignTokens.muted(b);
-
-    if (summary == null) {
-      return Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: muted,
-          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-        ),
-      );
-    }
-
-    final s = summary!;
-    final pctK = (s.cumplKcal.porcentaje / 100).clamp(0.0, 1.0);
-    final kcalConsum = s.consumidoHoy.kcal.toInt();
-    final kcalObj = s.objetivos.kcal.toInt();
-
-    final macros = [
-      (label: 'PROTEÍNA', val: s.consumidoHoy.proteinasG.toInt(), total: s.objetivos.proteinasG.toInt(), color: const Color(0xFF9D7BFF)),
-      (label: 'CARBOHIDRATOS', val: s.consumidoHoy.carbohidratosG.toInt(), total: s.objetivos.carbohidratosG.toInt(), color: const Color(0xFF06B6D4)),
-      (label: 'GRASAS', val: s.consumidoHoy.grasasG.toInt(), total: s.objetivos.grasasG.toInt(), color: const Color(0xFFF87171)),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('MACROS · HOY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-              Text('$kcalConsum / $kcalObj kcal', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg.withOpacity(0.7))),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 8,
-            decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: pctK,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradient,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              for (var i = 0; i < macros.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8),
-                Expanded(child: _MiniMacroChip(m: macros[i], surface1: surface1, fg: fg, mutedFg: mutedFg, muted: muted)),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniMacroChip extends StatelessWidget {
-  const _MiniMacroChip({required this.m, required this.surface1, required this.fg, required this.mutedFg, required this.muted});
-  final ({String label, int val, int total, Color color}) m;
-  final Color surface1;
-  final Color fg;
-  final Color mutedFg;
-  final Color muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = m.total > 0 ? (m.val / m.total).clamp(0.0, 1.0) : 0.0;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: surface1, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(m.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: mutedFg)),
-          const SizedBox(height: 4),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: fg),
-              children: [
-                TextSpan(text: '${m.val}'),
-                TextSpan(text: '/${m.total}g', style: TextStyle(fontSize: 11, color: mutedFg, fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 4,
-            width: double.infinity,
-            decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: pct,
-              child: Container(decoration: BoxDecoration(color: m.color, borderRadius: BorderRadius.circular(999))),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 
 class _CoachScreen extends StatelessWidget {
@@ -1271,14 +1151,54 @@ class _CoachScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _RagBubble(),
-          const SizedBox(height: 16),
           _XiaomiWorkouts(),
+          const SizedBox(height: 16),
+          _RoutineShortcuts(),
           const SizedBox(height: 16),
           _VoiceHero(onTalk: onOpen),
           const SizedBox(height: 16),
           _FocusModeCard(),
         ],
       ),
+    );
+  }
+}
+
+class _RoutineShortcuts extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _NavTile(
+            tile: (
+              icon: LucideIcons.hammer,
+              title: 'Constructor',
+              sub: 'Crear Rutina',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => RoutineBuilderPage(
+                    onSave: () => context.read<RoutineProvider>().loadRoutines(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _NavTile(
+            tile: (
+              icon: LucideIcons.zap,
+              title: 'Añadir',
+              sub: 'Rápido',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RoutinesHomePage()),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2279,9 +2199,8 @@ class _MacroChip extends StatelessWidget {
 
 /* ============================== CLÍNICA ============================== */
 
-class _ClinicScreen extends StatelessWidget {
-  const _ClinicScreen({required this.onOpen});
-  final VoidCallback onOpen;
+class _HealthScreen extends StatelessWidget {
+  const _HealthScreen();
 
   @override
   Widget build(BuildContext context) {
@@ -2290,8 +2209,8 @@ class _ClinicScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ClinicalImporter(onTap: onOpen),
-          const SizedBox(height: 16),
+          _HealthHubGrid(),
+          const SizedBox(height: 24),
           _CompositionChart(),
           const SizedBox(height: 16),
           _PostureMesh(),
@@ -2301,66 +2220,6 @@ class _ClinicScreen extends StatelessWidget {
   }
 }
 
-class _ClinicalImporter extends StatelessWidget {
-  const _ClinicalImporter({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final border = DesignTokens.border(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-          border: Border.all(color: border, width: 2),
-          boxShadow: DesignTokens.shadowSoft(b),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: DesignTokens.aiGradientSoft,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(LucideIcons.upload, size: 20, color: fg),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Importar archivo clínico',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg)),
-                  const SizedBox(height: 2),
-                  RichText(
-                    text: TextSpan(
-                      style: TextStyle(fontSize: 12, color: mutedFg),
-                      children: [
-                        const TextSpan(text: 'PDF médico, analítica o '),
-                        TextSpan(text: 'DICOM (DEXA)', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _CompositionChart extends StatelessWidget {
   @override
@@ -2629,10 +2488,11 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      ('dashboard', 'Dashboard', LucideIcons.home),
-      ('coach', 'Entrenador', LucideIcons.dumbbell),
+      ('dashboard', 'Inicio', LucideIcons.home),
+      ('coach', 'Entrenar', LucideIcons.dumbbell),
       ('nutrition', 'Nutrición', LucideIcons.apple),
-      ('clinic', 'Clínica', LucideIcons.activity),
+      ('progress', 'Progreso', LucideIcons.trendingUp),
+      ('health', 'Salud', LucideIcons.heart),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
