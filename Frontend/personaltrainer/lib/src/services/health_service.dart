@@ -554,6 +554,15 @@ class HealthService {
     print('[HC] Sueño: bed=$totalBed min, asleep=$asleepMinutes min, deep=$deepMin, rem=$remMin, light=$lightMin, awake=$awakeMin');
 
     final hasStages = deepMin > 0 || remMin > 0 || lightMin > 0;
+
+    int computedAsleep = asleepMinutes > 0 ? asleepMinutes : totalBed;
+    int computedBed = totalBed;
+
+    if (computedAsleep == 0 && computedBed == 0 && hasStages) {
+      computedAsleep = deepMin + remMin + lightMin;
+      computedBed = computedAsleep + awakeMin;
+    }
+
     final stagesInput = <SleepStageInput>[];
     if (hasStages) {
       stagesInput.add(SleepStageInput('Profundo', deepMin));
@@ -561,15 +570,14 @@ class HealthService {
       stagesInput.add(SleepStageInput('Ligero', lightMin));
       stagesInput.add(SleepStageInput('Despierto', awakeMin));
     } else {
-      final computedAsleep = asleepMinutes > 0 ? asleepMinutes : totalBed;
-      final computedAwake = totalBed > computedAsleep ? totalBed - computedAsleep : awakeMin;
+      final computedAwake = computedBed > computedAsleep ? computedBed - computedAsleep : awakeMin;
       stagesInput.add(SleepStageInput('Dormido', computedAsleep));
       stagesInput.add(SleepStageInput('Despierto', computedAwake));
     }
 
     return SleepBreakdown(
-      totalSleepMinutes: asleepMinutes > 0 ? asleepMinutes : totalBed,
-      totalBedMinutes: totalBed,
+      totalSleepMinutes: computedAsleep,
+      totalBedMinutes: computedBed,
       remMinutes: remMin,
       stagesInput: stagesInput,
     );
@@ -713,8 +721,15 @@ class HealthService {
         print('[HC]   ACTIVE_ENERGY ayer ERROR: $e');
       }
 
-      final sleepMinutes = sleepData.fold(
+      int sleepMinutes = sleepData.fold(
           0, (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes);
+
+      if (sleepMinutes == 0) {
+        final deep = stageMinutes['deep'] ?? 0;
+        final rem = stageMinutes['rem'] ?? 0;
+        final light = stageMinutes['light'] ?? 0;
+        sleepMinutes = deep + rem + light;
+      }
 
       double? avgHr;
       if (hrData.isNotEmpty) {
