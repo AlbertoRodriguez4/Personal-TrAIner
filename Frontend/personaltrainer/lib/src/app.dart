@@ -7,6 +7,8 @@ import 'core/providers/workout_session_provider.dart';
 import 'core/providers/daily_summary_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/route_loaders.dart';
+import 'features/devices/presentation/screens/devices_page.dart';
+import 'features/recovery/presentation/screens/recovery_page.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/screens/auth_page.dart';
 import 'features/clinic/presentation/screens/clinic_import_page.dart';
@@ -71,10 +73,10 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
               '/progress': (context) => ProgressRoute(
                     onBack: () => Navigator.pop(context),
                   ),
-              '/recovery': (context) => RecoveryRoute(
+              '/recovery': (context) => RecoveryPage(
                     onBack: () => Navigator.pop(context),
                   ),
-              '/devices': (context) => DevicesRoute(
+              '/devices': (context) => DevicesPage(
                     onBack: () => Navigator.pop(context),
                   ),
               '/focus': (context) => const FocusPage(

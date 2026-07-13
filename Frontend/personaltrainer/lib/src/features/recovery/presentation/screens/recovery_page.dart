@@ -2,52 +2,125 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../services/health_service.dart';
 
 /// Pantalla de Recuperación & Sueño IA — réplica de `recovery.tsx`.
 ///
-/// Todas las métricas (fases de sueño, HR en reposo, alerta IA, VFC) se inyectan
-/// por constructor para no hardcodear mocks.
-class RecoveryPage extends StatelessWidget {
-  const RecoveryPage({
-    super.key,
-    required this.totalSleep,
-    required this.remSleep,
-    required this.restingHr,
-    required this.totalBed,
-    required this.stages,
-    required this.hrvDeltaPercent,
-    required this.alertText,
-    required this.heroBody,
-    this.onBack,
-  });
-
-  /// Ej: "6h 15m"
-  final String totalSleep;
-  final String remSleep;
-  /// Ej: "52 bpm"
-  final String restingHr;
-  /// Ej: "7h 25m en cama"
-  final String totalBed;
-
-  /// Fases del sueño (profundo / REM / ligero / despierto) — datos inyectados.
-  // TODO: conectar a GET /recovery/sleep/{date} (NestJS) → fases desde Mi Fitness/Health Connect.
-  final List<SleepStage> stages;
-
-  /// Delta VFC nocturno vs media semanal (ej: 8 → "+8%").
-  final int hrvDeltaPercent;
-
-  /// Texto de la alerta predictiva de IA (oración del modelo).
-  // TODO: conectar a GET /recovery/predictive-alert (FastAPI).
-  final String alertText;
-
-  /// Cuerpo del hero glass card (acción recalibrada por la IA).
-  final String heroBody;
+/// Carga sus propios datos de sueño desde Health Connect al abrir la pantalla.
+class RecoveryPage extends StatefulWidget {
+  const RecoveryPage({super.key, this.onBack});
 
   final VoidCallback? onBack;
 
   @override
+  State<RecoveryPage> createState() => _RecoveryPageState();
+}
+
+class _RecoveryPageState extends State<RecoveryPage> {
+  ReadinessSummary? _r;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      await HealthService.requestPermissions();
+      _r = await HealthService.fetchSleepAndReadiness();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
+
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: DesignTokens.background(b),
+        body: const SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: DesignTokens.background(b),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Error: $_error',
+                      textAlign: TextAlign.center,
+                      style: DesignTokens.bodyFont(
+                          fontSize: 14, color: DesignTokens.foreground(b))),
+                  const SizedBox(height: 16),
+                  FilledButton(onPressed: _load, child: const Text('Reintentar')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Estados vacíos diferenciados para QA ──
+    final String totalSleep;
+    final String remSleep;
+    final String restingHr;
+    final String heroBody;
+    final String alertText;
+    final String totalBed;
+
+    if (_r == null) {
+      // Sin datos (permisos o HC no disponible)
+      totalSleep = 'Sin datos';
+      remSleep   = 'Sin datos';
+      restingHr  = 'Sin datos';
+      heroBody   = 'Sin datos de sueño esta noche. Conecta tu wearable y verifica los permisos de Health Connect.';
+      alertText  = 'Sin análisis predictivo disponible.';
+      totalBed   = 'Sin datos';
+    } else if (_r!.sleepMinutes == 0) {
+      // HC respondió pero no hay registros de sueño en la ventana
+      totalSleep = 'Sin registros';
+      remSleep   = _r!.remSleepLabel;
+      restingHr  = _r!.restingHrLabel;
+      heroBody   = 'Sin registros de sueño en la ventana nocturna. Verifica que Mi Fitness sincroniza sueño a Health Connect.';
+      alertText  = _r!.alertBody;
+      totalBed   = 'Sin registros';
+    } else {
+      totalSleep = _r!.totalSleepLabel;
+      remSleep   = _r!.remSleepLabel;
+      restingHr  = _r!.restingHrLabel;
+      heroBody   = _r!.alertBody;
+      alertText  = _r!.alertBody;
+      totalBed   = _r!.totalSleepLabel;
+    }
+
+    // Construir fases del sueño como pct de la barra apilada.
+    final stageMin = _r?.stageMinutes ?? const <String, int>{};
+    final total = (stageMin['deep'] ?? 0) +
+                  (stageMin['rem']  ?? 0) +
+                  (stageMin['light'] ?? 0) +
+                  (stageMin['awake'] ?? 0);
+    double pctOf(int v) => total > 0 ? (v / total) * 100 : 0.0;
+    final stages = <SleepStage>[
+      SleepStage(label: 'Profundo',  pct: pctOf(stageMin['deep']  ?? 0), color: DesignTokens.recoveryGlassFrom),
+      SleepStage(label: 'REM',       pct: pctOf(stageMin['rem']   ?? 0), color: DesignTokens.recoveryAlertFrom),
+      SleepStage(label: 'Ligero',    pct: pctOf(stageMin['light'] ?? 0), color: DesignTokens.recoveryAlertTo),
+      SleepStage(label: 'Despierto', pct: pctOf(stageMin['awake'] ?? 0), color: const Color(0xFF3A3F4D)),
+    ];
+
     return Scaffold(
       backgroundColor: DesignTokens.background(b),
       body: SafeArea(
@@ -58,7 +131,7 @@ class RecoveryPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TopBar(title: 'Recuperación IA', onBack: onBack),
+                _TopBar(title: 'Recuperación IA', onBack: widget.onBack),
                 const SizedBox(height: 20),
                 _HeroGlassCard(body: heroBody),
                 const SizedBox(height: 20),
@@ -73,8 +146,16 @@ class RecoveryPage extends StatelessWidget {
                 _SleepStagesCard(
                   totalBed: totalBed,
                   stages: stages,
-                  hrvDeltaPercent: hrvDeltaPercent,
+                  hrvDeltaPercent: 0,
                 ),
+                if (_r == null) ...[
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: _load,
+                    icon: const Icon(LucideIcons.refreshCw, size: 16),
+                    label: const Text('Recargar'),
+                  ),
+                ],
               ],
             ),
           ),

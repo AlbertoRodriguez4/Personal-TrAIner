@@ -605,16 +605,19 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
           ),
         ],
       ),
-);
+    );
   }
 }
-
 
 class _DailySummary extends StatelessWidget {
   const _DailySummary({required this.summary, required this.loading, required this.error});
   final DailySummary? summary;
   final bool loading;
   final String? error;
+
+  /// Future cacheado a nivel de clase para evitar llamadas repetidas en rebuild.
+  static final Future<({int pct, String label})?> _loadFuture =
+      HealthService.fetchPhysicalLoadScore();
 
   @override
   Widget build(BuildContext context) {
@@ -629,68 +632,87 @@ class _DailySummary extends StatelessWidget {
     final surface1 = DesignTokens.surface1(b);
 
     final pctK = (s.cumplKcal.porcentaje / 100).clamp(0.0, 1.0);
-    
-    // Falsos datos de carga física para igualar el mockup
-    final pctCarga = 0.72;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Cuadrados superiores (Carga Física, Macros)
-        Row(
+    return FutureBuilder<({int pct, String label})?>(
+      future: _loadFuture,
+      builder: (context, snap) {
+        final physLoad = snap.data;
+        final double pctCarga;
+        final String loadValue;
+        final String loadLabel;
+
+        if (physLoad != null) {
+          pctCarga  = (physLoad.pct / 100).clamp(0.0, 1.0);
+          loadValue = '${physLoad.pct}';
+          loadLabel = physLoad.label;
+        } else {
+          pctCarga  = 0;
+          loadValue = '—';
+          loadLabel = snap.connectionState == ConnectionState.waiting
+              ? 'cargando…'
+              : 'sin datos';
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: card,
-                  borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-                  boxShadow: DesignTokens.shadowSoft(b),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('CARGA FÍSICA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
-                    const SizedBox(height: 12),
-                    Row(
+            // Cuadrados superiores (Carga Física, Macros)
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: card,
+                      borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+                      boxShadow: DesignTokens.shadowSoft(b),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        MetricRing(value: '72', unit: '%', pct: pctCarga),
-                        const SizedBox(width: 12),
-                        Text('óptima', style: TextStyle(fontSize: 12, color: mutedFg)),
+                        Text('CARGA FÍSICA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            MetricRing(value: loadValue, unit: '%', pct: pctCarga),
+                            const SizedBox(width: 12),
+                            Text(loadLabel, style: TextStyle(fontSize: 12, color: mutedFg)),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: card,
-                  borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-                  boxShadow: DesignTokens.shadowSoft(b),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('MACROS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
-                    const SizedBox(height: 12),
-                    Row(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: card,
+                      borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+                      boxShadow: DesignTokens.shadowSoft(b),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        MetricRing(value: (s.consumidoHoy.kcal / 1000).toStringAsFixed(1), unit: 'k', pct: pctK),
-                        const SizedBox(width: 12),
-                        Text('kcal · ${(s.objetivos.kcal / 1000).toStringAsFixed(1)}k', style: TextStyle(fontSize: 12, color: mutedFg)),
+                        Text('MACROS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            MetricRing(value: (s.consumidoHoy.kcal / 1000).toStringAsFixed(1), unit: 'k', pct: pctK),
+                            const SizedBox(width: 12),
+                            Text('kcal · ${(s.objetivos.kcal / 1000).toStringAsFixed(1)}k', style: TextStyle(fontSize: 12, color: mutedFg)),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

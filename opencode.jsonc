@@ -1,0 +1,85 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // ── Modelo ──────────────────────────────────────────────────────────
+  // Ajusta el string exacto al provider que uses para GLM 5.2 en tu setup.
+  "model": "zhipuai/glm-5.2",
+
+  // ── Plugins de reducción de tokens ─────────────────────────────────
+  // dcp:    poda contexto viejo/estancado y lo reemplaza por resúmenes técnicos
+  // rtk:    comprime salida de comandos bash repetitivos (git status/diff, ls, grep, logs)
+  // openslimedit: comprime descripciones de tools + compacta salida de lectura de archivos
+  "plugin": [
+    "@tarquinen/opencode-dcp@latest",
+    "openslimedit"
+    // "rtk" se instala aparte como binario (ver instrucciones abajo), no como plugin npm
+  ],
+
+  // ── Instrucciones del proyecto ─────────────────────────────────────
+  // Esto es lo que el modelo lee SIEMPRE como contexto persistente.
+  // Mantenlo corto: la lista de archivos clave vive en AGENTS.md, no aquí.
+  "instructions": [
+    "AGENTS.md"
+  ],
+
+  // ── Watcher: qué carpetas/archivos NO debe ni vigilar ni tocar ─────
+  // Esto evita que opencode reaccione a cambios en archivos irrelevantes
+  // y reduce drásticamente lo que se re-indexa/re-lee en cada vuelta.
+  "watcher": {
+    "ignore": [
+      // Flutter / Dart — Frontend/personaltrainer
+      "Frontend/personaltrainer/.dart_tool/**",
+      "Frontend/personaltrainer/build/**",
+      "Frontend/personaltrainer/.flutter-plugins",
+      "Frontend/personaltrainer/.flutter-plugins-dependencies",
+      "Frontend/personaltrainer/.packages",
+      "Frontend/personaltrainer/ios/Pods/**",
+      "Frontend/personaltrainer/android/.gradle/**",
+      "Frontend/personaltrainer/android/app/build/**",
+      "Frontend/personaltrainer/linux/**",
+      "Frontend/personaltrainer/macos/**",
+      "Frontend/personaltrainer/windows/**",
+      "Frontend/personaltrainer/web/**",
+      "**/*.g.dart",        // archivos generados (json_serializable, freezed, etc.)
+      "**/*.freezed.dart",
+      "**/*.mocks.dart",
+
+      // NestJS — Backend/Nestjs
+      "Backend/Nestjs/node_modules/**",
+      "Backend/Nestjs/dist/**",        // build compilado, duplica src/ en JS
+      "Backend/Nestjs/coverage/**",
+
+      // Python / FastAPI — Backend/Python
+      "Backend/Python/__pycache__/**",
+      "Backend/Python/venv/**",
+      "Backend/Python/.venv/**",
+      "**/*.pyc",
+      "**/.pytest_cache/**",
+
+      // Lovable proyect (prototipo React, solo se lee cuando se trabaja en diseño)
+      "lovable proyect/node_modules/**",
+      "lovable proyect/dist/**",
+
+      // Misceláneo / ruido general
+      "**/.git/**",
+      "**/.idea/**",
+      "**/.vscode/**",
+      "**/*.lock",
+      "**/*.log",
+      "**/.DS_Store",
+      "**/dcp.jsonc"
+    ]
+  },
+
+  // ── Permisos: evita prompts innecesarios que generan turnos extra ──
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny",
+      "sudo *": "ask"
+    }
+  },
+
+  "autoupdate": true
+}

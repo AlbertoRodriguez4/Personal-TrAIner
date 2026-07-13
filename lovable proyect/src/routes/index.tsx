@@ -1,29 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import {
-  Sparkles,
-  Mic,
-  Play,
-  Home,
-  Dumbbell,
-  Apple,
-  Activity,
-  ChevronRight,
-} from "lucide-react";
-import { useState } from "react";
-import {
-  Heart,
-  Camera,
-  ScanLine,
-  FileText,
-  Upload,
-  AlertTriangle,
-  Pause,
-  Volume2,
-  Image as ImageIcon,
-  TrendingDown,
-  TrendingUp,
-  CircleUser,
-} from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Sparkles, Play, Hop as Home, Dumbbell, Apple, Activity, ChevronRight } from "lucide-react";
+import { useRef, useState } from "react";
+import { Heart, Camera, ScanLine, FileText, Upload, TriangleAlert as AlertTriangle, Image as ImageIcon, TrendingDown, TrendingUp, CircleUser, Mic } from "lucide-react";
+import logoAsset from "@/assets/traainer-logo.jpg.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -84,7 +63,14 @@ function Header() {
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             Jueves · 25 jun
           </p>
-          <BrandName className="block truncate text-[22px] leading-tight" />
+          <Link to="/auth" className="flex items-center gap-2">
+            <img
+              src={logoAsset.url}
+              alt="Personal TrAIner"
+              className="h-7 w-7 rounded-lg object-cover ring-1 ring-border"
+            />
+            <BrandName className="block truncate text-[22px] leading-tight" />
+          </Link>
         </div>
         <LiveSync />
       </div>
@@ -113,10 +99,71 @@ function DashboardScreen() {
   return (
     <>
       <PredictiveAlert />
+      <AICoachCTA />
+      <NewSectionsRow />
       <QuickActions />
       <DailySummary />
+      <MacrosMini />
+      <XiaomiLastWorkout />
       <WorkoutCard />
     </>
+  );
+}
+
+function NewSectionsRow() {
+  const items = [
+    { to: "/recovery" as const, icon: Heart, title: "Recuperación", sub: "Sueño & VFC IA" },
+    { to: "/devices" as const, icon: Activity, title: "Dispositivos", sub: "Sync Center" },
+    { to: "/progress" as const, icon: TrendingUp, title: "Progreso", sub: "Calendarios & Insights" },
+  ];
+  return (
+    <section aria-label="Accesos avanzados" className="grid grid-cols-2 gap-3">
+      {items.map(({ to, icon: Icon, title, sub }) => (
+        <Link
+          key={to}
+          to={to}
+          className="group flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-soft transition active:scale-[0.98]"
+        >
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ai-gradient text-white">
+            <Icon className="h-4 w-4" strokeWidth={2.25} />
+          </div>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[13px] font-semibold text-foreground">{title}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+          </div>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5" />
+        </Link>
+      ))}
+    </section>
+  );
+}
+
+function AICoachCTA() {
+  return (
+    <Link
+      to="/chat"
+      className="group relative block overflow-hidden rounded-[28px] p-[1px] shadow-card"
+      aria-label="Hablar con la IA"
+    >
+      <span className="bg-ai-gradient absolute inset-0" aria-hidden />
+      <div className="relative flex items-center gap-3 rounded-[27px] bg-background/85 p-4 backdrop-blur-xl">
+        <div className="bg-ai-gradient flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-soft">
+          <Sparkles className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            AI Coach
+          </p>
+          <p className="truncate text-[15px] font-semibold leading-tight">
+            Habla con tu entrenador IA
+          </p>
+          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+            Pregunta sobre rutinas, macros o recuperación
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+    </Link>
   );
 }
 
@@ -387,10 +434,13 @@ function WorkoutCard() {
         </span>
       </div>
 
-      <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ai-gradient px-5 py-4 text-[15px] font-semibold text-white shadow-card transition active:scale-[0.99]">
+      <Link
+        to="/focus"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ai-gradient px-5 py-4 text-[15px] font-semibold text-white shadow-card transition active:scale-[0.99]"
+      >
         <Play className="h-4 w-4 fill-current" strokeWidth={0} />
         Iniciar Focus Mode
-      </button>
+      </Link>
     </section>
   );
 }
@@ -401,7 +451,8 @@ function CoachScreen() {
   return (
     <>
       <RAGBubble />
-      <VoiceHero />
+      <WorkoutSummary />
+      <XiaomiWorkouts />
       <FocusModeCard />
     </>
   );
@@ -419,49 +470,75 @@ function RAGBubble() {
         </span>
       </div>
       <p className="mt-2 text-[15px] font-medium leading-snug text-foreground">
-        Hola Carlos, noto por tu voz de ayer que estás estresado.
+        Hola Carlos, según tus métricas de ayer detecto algo de estrés.
         He ajustado tu rutina de <span className="text-ai-gradient font-semibold">fuerza</span>.
       </p>
     </div>
   );
 }
 
-function VoiceHero() {
+function WorkoutSummary() {
+  const metrics = [
+    { label: "Frecuencia cardíaca", value: "142", unit: "bpm", sub: "media" },
+    { label: "Duración", value: "52", unit: "min", sub: "activo" },
+    { label: "Calorías", value: "384", unit: "kcal", sub: "quemadas" },
+    { label: "Volumen", value: "4.2", unit: "t", sub: "carga total" },
+  ];
+
+  const conclusions = [
+    { icon: TrendingUp, text: "Tu rendimiento mejoró un 12% respecto a la semana pasada", positive: true },
+    { icon: Heart, text: "Recuperación cardíaca excelente: 45 bpm en 2 minutos", positive: true },
+    { icon: Activity, text: "Zona cardiovascular óptima durante el 78% del entrenamiento", positive: true },
+    { icon: AlertTriangle, text: "Fatiga detectada en el último series de press militar", positive: false },
+  ];
+
   return (
-    <section className="rounded-[32px] bg-card p-6 shadow-card">
-      <div className="relative mx-auto grid h-56 w-56 place-items-center">
-        <div className="absolute inset-0 rounded-full bg-ai-gradient opacity-20 blur-2xl animate-ai-pulse" />
-        <div className="absolute inset-6 rounded-full bg-ai-gradient opacity-30 blur-xl" />
-        <div className="relative grid h-44 w-44 place-items-center rounded-full bg-ai-gradient shadow-card">
-          <div className="grid h-36 w-36 place-items-center rounded-full bg-background">
-            <div className="flex h-10 items-end gap-1.5">
-              {[0.4, 0.8, 0.55, 1, 0.7, 0.9, 0.45, 0.75].map((h, i) => (
-                <span
-                  key={i}
-                  className="w-1.5 origin-bottom rounded-full bg-ai-gradient animate-wave"
-                  style={{ height: `${h * 100}%`, animationDelay: `${i * 0.08}s` }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+    <section className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Resumen de hoy
+        </p>
+        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+          Completado
+        </span>
       </div>
-      <p className="mt-5 text-center text-[15px] font-semibold text-foreground">
-        Escuchando…
-      </p>
-      <p className="mt-1 text-center text-[12px] text-muted-foreground">
-        Conversación full-duplex en tiempo real
-      </p>
-      <div className="mt-5 flex items-center justify-center gap-3">
-        <button className="grid h-11 w-11 place-items-center rounded-full bg-surface-2 text-foreground/70 transition active:scale-95">
-          <Volume2 className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-        <button className="grid h-14 w-14 place-items-center rounded-full bg-foreground text-background shadow-card transition active:scale-95">
-          <Pause className="h-5 w-5" strokeWidth={2.25} />
-        </button>
-        <button className="grid h-11 w-11 place-items-center rounded-full bg-surface-2 text-foreground/70 transition active:scale-95">
-          <Mic className="h-4 w-4" strokeWidth={2.25} />
-        </button>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        {metrics.map(({ label, value, unit, sub }) => (
+          <div key={label} className="rounded-2xl bg-surface-1 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="text-[22px] font-bold tracking-tight text-foreground">{value}</span>
+              <span className="text-[11px] text-muted-foreground">{unit}</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">{sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Conclusiones IA
+        </p>
+        <div className="mt-3 space-y-2">
+          {conclusions.map(({ icon: Icon, text, positive }, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2.5 rounded-xl bg-surface-1 px-3 py-2.5"
+            >
+              <div
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                  positive ? "bg-emerald-100 text-emerald-600" : "bg-orange-100 text-orange-600"
+                }`}
+              >
+                <Icon className="h-3 w-3" strokeWidth={2.25} />
+              </div>
+              <p className="text-[13px] leading-snug text-foreground">{text}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -487,10 +564,13 @@ function FocusModeCard() {
         <span><span className="text-[18px] font-bold text-foreground">8–10</span> reps</span>
         <span><span className="text-[18px] font-bold text-foreground">22kg</span></span>
       </div>
-      <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ai-gradient px-5 py-4 text-[15px] font-semibold text-white shadow-card transition active:scale-[0.99]">
+      <Link
+        to="/focus"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ai-gradient px-5 py-4 text-[15px] font-semibold text-white shadow-card transition active:scale-[0.99]"
+      >
         <Camera className="h-4 w-4" strokeWidth={2.25} />
         Activar Cámara Edge AI
-      </button>
+      </Link>
     </section>
   );
 }
@@ -500,6 +580,7 @@ function FocusModeCard() {
 function NutritionScreen() {
   return (
     <>
+      <MacrosOverview />
       <CameraViewer />
       <ScanResultCard />
     </>
@@ -594,7 +675,10 @@ function ClinicScreen() {
 
 function ClinicalImporter() {
   return (
-    <button className="group block w-full rounded-[28px] border-2 border-dashed border-border bg-card p-6 text-left shadow-soft transition hover:border-foreground/30 active:scale-[0.99]">
+    <Link
+      to="/clinic/import"
+      className="group block w-full rounded-[28px] border-2 border-dashed border-border bg-card p-6 text-left shadow-soft transition hover:border-foreground/30 active:scale-[0.99]"
+    >
       <div className="flex items-center gap-4">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-ai-soft">
           <Upload className="h-5 w-5 text-foreground" strokeWidth={2.25} />
@@ -606,7 +690,7 @@ function ClinicalImporter() {
           </p>
         </div>
       </div>
-    </button>
+    </Link>
   );
 }
 
@@ -664,6 +748,13 @@ function CompositionChart() {
 }
 
 function PostureMesh() {
+  const captures = [
+    { id: "c4", label: "Hoy", date: "25 jun", tilt: -1, current: true },
+    { id: "c3", label: "May", date: "10 may", tilt: -3 },
+    { id: "c2", label: "Mar", date: "02 mar", tilt: -5 },
+    { id: "c1", label: "Ene", date: "14 ene", tilt: -8, muted: true },
+  ];
+  const camRef = useRef<HTMLInputElement>(null);
   return (
     <section className="rounded-[28px] bg-card p-5 shadow-card">
       <div className="flex items-center justify-between">
@@ -680,6 +771,61 @@ function PostureMesh() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <MeshFigure label="Ene" tilt={-8} muted />
         <MeshFigure label="Hoy" tilt={-1} />
+      </div>
+
+      <button
+        onClick={() => camRef.current?.click()}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ai-gradient px-5 py-3.5 text-[14px] font-semibold text-white shadow-card transition active:scale-[0.99]"
+      >
+        <Camera className="h-4 w-4" strokeWidth={2.25} />
+        Tomar nueva imagen
+      </button>
+      <input
+        ref={camRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+      />
+
+      <div className="mt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Calendario de capturas
+        </p>
+        <ul className="mt-3 space-y-2">
+          {captures.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center gap-3 rounded-2xl bg-surface-1 px-3 py-2.5"
+            >
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-center leading-none ring-1 ring-border">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                    {c.date.split(" ")[1]}
+                  </p>
+                  <p className="text-[13px] font-bold text-foreground">
+                    {c.date.split(" ")[0]}
+                  </p>
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold leading-tight">
+                  Captura {c.label}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Inclinación {c.tilt}° · malla 3D
+                </p>
+              </div>
+              {c.current ? (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  Actual
+                </span>
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
@@ -714,6 +860,238 @@ function MeshFigure({ label, tilt, muted = false }: { label: string; tilt: numbe
 }
 
 /* ============================== NAV ============================== */
+
+/* ============================== MACROS ============================== */
+
+const MACROS_DATA = [
+  { key: "kcal", label: "Calorías", consumed: 1820, goal: 2400, unit: "kcal", color: "oklch(0.7 0.19 260)" },
+  { key: "protein", label: "Proteína", consumed: 92, goal: 160, unit: "g", color: "oklch(0.72 0.18 295)" },
+  { key: "carbs", label: "Carbohidratos", consumed: 178, goal: 260, unit: "g", color: "oklch(0.78 0.17 200)" },
+  { key: "fat", label: "Grasas", consumed: 48, goal: 75, unit: "g", color: "oklch(0.75 0.13 30)" },
+];
+
+function MacrosMini() {
+  const kcal = MACROS_DATA[0];
+  const pct = kcal.consumed / kcal.goal;
+  return (
+    <section
+      aria-label="Macros de hoy"
+      className="rounded-[28px] bg-card p-5 shadow-card"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Macros · hoy
+        </p>
+        <span className="text-[11px] font-semibold text-foreground/70">
+          {kcal.consumed} <span className="text-muted-foreground">/ {kcal.goal} kcal</span>
+        </span>
+      </div>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full bg-ai-gradient" style={{ width: `${Math.min(pct, 1) * 100}%` }} />
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {MACROS_DATA.slice(1).map((m) => {
+          const p = Math.min(m.consumed / m.goal, 1);
+          return (
+            <div key={m.key} className="rounded-2xl bg-surface-1 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {m.label}
+              </p>
+              <p className="mt-1 text-[14px] font-bold tracking-tight">
+                {m.consumed}
+                <span className="text-[11px] font-medium text-muted-foreground">/{m.goal}{m.unit}</span>
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full" style={{ width: `${p * 100}%`, background: m.color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MacrosOverview() {
+  return (
+    <section aria-label="Macronutrientes diarios" className="space-y-3">
+      <div className="rounded-[28px] bg-card p-5 shadow-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Hoy · Jueves 25 jun
+            </p>
+            <h2 className="mt-1 text-[22px] font-bold tracking-tight">
+              Tus macros
+            </h2>
+          </div>
+          <KcalDial consumed={MACROS_DATA[0].consumed} goal={MACROS_DATA[0].goal} />
+        </div>
+        <div className="mt-5 space-y-3">
+          {MACROS_DATA.slice(1).map(({ key, ...m }) => (
+            <MacroRow key={key} {...m} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function KcalDial({ consumed, goal }: { consumed: number; goal: number }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const pct = Math.min(consumed / goal, 1);
+  const remaining = Math.max(goal - consumed, 0);
+  return (
+    <div className="relative h-[88px] w-[88px]">
+      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
+        <circle cx="36" cy="36" r={r} className="fill-none stroke-muted" strokeWidth="7" />
+        <circle
+          cx="36" cy="36" r={r}
+          stroke="url(#aiRing)" strokeWidth="7" strokeLinecap="round" fill="none"
+          strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center leading-none">
+        <div>
+          <p className="text-[15px] font-bold tracking-tight">{remaining}</p>
+          <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">restan</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MacroRow({
+  label, consumed, goal, unit, color,
+}: { label: string; consumed: number; goal: number; unit: string; color: string }) {
+  const pct = Math.min(consumed / goal, 1);
+  const remaining = Math.max(goal - consumed, 0);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <p className="text-[13px] font-semibold text-foreground">{label}</p>
+        <p className="text-[12px] tabular-nums text-muted-foreground">
+          <span className="font-semibold text-foreground">{consumed}</span>
+          {" / "}{goal}{unit}
+          <span className="ml-2 text-[11px] text-muted-foreground">· faltan {remaining}{unit}</span>
+        </p>
+      </div>
+      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+/* ============================== XIAOMI ============================== */
+
+type XiaomiSession = {
+  id: string;
+  type: string;
+  when: string;
+  duration: string;
+  hrAvg: number;
+  hrMax: number;
+  kcal: number;
+  distance?: string;
+};
+
+const XIAOMI_SESSIONS: XiaomiSession[] = [
+  { id: "1", type: "Carrera al aire libre", when: "Hoy · 07:12", duration: "38 min", hrAvg: 152, hrMax: 174, kcal: 412, distance: "6.4 km" },
+  { id: "2", type: "Fuerza · Tren superior", when: "Ayer · 19:40", duration: "52 min", hrAvg: 128, hrMax: 162, kcal: 384 },
+  { id: "3", type: "Bicicleta", when: "Mar · 18:05", duration: "1 h 12", hrAvg: 138, hrMax: 168, kcal: 612, distance: "24.8 km" },
+  { id: "4", type: "Yoga", when: "Lun · 08:30", duration: "30 min", hrAvg: 92, hrMax: 110, kcal: 128 },
+];
+
+function XiaomiBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-foreground/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-background">
+      <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+      Xiaomi
+    </span>
+  );
+}
+
+function XiaomiLastWorkout() {
+  const s = XIAOMI_SESSIONS[0];
+  return (
+    <section aria-label="Último entrenamiento Xiaomi" className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Última actividad
+        </p>
+        <XiaomiBadge />
+      </div>
+      <h3 className="mt-2 text-[18px] font-bold leading-tight tracking-tight">{s.type}</h3>
+      <p className="text-[12px] text-muted-foreground">{s.when}</p>
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        <MiniStat value={s.duration} label="duración" />
+        <MiniStat value={`${s.hrAvg}`} label="bpm med" />
+        <MiniStat value={`${s.kcal}`} label="kcal" />
+        <MiniStat value={s.distance ?? `${s.hrMax}`} label={s.distance ? "dist." : "bpm máx"} />
+      </div>
+    </section>
+  );
+}
+
+function MiniStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-xl bg-surface-1 px-2 py-2 text-center">
+      <p className="text-[13px] font-bold tracking-tight text-foreground">{value}</p>
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function XiaomiWorkouts() {
+  return (
+    <section aria-label="Historial Xiaomi" className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Registros · Mi Band
+          </p>
+          <h3 className="mt-1 text-[18px] font-bold tracking-tight">Entrenamientos Xiaomi</h3>
+        </div>
+        <XiaomiBadge />
+      </div>
+      <ul className="mt-4 divide-y divide-border/60">
+        {XIAOMI_SESSIONS.map((s) => (
+          <li key={s.id}>
+            <Link
+              to="/workout/$id"
+              params={{ id: s.id }}
+              className="flex items-center gap-3 py-3 transition active:scale-[0.99]"
+            >
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ai-soft">
+                <Heart className="h-4 w-4 text-foreground/70" strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-semibold leading-tight text-foreground">
+                  {s.type}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {s.when} · {s.duration}
+                  {s.distance ? ` · ${s.distance}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right leading-tight">
+                  <p className="text-[13px] font-bold tabular-nums text-foreground">{s.hrAvg}<span className="text-[10px] font-medium text-muted-foreground">bpm</span></p>
+                  <p className="text-[10px] text-muted-foreground">{s.kcal} kcal</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" strokeWidth={2.25} />
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ============================== NAV (cont.) ============================== */
 
 function BottomNav({ active, onChange }: { active: TabKey; onChange: (k: TabKey) => void }) {
   const items: { key: TabKey; icon: typeof Home; label: string }[] = [

@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <!-- Sueño (Health Connect) — SLEEP_IN_BED / SLEEP_ASLEEP / fases granulares -->
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_SESSION" />
     <!-- CRÍTICO: Sin esto, HC solo devuelve datos de los últimos 30 días desde la primera auth -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 

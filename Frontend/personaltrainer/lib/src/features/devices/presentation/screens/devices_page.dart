@@ -1,45 +1,180 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../services/health_service.dart';
 
 /// Pantalla de gestión de wearables — réplica de `devices.tsx`.
 ///
-/// Conecta visualmente (sin lógica nueva) con el estado de sincronización
-/// Mi Fitness / Health Connect que ya se muestra en `home_page.dart` (badge
-/// "XIAOMI" / "SINCRONIZANDO"). El `syncState` se inyecta para que el host
-/// (home_page o un provider) pueda reflejar aquí el mismo estado real.
-class DevicesPage extends StatelessWidget {
-  const DevicesPage({
-    super.key,
-    required this.primaryDevice,
-    required this.metrics,
-    required this.otherDevices,
-    required this.syncState,
-    this.onBack,
-    this.onForceSync,
-  });
-
-  /// Wearable principal (Redmi Watch 5 / Mi Band …).
-  // TODO: conectar a GET /devices/primary (NestJS) — leer de smartwatch_service.dart.
-  final PrimaryDevice primaryDevice;
-
-  /// Métricas en vivo del device principal.
-  // TODO: conectar a stream Health Connect (steps) + smartwatch_service (HR live).
-  final List<DeviceMetric> metrics;
-
-  /// Otros dispositivos emparejables.
-  final List<OtherDevice> otherDevices;
-
-  /// Estado de sincronización compartido con el badge de `home_page.dart`.
-  final DeviceSyncState syncState;
+/// Escanea dispositivos BLE reales (emparejados + conectados + cercanos) y
+/// carga pasos/FC de hoy desde Health Connect al abrir la pantalla.
+class DevicesPage extends StatefulWidget {
+  const DevicesPage({super.key, this.onBack, this.onForceSync});
 
   final VoidCallback? onBack;
   final VoidCallback? onForceSync;
 
   @override
+  State<DevicesPage> createState() => _DevicesPageState();
+}
+
+class _DevicesPageState extends State<DevicesPage> {
+  bool _loading = true;          // scan BLE en curso
+  bool _metricsLoading = true;   // pasos/HR en curso
+  List<BluetoothDevice> _found = [];
+  /// IDs de dispositivos que vienen de bondedDevices o connectedDevices (no solo scan).
+  Set<DeviceIdentifier> _connectedOrBondedIds = {};
+  int _stepsToday = 0;
+  double? _lastHr;
+  StreamSubscription<List<ScanResult>>? _scanSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _scanBLE();
+    _loadMetrics();
+  }
+
+  Future<void> _scanBLE() async {
+    if (mounted) setState(() => _loading = true);
+    try {
+      await Permission.bluetoothScan.request();
+      await Permission.bluetoothConnect.request();
+
+      // 1. Dispositivos ya emparejados (Android)
+      List<BluetoothDevice> bonded = [];
+      try { bonded = await FlutterBluePlus.bondedDevices; } catch (_) {}
+
+      // 2. Dispositivos actualmente conectados por GATT
+      final connected = FlutterBluePlus.connectedDevices;
+
+      // 3. Scan activo 5 s
+      final scanned = <BluetoothDevice>[];
+      _scanSub = FlutterBluePlus.onScanResults.listen((results) {
+        for (final r in results) {
+          if (!scanned.any((d) => d.remoteId == r.device.remoteId)) {
+            scanned.add(r.device);
+          }
+        }
+      });
+      try {
+        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+        await Future.delayed(const Duration(seconds: 5));
+      } catch (_) {}
+      await FlutterBluePlus.stopScan();
+      _scanSub?.cancel();
+
+      // Combinar + deduplicar
+      final all = [...bonded, ...connected, ...scanned];
+      final seen = <DeviceIdentifier>{};
+      final unique = all.where((d) => seen.add(d.remoteId)).toList();
+
+      // Trackear IDs de dispositivos realmente conectados/emparejados
+      final bondedAndConnectedIds = <DeviceIdentifier>{};
+      for (final d in bonded) bondedAndConnectedIds.add(d.remoteId);
+      for (final d in connected) bondedAndConnectedIds.add(d.remoteId);
+
+      if (mounted) setState(() {
+        _found = unique;
+        _connectedOrBondedIds = bondedAndConnectedIds;
+        _loading = false;
+      });
+    } catch (e) {
+      print('[BLE] scan error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMetrics() async {
+    if (mounted) setState(() => _metricsLoading = true);
+    try {
+      await HealthService.requestPermissions();
+      final steps = await HealthService.fetchStepsToday();
+      final hr    = await HealthService.fetchLastHeartRate();
+      if (mounted) setState(() {
+        _stepsToday     = steps;
+        _lastHr         = hr;
+        _metricsLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _metricsLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scanSub?.cancel();
+    super.dispose();
+  }
+
+  bool _isXiaomi(BluetoothDevice d) {
+    final n = d.platformName.toLowerCase();
+    return n.contains('redmi') || n.contains('xiaomi') ||
+        n.contains('mi watch') || n.contains('mi band') ||
+        n.contains('watch') || n.contains('band');
+  }
+
+  @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
+
+    final primary = _found.where(_isXiaomi).firstOrNull;
+    final others  = _found.where((d) => !_isXiaomi(d)).toList();
+
+    final primaryDevice = PrimaryDevice(
+      name: (primary?.platformName.isNotEmpty ?? false)
+          ? primary!.platformName
+          : 'Redmi Watch 5',
+      sub: primary != null
+          ? 'Emparejado · Bluetooth activo'
+          : 'No detectado — abre Mi Fitness y activa BT',
+    );
+
+    final syncState = DeviceSyncState(
+      badgeLabel: primary != null ? 'XIAOMI' : 'SIN SEÑAL',
+      liveLabel: primary != null
+          ? 'BLE activo · sincronizando'
+          : 'Sin conexión BLE',
+      syncing: primary != null,
+    );
+
+    final stepsStr = _metricsLoading ? '…' : _stepsToday.toString();
+    final hrStr    = _metricsLoading ? '…'
+        : (_lastHr != null ? _lastHr!.round().toString() : '--');
+
+    final metrics = [
+      DeviceMetric(label: 'Pasos hoy',   value: stepsStr, suffix: 'steps'),
+      DeviceMetric(label: 'FC reciente', value: hrStr,    suffix: 'bpm'),
+    ];
+
+    final otherDevices = <OtherDevice>[
+      // Solo mostrar dispositivos realmente conectados/emparejados, no los detectados por scan
+      ...others
+        .where((d) => _connectedOrBondedIds.contains(d.remoteId))
+        .map((d) => OtherDevice(
+          icon: LucideIcons.bluetooth,
+          name: d.platformName.isNotEmpty ? d.platformName : 'Dispositivo BLE',
+          sub: d.remoteId.str,
+          status: 'Conectado',
+        )),
+      const OtherDevice(
+        icon: LucideIcons.smartphone,
+        name: 'Mi Fitness App',
+        sub: 'Android · fuente de datos',
+        status: 'Activo',
+      ),
+      const OtherDevice(
+        icon: LucideIcons.database,
+        name: 'Health Connect',
+        sub: 'Google API · sincronización pasiva',
+        status: 'Conectado',
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: DesignTokens.background(b),
       body: SafeArea(
@@ -50,7 +185,12 @@ class DevicesPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TopBar(title: 'Device Sync Center', onBack: onBack),
+                _TopBar(title: 'Device Sync Center', onBack: widget.onBack),
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4, bottom: 4),
+                    child: LinearProgressIndicator(),
+                  ),
                 const SizedBox(height: 20),
                 _PrimaryDeviceCard(
                   device: primaryDevice,
@@ -60,7 +200,11 @@ class DevicesPage extends StatelessWidget {
                 const SizedBox(height: 20),
                 _OtherDevicesCard(devices: otherDevices),
                 const SizedBox(height: 20),
-                _PrimarySyncButton(onTap: onForceSync),
+                _PrimarySyncButton(onTap: () {
+                  _scanBLE();
+                  _loadMetrics();
+                  widget.onForceSync?.call();
+                }),
               ],
             ),
           ),

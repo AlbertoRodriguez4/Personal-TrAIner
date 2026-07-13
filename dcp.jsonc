@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
+  "enabled": true,
+
+  "strategy": "smart",
+  "max_tokens": 10000,
+
+  // Qué mantener siempre presente, aunque sea "viejo" en la conversación
+  "keep": [
+    "active_file",
+    "recent_errors"
+  ],
+
+  // Qué descartar agresivamente en cuanto deja de ser relevante
+  "drop": [
+    "old_history",
+    "debug_logs"
+  ],
+
+  // Si tu modelo (GLM 5.2) tiene ventana de contexto menor a la de Claude/GPT,
+  // baja estos límites para que DCP empiece a podar antes.
+  "compress": {
+    "minContextLimit": 16000,
+    "maxContextLimit": 32000
+  },
+
+  // Pruning explícito por agente: si usas agentes custom (coder/debugger/etc.)
+  "agents": {
+    "coder": { "dcp": true },
+    "debugger": { "dcp": true },
+    "build": { "dcp": true }
+  },
+
+  // Borra inputs de tool calls que fallaron tras N turnos, conservando el mensaje de error
+  "errorPruning": {
+    "afterTurns": 4
+  }
+}

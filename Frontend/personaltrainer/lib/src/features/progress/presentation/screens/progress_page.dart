@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../services/health_service.dart';
+import '../../health/presentation/screens/workout_detail_page.dart';
 import '../../models/calendar_day_summary.dart';
 
 /// Pantalla de Progreso — réplica de `progress.tsx` (3 tabs:
@@ -621,11 +622,15 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
       ),
       builder: (sheetCtx) {
         return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
+          constraints: BoxConstraints(
+            maxWidth: 440,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
@@ -687,7 +692,8 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
                     _WorkoutTile(workout: w),
                     if (w != _openDayWorkouts.last) const SizedBox(height: 10),
                   ],
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -755,12 +761,21 @@ class _WorkoutTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: DesignTokens.surface1(b),
-        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-      ),
+    return GestureDetector(
+      onTap: workout.rawDataPoint == null ? null : () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WorkoutDetailPage(workout: workout.rawDataPoint!),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: DesignTokens.surface1(b),
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+        ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

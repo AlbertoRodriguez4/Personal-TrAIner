@@ -9,38 +9,201 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RecoveryRouteImport } from './routes/recovery'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as FocusRouteImport } from './routes/focus'
+import { Route as DevicesRouteImport } from './routes/devices'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkoutIdRouteImport } from './routes/workout.$id'
+import { Route as ClinicImportRouteImport } from './routes/clinic.import'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const RecoveryRoute = RecoveryRouteImport.update({
+  id: '/recovery',
+  path: '/recovery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FocusRoute = FocusRouteImport.update({
+  id: '/focus',
+  path: '/focus',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevicesRoute = DevicesRouteImport.update({
+  id: '/devices',
+  path: '/devices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkoutIdRoute = WorkoutIdRouteImport.update({
+  id: '/workout/$id',
+  path: '/workout/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClinicImportRoute = ClinicImportRouteImport.update({
+  id: '/clinic/import',
+  path: '/clinic/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/devices': typeof DevicesRoute
+  '/focus': typeof FocusRoute
+  '/progress': typeof ProgressRoute
+  '/recovery': typeof RecoveryRoute
+  '/api/chat': typeof ApiChatRoute
+  '/clinic/import': typeof ClinicImportRoute
+  '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/devices': typeof DevicesRoute
+  '/focus': typeof FocusRoute
+  '/progress': typeof ProgressRoute
+  '/recovery': typeof RecoveryRoute
+  '/api/chat': typeof ApiChatRoute
+  '/clinic/import': typeof ClinicImportRoute
+  '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/chat': typeof ChatRoute
+  '/devices': typeof DevicesRoute
+  '/focus': typeof FocusRoute
+  '/progress': typeof ProgressRoute
+  '/recovery': typeof RecoveryRoute
+  '/api/chat': typeof ApiChatRoute
+  '/clinic/import': typeof ClinicImportRoute
+  '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/devices'
+    | '/focus'
+    | '/progress'
+    | '/recovery'
+    | '/api/chat'
+    | '/clinic/import'
+    | '/workout/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/devices'
+    | '/focus'
+    | '/progress'
+    | '/recovery'
+    | '/api/chat'
+    | '/clinic/import'
+    | '/workout/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/devices'
+    | '/focus'
+    | '/progress'
+    | '/recovery'
+    | '/api/chat'
+    | '/clinic/import'
+    | '/workout/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ChatRoute: typeof ChatRoute
+  DevicesRoute: typeof DevicesRoute
+  FocusRoute: typeof FocusRoute
+  ProgressRoute: typeof ProgressRoute
+  RecoveryRoute: typeof RecoveryRoute
+  ApiChatRoute: typeof ApiChatRoute
+  ClinicImportRoute: typeof ClinicImportRoute
+  WorkoutIdRoute: typeof WorkoutIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/recovery': {
+      id: '/recovery'
+      path: '/recovery'
+      fullPath: '/recovery'
+      preLoaderRoute: typeof RecoveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/focus': {
+      id: '/focus'
+      path: '/focus'
+      fullPath: '/focus'
+      preLoaderRoute: typeof FocusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devices': {
+      id: '/devices'
+      path: '/devices'
+      fullPath: '/devices'
+      preLoaderRoute: typeof DevicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +211,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workout/$id': {
+      id: '/workout/$id'
+      path: '/workout/$id'
+      fullPath: '/workout/$id'
+      preLoaderRoute: typeof WorkoutIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinic/import': {
+      id: '/clinic/import'
+      path: '/clinic/import'
+      fullPath: '/clinic/import'
+      preLoaderRoute: typeof ClinicImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ChatRoute: ChatRoute,
+  DevicesRoute: DevicesRoute,
+  FocusRoute: FocusRoute,
+  ProgressRoute: ProgressRoute,
+  RecoveryRoute: RecoveryRoute,
+  ApiChatRoute: ApiChatRoute,
+  ClinicImportRoute: ClinicImportRoute,
+  WorkoutIdRoute: WorkoutIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
