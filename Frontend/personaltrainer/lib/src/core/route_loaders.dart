@@ -83,8 +83,9 @@ class RecoveryRoute extends StatelessWidget {
 /* ───────────────────────── Progress ───────────────────────── */
 
 class ProgressRoute extends StatefulWidget {
-  const ProgressRoute({super.key, this.onBack});
+  const ProgressRoute({super.key, this.onBack, this.isTab = false});
   final VoidCallback? onBack;
+  final bool isTab;
   @override
   State<ProgressRoute> createState() => _ProgressRouteState();
 }
@@ -140,6 +141,7 @@ class _ProgressRouteState extends State<ProgressRoute> {
       insightsWeeklyTrainings: const [],
       correlations: const [],
       onBack: widget.onBack ?? () => Navigator.maybePop(context),
+      isTab: widget.isTab,
     );
   }
 }

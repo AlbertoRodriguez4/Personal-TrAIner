@@ -3,7 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../services/health_service.dart';
-import '../../health/presentation/screens/workout_detail_page.dart';
+import '../../../health/presentation/screens/workout_detail_page.dart';
 import '../../models/calendar_day_summary.dart';
 
 /// Pantalla de Progreso — réplica de `progress.tsx` (3 tabs:
@@ -22,6 +22,7 @@ class ProgressPage extends StatefulWidget {
     required this.insightsWeeklyTrainings,
     required this.correlations,
     this.onBack,
+    this.isTab = false,
   });
 
   /// Etiqueta del mes (p.ej. "Junio 2026").
@@ -50,6 +51,7 @@ class ProgressPage extends StatefulWidget {
   final List<CorrelationItem> correlations;
 
   final VoidCallback? onBack;
+  final bool isTab;
 
   @override
   State<ProgressPage> createState() => _ProgressPageState();
@@ -825,6 +827,7 @@ class _WorkoutTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
