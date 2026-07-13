@@ -21,7 +21,7 @@ import '../../../../services/api_service.dart';
 import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
 import '../../../routine/presentation/screens/routines_home_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
-import '../../../progress/presentation/screens/progress_page.dart';
+import '../../../../core/route_loaders.dart';
 import '../../models/daily_summary.dart';
 import 'backend_features_page.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
