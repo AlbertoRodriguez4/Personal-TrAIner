@@ -1,25 +1,28 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Sparkles, Watch, Smartphone, Circle as Ring, RefreshCw } from "lucide-react";
 
-/* ─────────────── Conceptual theme tokens ─────────────── */
+/* ─────────────── Apple-style light tokens ─────────────── */
 const theme = {
-  bg: "#111318",
-  fg: "#F9F9FC",
-  card: "#23262F",
-  surface1: "#1B1D24",
-  label: "#9DA0AE",
+  bg: "#F5F5F7",
+  fg: "#1D1D1F",
+  card: "#FFFFFF",
+  surface1: "#F5F5F7",
+  surface2: "#ECECEF",
+  label: "#6E6E73",
+  border: "rgba(0,0,0,0.06)",
   aiFrom: "#B054F0",
   aiVia: "#6A5CF0",
   aiTo: "#46B5E8",
-  badgeBg: "#1E1E1E",
+  badgeBg: "#1D1D1F",
   badgeDot: "#FF6900",
   live: "#10B981",
-  radius: 28,
+  radius: 24,
+  cardShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.08)",
 } as const;
 
 const aiGradient = `linear-gradient(135deg, ${theme.aiFrom} 0%, ${theme.aiVia} 50%, ${theme.aiTo} 100%)`;
-const titleFont = { fontFamily: "Outfit, Inter, sans-serif", fontWeight: 800, letterSpacing: "-0.5px" } as const;
-const bodyFont = { fontFamily: "Manrope, Inter, sans-serif" } as const;
+const titleFont = { fontFamily: "Inter, -apple-system, 'SF Pro Display', sans-serif", fontWeight: 700, letterSpacing: "-0.02em" } as const;
+const bodyFont = { fontFamily: "Inter, -apple-system, 'SF Pro Text', sans-serif" } as const;
 const labelStyle = {
   fontSize: 11, fontWeight: 600, letterSpacing: "1.4px",
   color: theme.label, textTransform: "uppercase" as const,
@@ -78,7 +81,7 @@ function DeviceBadge() {
       }}
     >
       <span className="h-2 w-2 rounded-full" style={{ background: theme.badgeDot }} />
-      <span style={{ ...labelStyle, fontSize: 9, color: theme.fg }}>Device</span>
+      <span style={{ ...labelStyle, fontSize: 9, color: "#FFFFFF" }}>Device</span>
     </span>
   );
 }
@@ -106,7 +109,7 @@ function LiveSyncPill() {
 
 function PrimaryDeviceCard() {
   return (
-    <section style={{ background: theme.card, borderRadius: theme.radius, padding: 20 }}>
+    <section style={{ background: theme.card, borderRadius: theme.radius, padding: 20, boxShadow: theme.cardShadow, border: `1px solid ${theme.border}` }}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-3 min-w-0">
           <DeviceBadge />
@@ -133,7 +136,7 @@ function PrimaryDeviceCard() {
 
 function DeviceMetric({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
   return (
-    <div style={{ background: theme.surface1, borderRadius: 16, padding: 12 }}>
+    <div style={{ background: theme.surface1, borderRadius: 14, padding: 12 }}>
       <p style={labelStyle}>{label}</p>
       <p className="mt-1" style={{ fontSize: 13, fontWeight: 700, color: theme.fg, ...bodyFont, lineHeight: 1.1 }}>
         {value}
@@ -150,18 +153,18 @@ function OtherDevicesCard() {
     { icon: Watch, name: "Mi Band 8", sub: "Histórico importado", status: "Sync diario" },
   ];
   return (
-    <section style={{ background: theme.card, borderRadius: theme.radius, padding: 20 }}>
+    <section style={{ background: theme.card, borderRadius: theme.radius, padding: 20, boxShadow: theme.cardShadow, border: `1px solid ${theme.border}` }}>
       <p style={labelStyle}>Otros dispositivos</p>
       <ul className="mt-3 space-y-2">
         {list.map(({ icon: Icon, name, sub, status, muted }) => (
           <li
             key={name}
             className="flex items-center gap-3"
-            style={{ background: theme.surface1, borderRadius: 16, padding: 12, opacity: muted ? 0.55 : 1 }}
+            style={{ background: theme.surface1, borderRadius: 14, padding: 12, opacity: muted ? 0.55 : 1 }}
           >
             <div
               className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-              style={{ background: "rgba(255,255,255,0.04)", color: theme.fg }}
+              style={{ background: theme.card, color: theme.fg, border: `1px solid ${theme.border}` }}
             >
               <Icon className="h-4 w-4" strokeWidth={2} />
             </div>

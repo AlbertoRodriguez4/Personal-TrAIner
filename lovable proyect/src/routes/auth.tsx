@@ -124,12 +124,11 @@ function AuthScreen() {
           </button>
         </p>
 
-        <Link
-          to="/"
-          className="relative mt-3 text-center text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
-        >
-          Volver
-        </Link>
+        <div className="relative mt-3 flex items-center justify-center gap-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          <Link to="/">Volver</Link>
+          <span className="opacity-40">·</span>
+          <Link to="/onboarding" className="text-foreground">Ver tour</Link>
+        </div>
       </div>
     </div>
   );

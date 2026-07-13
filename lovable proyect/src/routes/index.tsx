@@ -115,6 +115,7 @@ function NewSectionsRow() {
     { to: "/recovery" as const, icon: Heart, title: "Recuperación", sub: "Sueño & VFC IA" },
     { to: "/devices" as const, icon: Activity, title: "Dispositivos", sub: "Sync Center" },
     { to: "/progress" as const, icon: TrendingUp, title: "Progreso", sub: "Calendarios & Insights" },
+    { to: "/routine/builder" as const, icon: Dumbbell, title: "Rutinas", sub: "Constructor rápido" },
   ];
   return (
     <section aria-label="Accesos avanzados" className="grid grid-cols-2 gap-3">
