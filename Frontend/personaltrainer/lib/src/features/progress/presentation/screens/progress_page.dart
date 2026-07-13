@@ -75,7 +75,11 @@ class _ProgressPageState extends State<ProgressPage>
           constraints: const BoxConstraints(maxWidth: 440),
           child: Column(
             children: [
-              _TopBar(label: 'Progreso · ${widget.monthLabel}', onBack: widget.onBack),
+              _TopBar(
+                label: 'Progreso · ${widget.monthLabel}',
+                onBack: widget.onBack,
+                isTab: widget.isTab,
+              ),
               _Tabs(tab: _tab),
               Expanded(
                 child: TabBarView(
@@ -109,9 +113,10 @@ class _ProgressPageState extends State<ProgressPage>
 /* ─────────────────────── Top bar + Tabs ─────────────────────── */
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.label, this.onBack});
+  const _TopBar({required this.label, this.onBack, this.isTab = false});
   final String label;
   final VoidCallback? onBack;
+  final bool isTab;
 
   @override
   Widget build(BuildContext context) {
@@ -120,11 +125,13 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Row(
         children: [
-          _RoundIconButton(
-            icon: LucideIcons.arrowLeft,
-            onTap: onBack ?? () => Navigator.maybePop(context),
-          ),
-          const SizedBox(width: 12),
+          if (!isTab) ...[
+            _RoundIconButton(
+              icon: LucideIcons.arrowLeft,
+              onTap: onBack ?? () => Navigator.maybePop(context),
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Text(
               label.toUpperCase(),
