@@ -9,5 +9,5 @@ export class AiChatDto {
   message: string;
   history?: ChatTurnDto[];
   healthContext?: Record<string, unknown>;
-  images?: string[];
+  images?: { data: string; mimeType: string }[];
 }

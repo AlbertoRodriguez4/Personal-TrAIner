@@ -230,6 +230,14 @@ class SetTelemetryInput(BaseModel):
             }
         }
 
+class ChatImage(BaseModel):
+    data: str
+    mime_type: str = Field(..., alias="mimeType")
+
+    class Config:
+        populate_by_name = True
+
+
 class ChatTurn(BaseModel):
     role: str = Field(..., description="'user' o 'model'")
     text: str
@@ -240,7 +248,7 @@ class ChatRequest(BaseModel):
     message: str
     history: List[ChatTurn] = Field(default_factory=list)
     health_context: Optional[dict] = Field(None, description="Datos crudos de Health Connect, solo para modo sueno_recuperacion")
-    images: List[str] = Field(default_factory=list)
+    images: List[ChatImage] = Field(default_factory=list)
 
 class ChatAction(BaseModel):
     tool: str

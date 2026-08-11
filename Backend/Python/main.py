@@ -412,7 +412,7 @@ async def chat(request: ChatRequest):
             message=request.message,
             history=[t.model_dump() for t in request.history],
             health_context=request.health_context,
-            images=request.images,
+            images=[i.model_dump(by_alias=False) for i in request.images],
         )
         return result
     except ValueError as e:

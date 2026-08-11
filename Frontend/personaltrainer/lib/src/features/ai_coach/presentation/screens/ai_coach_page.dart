@@ -109,6 +109,14 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
     }
   }
 
+  String _mimeFromPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
   Future<void> _submitQuestion() async {
     final question = _questionController.text.trim();
     if (question.isEmpty && _attachedPhotos.isEmpty) {
@@ -126,10 +134,14 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
       );
     }
 
-    final List<String> imagesBase64 = [];
+    final List<Map<String, String>> images = [];
     for (final photo in photosToSend) {
       final bytes = await photo.readAsBytes();
-      imagesBase64.add(base64Encode(bytes));
+      final mimeType = photo.mimeType ?? _mimeFromPath(photo.path);
+      images.add({
+        'data': base64Encode(bytes),
+        'mimeType': mimeType,
+      });
     }
 
     final userMsg = _ChatMessage(
@@ -175,7 +187,7 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
         message: question,
         history: history,
         healthContext: healthContext,
-        imagesBase64: imagesBase64,
+        images: images,
       );
 
       if (!mounted) return;

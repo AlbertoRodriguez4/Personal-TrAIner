@@ -17,7 +17,7 @@ def run_chat(
     message: str,
     history: list[dict],
     health_context: dict | None,
-    images: list[str] | None = None,
+    images: list[dict] | None = None,
 ) -> dict:
     """
     history: [{"role": "user"|"model", "text": "..."}]  (turnos previos, sin function calls)
@@ -43,8 +43,8 @@ def run_chat(
         for img in images:
             user_parts.append(
                 types.Part.from_bytes(
-                    data=base64.b64decode(img),
-                    mime_type="image/jpeg",
+                    data=base64.b64decode(img["data"]),
+                    mime_type=img["mime_type"],
                 )
             )
     user_parts.append(types.Part.from_text(text=user_text))

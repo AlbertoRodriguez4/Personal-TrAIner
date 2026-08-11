@@ -732,7 +732,7 @@ class ApiService {
     required String message,
     List<Map<String, String>> history = const [],
     Map<String, dynamic>? healthContext,
-    List<String> imagesBase64 = const [],
+    List<Map<String, String>> images = const [],
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -743,7 +743,7 @@ class ApiService {
         'message': message,
         'history': history,
         if (healthContext != null) 'healthContext': healthContext,
-        if (imagesBase64.isNotEmpty) 'images': imagesBase64,
+        if (images.isNotEmpty) 'images': images,
       },
     );
     return _toMap(decoded) ?? {};
