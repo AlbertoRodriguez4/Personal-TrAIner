@@ -209,6 +209,42 @@ def registrar_sesion_entrenamiento(user_id: str, **kwargs) -> dict:
 
 
 # ============================================================
+# DIVISIÓN 6 — Análisis Físico
+# ============================================================
+
+guardar_analisis_fisico_decl = types.FunctionDeclaration(
+    name="guardar_analisis_fisico",
+    description=(
+        "Guarda en la base de datos un análisis de la condición física del usuario a partir "
+        "de fotos del cuerpo. Requiere al menos analisis_general. Si no puedes estimar un "
+        "valor con confianza razonable a partir de la foto (peso, % grasa, masa muscular, etc.), "
+        "déjalo como null en vez de inventar una cifra."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "analisis_general": types.Schema(type="STRING", description="Resumen detallado de la composición corporal y condición física"),
+            "peso_estimado_kg": types.Schema(type="NUMBER", description="Peso estimado en kg o null"),
+            "porcentaje_grasa_estimado": types.Schema(type="NUMBER", description="Porcentaje de grasa estimado o null"),
+            "masa_muscular_estimada_kg": types.Schema(type="NUMBER", description="Masa muscular estimada en kg o null"),
+            "somatotipo_estimado": types.Schema(type="STRING", description="Ectomorfo | Mesomorfo | Endomorfo u omitir/null"),
+            "nivel_fitness_estimado": types.Schema(type="STRING", description="Principiante | Intermedio | Avanzado u omitir/null"),
+            "puntos_fuertes_fisicos": types.Schema(type="ARRAY", items=types.Schema(type="STRING")),
+            "areas_mejora_fisicas": types.Schema(type="ARRAY", items=types.Schema(type="STRING")),
+            "recomendaciones": types.Schema(type="STRING", description="Recomendaciones de entrenamiento y nutrición"),
+            "notas_adicionales": types.Schema(type="STRING"),
+            "comparacion_progreso": types.Schema(type="STRING"),
+        },
+        required=["analisis_general"],
+    ),
+)
+
+def guardar_analisis_fisico(user_id: str, **kwargs) -> dict:
+    body = {"userId": user_id, **kwargs}
+    return nest.post("/body-analysis", body)
+
+
+# ============================================================
 # Registro por división — qué tools se exponen en cada modo
 # ============================================================
 
@@ -218,6 +254,7 @@ TOOLS_BY_MODE = {
     "sueno_recuperacion": [guardar_recuperacion_decl, historial_recuperacion_decl],
     "nutricion": [registrar_comida_decl, resumen_diario_decl],
     "entrenamiento": [registrar_sesion_decl],
+    "analisis_fisico": [guardar_analisis_fisico_decl],
 }
 
 EXECUTORS = {
@@ -230,6 +267,7 @@ EXECUTORS = {
     "registrar_comida": registrar_comida,
     "obtener_resumen_diario": obtener_resumen_diario,
     "registrar_sesion_entrenamiento": registrar_sesion_entrenamiento,
+    "guardar_analisis_fisico": guardar_analisis_fisico,
 }
 
 SYSTEM_PROMPTS = {
@@ -258,14 +296,24 @@ SYSTEM_PROMPTS = {
         "obtener_historial_recuperacion."
     ),
     "nutricion": (
-        "Eres el Nutricionista de Personal TrAIner. Si el usuario describe una comida, "
-        "estima sus macros y calorías y guárdala con registrar_comida. Si pregunta cómo va "
-        "en el día, usa obtener_resumen_diario. Sé breve y accionable."
+        "Eres el Nutricionista de Personal TrAIner. Si el mensaje trae imágenes, debes "
+        "analizarlas visualmente (identificar alimentos y estimar porciones) antes de llamar a "
+        "registrar_comida. Si el usuario describe una comida o adjunta una foto, estima sus "
+        "macros y calorías y guárdala con registrar_comida. Si pregunta cómo va en el día, "
+        "usa obtener_resumen_diario. Sé breve y accionable."
     ),
     "entrenamiento": (
         "Eres el Diario de Entrenamiento. Cuando el usuario te cuente lo que hizo o vaya a "
         "hacer en el gym, registralo con registrar_sesion_entrenamiento. tipo_entrenamiento "
         "solo puede ser 'fuerza', 'cardio' o 'flexibilidad' — si no encaja claramente, "
         "preguntá antes de guardar."
+    ),
+    "analisis_fisico": (
+        "Eres el Analista de Condición Física de Personal TrAIner. Tu función es evaluar la "
+        "composición corporal a partir de fotos del cuerpo que adjunte el usuario. Debes exigir al "
+        "menos una foto adjunta para poder usar guardar_analisis_fisico. Si no puedes "
+        "estimar un valor con confianza razonable a partir de la foto (peso, % grasa, masa muscular, "
+        "etc.), déjalo como null en vez de inventar una cifra. Proporciona un análisis visual "
+        "detallado y guarda los hallazgos en la base de datos llamando a guardar_analisis_fisico."
     ),
 }

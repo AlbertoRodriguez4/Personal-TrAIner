@@ -17,7 +17,8 @@ enum ChatMode {
   revisorRutina('revisor_rutina', 'Revisor de Rutina', Icons.rate_review_outlined),
   suenoRecuperacion('sueno_recuperacion', 'Sueño y Recuperación', Icons.bedtime_outlined),
   nutricion('nutricion', 'Nutrición', Icons.restaurant_outlined),
-  entrenamiento('entrenamiento', 'Diario de Entrenamiento', Icons.event_available_outlined);
+  entrenamiento('entrenamiento', 'Diario de Entrenamiento', Icons.event_available_outlined),
+  analisisFisico('analisis_fisico', 'Análisis Físico', Icons.camera_alt_outlined);
 
   const ChatMode(this.value, this.label, this.icon);
   final String value;
@@ -58,69 +59,83 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
   Future<void> _logHealthData() async {
     print("===== DEBUG COACH IA: Rastreo profundo de MI Fitness =====");
     try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(days: 7));
-      final health = Health();
-      
-      final typesToTest = [
-        HealthDataType.WORKOUT,
-        HealthDataType.STEPS,
-        HealthDataType.HEART_RATE,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
-        HealthDataType.DISTANCE_DELTA,
-      ];
-
-      for (var type in typesToTest) {
-        try {
-          List<HealthDataPoint> data = await health.getHealthDataFromTypes(
-            startTime: start,
-            endTime: now,
-            types: [type],
-          );
-          print("-> Tipo: ${type.name} | Registros encontrados: ${data.length}");
-          if (data.isNotEmpty) {
-            print("   Ejemplo: ${data.first.value} (del ${data.first.dateFrom} al ${data.first.dateTo})");
-          }
-        } catch (e) {
-          print("-> Tipo: ${type.name} | ERROR: $e");
-        }
+      final summary = await HealthService.fetchSleepAndReadiness();
+      if (summary != null) {
+        print("  - Horas de sueño: ${summary.sleepMinutes / 60.0}");
+        print("  - FC Reposo (Noche): ${summary.avgNightHr}");
+        print("  - HRV Status: ${summary.hrvStatus}");
+        print("  - Readiness Score: ${summary.readinessScore}");
+      } else {
+        print("  - No se obtuvieron datos de sueño/readiness.");
       }
     } catch (e) {
-      print("Error crítico leyendo Health Connect: $e");
+      print("  - Error al rastrear salud: $e");
     }
-    print("=========================================================");
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _questionController.dispose();
     _scrollController.dispose();
-    _pulseController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickPhotos() async {
-    final photos = await _imagePicker.pickMultiImage(
-      imageQuality: 85,
-      maxWidth: 1800,
-    );
-    if (photos.isEmpty) return;
-    setState(() => _attachedPhotos.addAll(photos));
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final photo = await _imagePicker.pickImage(source: source);
+      if (photo != null) {
+        setState(() {
+          _attachedPhotos.add(photo);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al capturar imagen: $e')),
+      );
+    }
   }
 
   Future<void> _submitQuestion() async {
     final question = _questionController.text.trim();
-    if (question.isEmpty) {
+    if (question.isEmpty && _attachedPhotos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Escribe una consulta.')),
+        const SnackBar(content: Text('Escribe una consulta o adjunta una imagen.')),
       );
       return;
+    }
+
+    List<XFile> photosToSend = List.from(_attachedPhotos);
+    if (photosToSend.length > 4) {
+      photosToSend = photosToSend.sublist(0, 4);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Máximo 4 fotos por mensaje. Se enviaron las 4 primeras.')),
+      );
+    }
+
+    final List<String> imagesBase64 = [];
+    for (final photo in photosToSend) {
+      final bytes = await photo.readAsBytes();
+      imagesBase64.add(base64Encode(bytes));
     }
 
     final userMsg = _ChatMessage(
       isUser: true,
       text: question.isNotEmpty ? question : null,
-      photos: List.from(_attachedPhotos),
+      photos: photosToSend,
       createdAt: DateTime.now(),
     );
 
@@ -160,6 +175,7 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
         message: question,
         history: history,
         healthContext: healthContext,
+        imagesBase64: imagesBase64,
       );
 
       if (!mounted) return;

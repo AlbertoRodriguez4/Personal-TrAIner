@@ -236,10 +236,11 @@ class ChatTurn(BaseModel):
 
 class ChatRequest(BaseModel):
     user_id: str = Field(..., description="UUID del usuario")
-    mode: str = Field(..., description="creador_rutina | revisor_rutina | sueno_recuperacion | nutricion | entrenamiento")
+    mode: str = Field(..., description="creador_rutina | revisor_rutina | sueno_recuperacion | nutricion | entrenamiento | analisis_fisico")
     message: str
     history: List[ChatTurn] = Field(default_factory=list)
     health_context: Optional[dict] = Field(None, description="Datos crudos de Health Connect, solo para modo sueno_recuperacion")
+    images: List[str] = Field(default_factory=list)
 
 class ChatAction(BaseModel):
     tool: str

@@ -395,6 +395,7 @@ export class AiService {
         message: payload.message,
         history: (payload.history ?? []).map((h) => ({ role: h.role, text: h.text })),
         health_context: payload.healthContext ?? null,
+        images: payload.images ?? [],
       }),
     });
 

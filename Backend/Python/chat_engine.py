@@ -1,3 +1,4 @@
+import base64
 import os
 from google import genai
 from google.genai import types
@@ -10,7 +11,14 @@ MAX_TOOL_ITERATIONS = 5     # guarda contra loops infinitos de function calling
 _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
 
-def run_chat(user_id: str, mode: str, message: str, history: list[dict], health_context: dict | None) -> dict:
+def run_chat(
+    user_id: str,
+    mode: str,
+    message: str,
+    history: list[dict],
+    health_context: dict | None,
+    images: list[str] | None = None,
+) -> dict:
     """
     history: [{"role": "user"|"model", "text": "..."}]  (turnos previos, sin function calls)
     Devuelve {"reply": str, "actions_taken": [ {"tool": str, "result": dict} ]}
@@ -29,7 +37,18 @@ def run_chat(user_id: str, mode: str, message: str, history: list[dict], health_
     user_text = message
     if health_context:
         user_text += f"\n\n[Contexto Health Connect — datos reales, no inventar]\n{health_context}"
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_text)]))
+
+    user_parts = []
+    if images:
+        for img in images:
+            user_parts.append(
+                types.Part.from_bytes(
+                    data=base64.b64decode(img),
+                    mime_type="image/jpeg",
+                )
+            )
+    user_parts.append(types.Part.from_text(text=user_text))
+    contents.append(types.Content(role="user", parts=user_parts))
 
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
