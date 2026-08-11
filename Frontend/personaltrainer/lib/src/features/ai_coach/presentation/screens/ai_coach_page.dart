@@ -1,35 +1,48 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:health/health.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../services/api_service.dart';
-import 'package:health/health.dart';
+import '../../../../services/health_service.dart';
+import '../../../../core/theme/design_tokens.dart';
+
+enum ChatMode {
+  creadorRutina('creador_rutina', 'Creador de Rutina', Icons.fitness_center),
+  revisorRutina('revisor_rutina', 'Revisor de Rutina', Icons.rate_review_outlined),
+  suenoRecuperacion('sueno_recuperacion', 'Sueño y Recuperación', Icons.bedtime_outlined),
+  nutricion('nutricion', 'Nutrición', Icons.restaurant_outlined),
+  entrenamiento('entrenamiento', 'Diario de Entrenamiento', Icons.event_available_outlined);
+
+  const ChatMode(this.value, this.label, this.icon);
+  final String value;
+  final String label;
+  final IconData icon;
+}
 
 class AiCoachPage extends StatefulWidget {
   const AiCoachPage({super.key, this.embedded = false});
 
-  /// Cuando `true`, se renderiza sin `Scaffold`/`AppBar` propios para embeberse
-  /// dentro de otro `Scaffold` (p. ej. el tab "coach" del `HomePage`) sin
-  /// duplicar barras de navegación.
   final bool embedded;
 
   @override
   State<AiCoachPage> createState() => _AiCoachPageState();
 }
 
-class _AiCoachPageState extends State<AiCoachPage>
-    with TickerProviderStateMixin {
+class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin {
   final TextEditingController _questionController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _attachedPhotos = [];
   final List<_ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
+  ChatMode _selectedMode = ChatMode.creadorRutina;
 
   bool _isGenerating = false;
-
   late final AnimationController _pulseController;
 
   @override
@@ -49,7 +62,6 @@ class _AiCoachPageState extends State<AiCoachPage>
       final start = now.subtract(const Duration(days: 7));
       final health = Health();
       
-      // Probar todos los tipos que soporta la app
       final typesToTest = [
         HealthDataType.WORKOUT,
         HealthDataType.STEPS,
@@ -98,11 +110,9 @@ class _AiCoachPageState extends State<AiCoachPage>
 
   Future<void> _submitQuestion() async {
     final question = _questionController.text.trim();
-    if (question.isEmpty && _attachedPhotos.isEmpty) {
+    if (question.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Escribe una consulta o adjunta una foto.'),
-        ),
+        const SnackBar(content: Text('Escribe una consulta.')),
       );
       return;
     }
@@ -124,10 +134,32 @@ class _AiCoachPageState extends State<AiCoachPage>
     _scrollToBottom();
 
     try {
-      final imageBase64 = await _resolveImageBase64(userMsg.photos);
-      final answer = await _requestAiAnswer(
-        question: question,
-        imageBase64: imageBase64,
+      final userId = ApiService.getCurrentUserId() ?? '';
+      Map<String, dynamic>? healthContext;
+      if (_selectedMode == ChatMode.suenoRecuperacion) {
+        final summary = await HealthService.fetchSleepAndReadiness();
+        if (summary != null) {
+          healthContext = {
+            'horas_sueno': summary.sleepMinutes / 60.0,
+            'frecuencia_cardiaca_reposo': summary.avgNightHr?.toInt(),
+          };
+        }
+      }
+
+      final history = _messages
+          .where((m) => m.text != null && m.text!.isNotEmpty)
+          .map((m) => {
+                'role': m.isUser ? 'user' : 'model',
+                'text': m.text!,
+              })
+          .toList();
+
+      final response = await ApiService.sendChatMessage(
+        userId: userId,
+        mode: _selectedMode.value,
+        message: question,
+        history: history,
+        healthContext: healthContext,
       );
 
       if (!mounted) return;
@@ -135,7 +167,8 @@ class _AiCoachPageState extends State<AiCoachPage>
         _messages.add(
           _ChatMessage(
             isUser: false,
-            text: answer,
+            text: response['reply']?.toString() ?? '',
+            actionsTaken: response['actions_taken'] as List<dynamic>? ?? [],
             createdAt: DateTime.now(),
           ),
         );
@@ -164,360 +197,339 @@ class _AiCoachPageState extends State<AiCoachPage>
     });
   }
 
-  Future<String> _resolveImageBase64(List<XFile> photos) async {
-    if (photos.isEmpty) return 'bm8taW1hZ2U=';
-    final bytes = await File(photos.first.path).readAsBytes();
-    return base64Encode(bytes);
-  }
-
-  Future<String> _requestAiAnswer({
-    required String question,
-    required String imageBase64,
-  }) {
-    return _callAiEndpoint(
-      question: question,
-      imageBase64: imageBase64,
-    ).then(_formatAiResponse);
-  }
-
-  Future<Map<String, dynamic>> _callAiEndpoint({
-    required String question,
-    required String imageBase64,
-  }) async {
-    final body = <String, dynamic>{
-      'image_base64': imageBase64,
-      'prompt': question,
-    };
-    final userId = ApiService.getCurrentUserId();
-    if (userId != null) {
-      body['user_id'] = userId;
-    }
-    final response = await http.post(
-      Uri.parse('${ApiService.baseUrl}/ai/analizar-nutricion'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
-
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) {
-      throw const FormatException('La IA devolvió un formato inválido.');
-    }
-    return Map<String, dynamic>.from(decoded);
-  }
-
-  String _formatAiResponse(Map<String, dynamic> response) {
-    final calorias = response['calorias_consumidas'] ?? '-';
-    final proteinas = response['proteinas_g'] ?? '-';
-    final carbohidratos = response['carbohidratos_g'] ?? '-';
-    final grasas = response['grasas_g'] ?? '-';
-    final notas = response['notas']?.toString() ?? 'Sin notas.';
-
-    return 'CAL:$calorias|PRO:$proteinas|CAR:$carbohidratos|GRA:$grasas|NOT:$notas';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final body = _buildBody();
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    
+    final body = Stack(
+      children: [
+        Column(
+          children: [
+            if (!widget.embedded) _buildHeader(b),
+            Expanded(
+              child: _messages.isEmpty
+                  ? _EmptyState(onPick: (s) {
+                      _questionController.text = s;
+                      _submitQuestion();
+                    })
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                      itemCount: _messages.length + (_isGenerating ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _messages.length && _isGenerating) {
+                          return _TypingIndicator(pulseController: _pulseController);
+                        }
+                        return _ChatBubble(
+                          message: _messages[index],
+                          onRemovePhoto: null,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+        _buildInputArea(),
+      ],
+    );
 
     if (widget.embedded) {
       return body;
     }
 
-    return Theme(
-      data: ThemeData.dark(),
-      child: Builder(
-        builder: (context) {
-          final bg = const Color(0xFF0B1220);
-          return Scaffold(
-            backgroundColor: bg,
-            appBar: AppBar(
-              backgroundColor: bg,
-              elevation: 0,
-              title: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF00C897),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('Coach IA'),
-                ],
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(child: body),
+    );
+  }
+
+  Widget _buildHeader(Brightness b) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      decoration: BoxDecoration(
+        color: DesignTokens.background(b).withOpacity(0.8),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.maybePop(context),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: DesignTokens.surface2of(b),
+                shape: BoxShape.circle,
+                border: Border.all(color: DesignTokens.border(b)),
               ),
-              centerTitle: true,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.history_rounded),
-                  onPressed: _showHistoryBottomSheet,
+              child: Icon(LucideIcons.arrowLeft, size: 16, color: DesignTokens.foreground(b)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: DesignTokens.border(b)),
+              image: const DecorationImage(
+                image: AssetImage('assets/logo.jpg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Coach', style: DesignTokens.titleFont(fontSize: 15, color: DesignTokens.foreground(b))),
+                Row(
+                  children: [
+                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: DesignTokens.deviceLive, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text('En línea · contexto de tus datos', style: DesignTokens.bodyFont(fontSize: 11, color: DesignTokens.mutedForeground(b))),
+                  ],
                 ),
               ],
             ),
-            body: body,
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBody() {
-    final card = const Color(0xFF131B2C);
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            itemCount: _messages.length + (_isGenerating ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == _messages.length && _isGenerating) {
-                return _TypingIndicator(pulseController: _pulseController);
-              }
-              return _ChatBubble(
-                message: _messages[index],
-                onRemovePhoto: null,
-              );
-            },
-          ),
-        ),
-        if (_attachedPhotos.isNotEmpty)
-          Container(
-            color: card,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: SizedBox(
-              height: 72,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  final photo = _attachedPhotos[index];
-                  return Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(photo.path),
-                          width: 72,
-                          height: 72,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        right: 4,
-                        top: 4,
-                        child: GestureDetector(
-                          onTap: () => setState(
-                            () => _attachedPhotos.removeAt(index),
-                          ),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black54,
-                            ),
-                            padding: const EdgeInsets.all(3),
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemCount: _attachedPhotos.length,
-              ),
-            ),
-          ),
-        _buildInputArea(card),
-      ],
-    );
-  }
+  Widget _buildInputArea() {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final border = DesignTokens.border(b);
+    final bg = DesignTokens.background(b).withOpacity(0.6);
 
-  Widget _buildInputArea(Color cardColor) {
-    return SafeArea(
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
-        color: cardColor,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: _pickPhotos,
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              color: const Color(0xFF6B7280),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _questionController,
-                minLines: 1,
-                maxLines: 5,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submitQuestion(),
-                decoration: const InputDecoration(
-                  hintText: 'Pregunta a tu coach IA...',
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: _isGenerating ? null : _submitQuestion,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              DesignTokens.background(b),
+              DesignTokens.background(b).withOpacity(0.6),
+              Colors.transparent,
+            ],
+            stops: const [0.6, 0.9, 1.0],
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        child: SafeArea(
+          top: false,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
               child: Container(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                 decoration: BoxDecoration(
-                  gradient: _isGenerating
-                      ? null
-                      : const LinearGradient(
-                          colors: [Color(0xFF06B6D4), Color(0xFF00C897)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: _isGenerating ? const Color(0xFFE5E7EB) : null,
-                  shape: BoxShape.circle,
+                  color: bg,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: border),
+                  boxShadow: DesignTokens.shadowCard(b),
                 ),
-                padding: const EdgeInsets.all(12),
-                child: Icon(
-                  Icons.send_rounded,
-                  color: _isGenerating ? const Color(0xFF9CA3AF) : Colors.white,
-                  size: 20,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_attachedPhotos.isNotEmpty)
+                      Container(
+                        height: 64,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _attachedPhotos.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final photo = _attachedPhotos[index];
+                            return Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(File(photo.path), width: 64, height: 64, fit: BoxFit.cover),
+                                ),
+                                Positioned(
+                                  top: 2,
+                                  right: 2,
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _attachedPhotos.removeAt(index)),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.black54),
+                                      child: const Icon(LucideIcons.x, color: Colors.white, size: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          onPressed: _pickPhotos,
+                          icon: Icon(LucideIcons.paperclip, color: mutedFg, size: 18),
+                          splashRadius: 20,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: ChatMode.values.map((mode) {
+                                    final isSelected = _selectedMode == mode;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+                                      child: ChoiceChip(
+                                        label: Row(
+                                          children: [
+                                            Icon(mode.icon, size: 14, color: isSelected ? Colors.white : fg),
+                                            const SizedBox(width: 4),
+                                            Text(mode.label, style: TextStyle(color: isSelected ? Colors.white : fg, fontSize: 12)),
+                                          ],
+                                        ),
+                                        selected: isSelected,
+                                        selectedColor: const Color(0xFF06B6D4),
+                                        backgroundColor: DesignTokens.surface2of(b),
+                                        onSelected: (selected) {
+                                          if (selected) setState(() => _selectedMode = mode);
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              TextField(
+                                controller: _questionController,
+                                minLines: 1,
+                                maxLines: 4,
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: (_) => _submitQuestion(),
+                                style: DesignTokens.bodyFont(fontSize: 15, color: fg),
+                                decoration: InputDecoration(
+                                  hintText: 'Pregunta a tu AI Coach...',
+                                  hintStyle: DesignTokens.bodyFont(fontSize: 15, color: mutedFg),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _isGenerating ? null : _submitQuestion,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 2),
+                            decoration: BoxDecoration(
+                              gradient: _isGenerating ? null : DesignTokens.aiGradient,
+                              color: _isGenerating ? DesignTokens.surface2of(b) : null,
+                              shape: BoxShape.circle,
+                              boxShadow: _isGenerating ? null : DesignTokens.shadowSoft(b),
+                            ),
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              LucideIcons.arrowUp,
+                              color: _isGenerating ? mutedFg : Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  void _showHistoryBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, scrollController) {
-            final userMessages = _messages
-                .where((m) => m.isUser)
-                .toList()
-                .reversed
-                .toList();
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
+class _EmptyState extends StatelessWidget {
+  final ValueChanged<String> onPick;
+  const _EmptyState({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 40, left: 16, right: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            height: 64,
+            width: 64,
+            decoration: BoxDecoration(
+              gradient: DesignTokens.aiGradient,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: DesignTokens.shadowSoft(b),
+            ),
+            child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '¿En qué te ayudo hoy?',
+            style: DesignTokens.titleFont(fontSize: 22, color: fg),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tu coach personal con acceso a tus métricas, entrenamientos y nutrición.',
+            style: DesignTokens.bodyFont(fontSize: 14, color: mutedFg),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final s in [
+                "¿Cómo voy de recuperación hoy?",
+                "Plan de comida alta en proteína",
+                "Rutina rápida de 20 min",
+                "Interpreta mi última FC media",
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () => onPick(s),
+                    borderRadius: BorderRadius.circular(16),
                     child: Container(
-                      width: 40,
-                      height: 4,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD1D5DB),
-                        borderRadius: BorderRadius.circular(4),
+                        color: DesignTokens.surface2of(b),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: DesignTokens.border(b)),
+                      ),
+                      child: Text(
+                        s,
+                        style: DesignTokens.bodyFont(fontSize: 14, color: fg),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Historial de consultas',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: userMessages.isEmpty
-                        ? Center(
-                            child: Text(
-                              'Sin historial reciente.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          )
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: userMessages.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final msg = userMessages[index];
-                              return Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      msg.text ?? '(Solo imagen)',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        if (msg.photos.isNotEmpty)
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.image,
-                                                size: 14,
-                                                color: Color(0xFF6B7280),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${msg.photos.length} foto(s)',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                              const SizedBox(width: 10),
-                                            ],
-                                          ),
-                                        Text(
-                                          '${msg.createdAt.hour.toString().padLeft(2, '0')}:${msg.createdAt.minute.toString().padLeft(2, '0')}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+                ),
+            ],
+          )
+        ],
+      ),
     );
   }
 }
@@ -527,12 +539,14 @@ class _ChatMessage {
     required this.isUser,
     this.text,
     this.photos = const [],
+    this.actionsTaken = const [],
     required this.createdAt,
   });
 
   final bool isUser;
   final String? text;
   final List<XFile> photos;
+  final List<dynamic> actionsTaken;
   final DateTime createdAt;
 }
 
@@ -547,138 +561,90 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     final isUser = message.isUser;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.88,
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (!isUser)
-                  Container(
-                    margin: const EdgeInsets.only(right: 8, bottom: 4),
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF06B6D4), Color(0xFF00C897)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isUser
-                          ? const Color(0xFF0B1220)
-                          : Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(20),
-                        topRight: const Radius.circular(20),
-                        bottomLeft: Radius.circular(isUser ? 20 : 4),
-                        bottomRight: Radius.circular(isUser ? 4 : 20),
-                      ),
-                      boxShadow: isUser
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                    ),
-                    child: isUser
-                        ? _buildUserContent(context)
-                        : _buildAiContent(context),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: EdgeInsets.only(
-                left: isUser ? 0 : 40,
-                right: isUser ? 8 : 0,
-              ),
-              child: Text(
-                '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 11,
-                    ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    final text = message.text ?? '';
+    final images = message.photos;
 
-  Widget _buildUserContent(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (message.text != null && message.text!.isNotEmpty)
-          Text(
-            message.text!,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white,
-                  height: 1.4,
-                ),
-          ),
-        if (message.photos.isNotEmpty) ...[
-          if (message.text != null && message.text!.isNotEmpty)
-            const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: message.photos.asMap().entries.map((entry) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(
-                  File(entry.value.path),
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                ),
-              );
-            }).toList(),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.88),
+              child: Column(
+                crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  if (images.isNotEmpty)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      alignment: isUser ? WrapAlignment.end : WrapAlignment.start,
+                      children: images.map((x) => ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(File(x.path), width: 140, height: 140, fit: BoxFit.cover),
+                      )).toList(),
+                    ),
+                  if (text.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: images.isNotEmpty ? 6 : 0),
+                      child: isUser
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF06B6D4), // Primary color
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(22),
+                                  topRight: Radius.circular(22),
+                                  bottomLeft: Radius.circular(22),
+                                  bottomRight: Radius.circular(6),
+                                ),
+                                boxShadow: DesignTokens.shadowSoft(b),
+                              ),
+                              child: Text(
+                                text,
+                                style: DesignTokens.bodyFont(fontSize: 15, color: Colors.white),
+                              ),
+                            )
+                          : text.startsWith('CAL:')
+                              ? _AiMetricsCard(raw: text)
+                              : Text(
+                                  text,
+                                  style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b), height: 1.5),
+                                ),
+                    ),
+                  if (message.actionsTaken.isNotEmpty && !isUser)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        children: message.actionsTaken.map((action) {
+                          final tool = action['tool'] as String? ?? '';
+                          String label = '✅ Acción realizada';
+                          if (tool == 'crear_rutina_personalizada') label = '✅ Rutina guardada';
+                          else if (tool == 'registrar_comida') label = '✅ Comida registrada';
+                          else if (tool == 'guardar_analisis_recuperacion') label = '✅ Recuperación guardada';
+                          else if (tool == 'registrar_sesion_entrenamiento') label = '✅ Entrenamiento guardado';
+                          else if (tool == 'aplicar_cambios_rutina') label = '✅ Rutina actualizada';
+                          else if (tool == 'buscar_ejercicios_catalogo') return const SizedBox.shrink();
+                          
+                          return Chip(
+                            label: Text(label, style: const TextStyle(fontSize: 12, color: Colors.green)),
+                            backgroundColor: Colors.green.withOpacity(0.1),
+                            side: BorderSide.none,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildAiContent(BuildContext context) {
-    final text = message.text ?? '';
-    if (text.startsWith('CAL:')) {
-      return _AiMetricsCard(raw: text);
-    }
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: const Color(0xFF0B1220),
-            height: 1.5,
-          ),
+      ),
     );
   }
 }
@@ -710,11 +676,7 @@ class _AiMetricsCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(
-              Icons.auto_awesome,
-              size: 16,
-              color: Color(0xFF06B6D4),
-            ),
+            const Icon(LucideIcons.sparkles, size: 16, color: Color(0xFF06B6D4)),
             const SizedBox(width: 6),
             Text(
               'Análisis IA',
@@ -863,86 +825,47 @@ class _MetricPill extends StatelessWidget {
 }
 
 class _TypingIndicator extends StatelessWidget {
-  const _TypingIndicator({required this.pulseController});
-
   final AnimationController pulseController;
+  const _TypingIndicator({required this.pulseController});
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-            bottomLeft: Radius.circular(4),
-            bottomRight: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF06B6D4), Color(0xFF00C897)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 12,
-              ),
-            ),
-            _Dot(delay: 0, controller: pulseController),
-            _Dot(delay: 1, controller: pulseController),
-            _Dot(delay: 2, controller: pulseController),
-          ],
-        ),
+    final mutedFg = DesignTokens.mutedForeground(Theme.of(context).brightness);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          _BouncingDot(delay: 0, controller: pulseController, color: mutedFg),
+          const SizedBox(width: 4),
+          _BouncingDot(delay: 0.2, controller: pulseController, color: mutedFg),
+          const SizedBox(width: 4),
+          _BouncingDot(delay: 0.4, controller: pulseController, color: mutedFg),
+        ],
       ),
     );
   }
 }
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.delay, required this.controller});
-
-  final int delay;
+class _BouncingDot extends StatelessWidget {
+  final double delay;
   final AnimationController controller;
+  final Color color;
+
+  const _BouncingDot({required this.delay, required this.controller, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) {
-        final double progress = (controller.value + delay * 0.25) % 1.0;
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2.5),
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            color: Color.lerp(
-              const Color(0xFFD1D5DB),
-              const Color(0xFF06B6D4),
-              progress < 0.5 ? progress * 2 : (1 - progress) * 2,
-            ),
-            shape: BoxShape.circle,
+        final val = (controller.value + delay) % 1.0;
+        final y = (val < 0.5 ? val : 1 - val) * -4.0;
+        return Transform.translate(
+          offset: Offset(0, y),
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color.withOpacity(0.6), shape: BoxShape.circle),
           ),
         );
       },

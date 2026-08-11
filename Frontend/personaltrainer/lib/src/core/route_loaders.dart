@@ -102,7 +102,6 @@ class _ProgressRouteState extends State<ProgressRoute> {
   }
 
   Future<void> _load() async {
-    await HealthService.requestPermissions();
     final days = await HealthService.fetchMonthlyWorkoutCalendar();
     if (!mounted) return;
     setState(() {

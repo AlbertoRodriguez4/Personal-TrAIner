@@ -30,7 +30,6 @@ class _RecoveryPageState extends State<RecoveryPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      await HealthService.requestPermissions();
       _r = await HealthService.fetchSleepAndReadiness();
     } catch (e) {
       _error = e.toString();

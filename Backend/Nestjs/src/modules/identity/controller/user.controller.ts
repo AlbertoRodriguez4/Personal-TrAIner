@@ -22,6 +22,12 @@ export class UserController {
         return this.userService.login(body.email, body.password);
     }
 
+    @Post('google-login')
+    @HttpCode(HttpStatus.OK)
+    googleLogin(@Body('idToken') idToken: string) {
+        return this.userService.googleLogin(idToken);
+    }
+
     @Post()
     create(@Body() createUserDto: UserDto) {
         return this.userService.create(createUserDto);

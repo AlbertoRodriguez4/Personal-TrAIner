@@ -53,6 +53,10 @@ export class CreateRoutineDayDto {
 
 export class CreateRoutineDto {
   @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
   @IsNotEmpty()
   name: string;
 

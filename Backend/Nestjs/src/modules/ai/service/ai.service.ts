@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { AnalyzeNutritionDto } from '../dto/analyze-nutrition.dto';
 import { AnalyzeRoutineDto } from '../dto/analyze-routine.dto';
 import { AnalyzeBodyDto } from '../dto/analyze-body.dto';
+import { AiChatDto } from '../dto/chat.dto';
 import { UserProfile } from '../../user_profile/entities/user_profile.entity';
 import { CustomRoutine } from '../../custom_routine/entities/custom_routine.entity';
 import { BodyAnalysisRecord } from '../../body_analysis/entities/body_analysis_record.entity';
@@ -378,5 +379,32 @@ export class AiService {
       typeof candidate.notas_adicionales === 'string' &&
       (candidate.comparacion_progreso === null || typeof candidate.comparacion_progreso === 'string')
     );
+  }
+
+  async chat(payload: AiChatDto): Promise<{ reply: string; actions_taken: unknown[] }> {
+    const baseUrl = this.configService.get<string>('AI_PYTHON_URL') ?? 'http://127.0.0.1:8000';
+    const path = this.configService.get<string>('AI_PYTHON_CHAT_PATH') ?? '/api/ia/chat';
+    const endpoint = new URL(path, baseUrl).toString();
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: payload.userId,
+        mode: payload.mode,
+        message: payload.message,
+        history: (payload.history ?? []).map((h) => ({ role: h.role, text: h.text })),
+        health_context: payload.healthContext ?? null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new BadGatewayException(
+        `Error al comunicarse con el servicio Python (${response.status}): ${errorBody}`,
+      );
+    }
+
+    return response.json() as Promise<{ reply: string; actions_taken: unknown[] }>;
   }
 }

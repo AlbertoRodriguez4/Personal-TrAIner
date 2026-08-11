@@ -6,20 +6,35 @@ import 'package:permission_handler/permission_handler.dart';
 class HealthService {
   static final Health _health = Health();
 
-  static final List<HealthDataType> _types = [
-    HealthDataType.WORKOUT,
-    HealthDataType.STEPS,
-    HealthDataType.HEART_RATE,
-    HealthDataType.ACTIVE_ENERGY_BURNED,
-    HealthDataType.TOTAL_CALORIES_BURNED,
-    HealthDataType.DISTANCE_DELTA,
-    HealthDataType.SLEEP_IN_BED,
-    HealthDataType.SLEEP_ASLEEP,
-    HealthDataType.SLEEP_AWAKE,
-    HealthDataType.SLEEP_DEEP,
-    HealthDataType.SLEEP_REM,
-    HealthDataType.SLEEP_LIGHT,
-  ];
+  static final List<HealthDataType> _types = Platform.isAndroid
+      ? [
+          HealthDataType.WORKOUT,
+          HealthDataType.STEPS,
+          HealthDataType.HEART_RATE,
+          HealthDataType.ACTIVE_ENERGY_BURNED,
+          HealthDataType.TOTAL_CALORIES_BURNED,
+          HealthDataType.DISTANCE_DELTA,
+          HealthDataType.SLEEP_SESSION,
+          HealthDataType.SLEEP_ASLEEP,
+          HealthDataType.SLEEP_AWAKE,
+          HealthDataType.SLEEP_DEEP,
+          HealthDataType.SLEEP_REM,
+          HealthDataType.SLEEP_LIGHT,
+        ]
+      : [
+          HealthDataType.WORKOUT,
+          HealthDataType.STEPS,
+          HealthDataType.HEART_RATE,
+          HealthDataType.ACTIVE_ENERGY_BURNED,
+          HealthDataType.TOTAL_CALORIES_BURNED,
+          HealthDataType.DISTANCE_DELTA,
+          HealthDataType.SLEEP_IN_BED,
+          HealthDataType.SLEEP_ASLEEP,
+          HealthDataType.SLEEP_AWAKE,
+          HealthDataType.SLEEP_DEEP,
+          HealthDataType.SLEEP_REM,
+          HealthDataType.SLEEP_LIGHT,
+        ];
 
   static bool _isConfigured = false;
 
@@ -345,25 +360,9 @@ class HealthService {
     await requestPermissions();
     try {
       final now = DateTime.now();
-      final start = DateTime(now.year, now.month, now.day);
-      print('[HC] fetchTodaySteps: $start → $now');
-      final data = await _health.getHealthDataFromTypes(
-        startTime: start,
-        endTime: now,
-        types: [HealthDataType.STEPS],
-      );
-      print('[HC] Steps registros brutos: ${data.length}');
-      final clean = _health.removeDuplicates(data);
-      double total = 0;
-      for (final p in clean) {
-        if (p.value is NumericHealthValue) {
-          final val = (p.value as NumericHealthValue).numericValue.toDouble();
-          total += val;
-          print('[HC]   Steps: $val @ ${p.dateFrom} (${p.sourceName})');
-        }
-      }
-      print('[HC] Steps total hoy: $total');
-      return total.round();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final steps = await _health.getTotalStepsInInterval(startOfDay, now);
+      return steps ?? 0;
     } catch (e) {
       print('[HC] fetchTodaySteps error: $e');
       return 0;
@@ -537,7 +536,7 @@ class HealthService {
       return m < 0 ? 0 : m;
     }
 
-    final inBed = await _get(HealthDataType.SLEEP_IN_BED);
+    final inBed = await _get(Platform.isAndroid ? HealthDataType.SLEEP_SESSION : HealthDataType.SLEEP_IN_BED);
     final asleep = await _get(HealthDataType.SLEEP_ASLEEP);
     final awake = await _get(HealthDataType.SLEEP_AWAKE);
     final light = await _get(HealthDataType.SLEEP_LIGHT);
@@ -583,41 +582,9 @@ class HealthService {
     );
   }
 
-  /// Pasos totales desde el inicio del día hasta ahora.
-  /// Devuelve 0 si no hay datos o permisos.
-  static Future<int> fetchStepsToday() async {
-    _ensureConfigured();
-    try {
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final steps = await _health.getTotalStepsInInterval(startOfDay, now);
-      return steps ?? 0;
-    } catch (e) {
-      print('[HC] fetchStepsToday error: $e');
-      return 0;
-    }
-  }
 
-  /// FC media de las últimas 2 horas. Null si no hay datos.
-  static Future<double?> fetchLastHeartRate() async {
-    _ensureConfigured();
-    try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(hours: 2));
-      final data = await _health.getHealthDataFromTypes(
-        startTime: start, endTime: now,
-        types: [HealthDataType.HEART_RATE],
-      );
-      if (data.isEmpty) return null;
-      final vals = data
-          .map((p) => (p.value as NumericHealthValue).numericValue.toDouble())
-          .toList();
-      return vals.reduce((a, b) => a + b) / vals.length;
-    } catch (e) {
-      print('[HC] fetchLastHeartRate error: $e');
-      return null;
-    }
-  }
+
+
 
   /// Resumen de sueño + readiness para el dashboard y RecoveryPage.
   /// Ventana unificada con fetchSleepBreakdown: 18:00 de ayer → 15:00 de hoy.
@@ -634,15 +601,25 @@ class HealthService {
       print('[HC] fetchSleepAndReadiness: ventana $sleepStart → $sleepEnd');
 
       // ── Verificación de permisos explícita ──
-      final sleepTypes = [
-        HealthDataType.SLEEP_IN_BED,
-        HealthDataType.SLEEP_ASLEEP,
-        HealthDataType.SLEEP_DEEP,
-        HealthDataType.SLEEP_REM,
-        HealthDataType.SLEEP_LIGHT,
-        HealthDataType.SLEEP_AWAKE,
-        HealthDataType.HEART_RATE,
-      ];
+      final sleepTypes = Platform.isAndroid
+          ? [
+              HealthDataType.SLEEP_SESSION,
+              HealthDataType.SLEEP_ASLEEP,
+              HealthDataType.SLEEP_DEEP,
+              HealthDataType.SLEEP_REM,
+              HealthDataType.SLEEP_LIGHT,
+              HealthDataType.SLEEP_AWAKE,
+              HealthDataType.HEART_RATE,
+            ]
+          : [
+              HealthDataType.SLEEP_IN_BED,
+              HealthDataType.SLEEP_ASLEEP,
+              HealthDataType.SLEEP_DEEP,
+              HealthDataType.SLEEP_REM,
+              HealthDataType.SLEEP_LIGHT,
+              HealthDataType.SLEEP_AWAKE,
+              HealthDataType.HEART_RATE,
+            ];
       final hasPerm = await _health.hasPermissions(
         sleepTypes,
         permissions: sleepTypes.map((_) => HealthDataAccess.READ).toList(),
@@ -653,9 +630,13 @@ class HealthService {
         await requestPermissions();
       }
 
-      // 1. Sueño: probar SLEEP_ASLEEP primero, SLEEP_IN_BED como fallback
+      // 1. Sueño: probar SLEEP_SESSION en Android, SLEEP_ASLEEP/IN_BED en iOS
       List<HealthDataPoint> sleepData = [];
-      for (final type in [HealthDataType.SLEEP_ASLEEP, HealthDataType.SLEEP_IN_BED]) {
+      final List<HealthDataType> sleepDataTypesToTry = Platform.isAndroid
+          ? [HealthDataType.SLEEP_SESSION, HealthDataType.SLEEP_ASLEEP]
+          : [HealthDataType.SLEEP_ASLEEP, HealthDataType.SLEEP_IN_BED];
+
+      for (final type in sleepDataTypesToTry) {
         try {
           final d = await _health.getHealthDataFromTypes(
             startTime: sleepStart, endTime: sleepEnd, types: [type],

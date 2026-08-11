@@ -13,6 +13,8 @@ import { BodyAnalysisRecord } from "../../modules/body_analysis/entities/body_an
 import { Routine } from "../../modules/routine/entities/routine.entity";
 import { RoutineDay } from "../../modules/routine/entities/routine_day.entity";
 import { Exercise } from "../../modules/routine/entities/exercise.entity";
+import { ExerciseCatalog } from "../../modules/exercises_catalog/entities/exercise_catalog.entity";
+import { RecoveryLog } from "../../modules/recovery/entities/recovery_log.entity";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -36,6 +38,8 @@ export const AppDataSource = new DataSource({
         Routine,
         RoutineDay,
         Exercise,
+        ExerciseCatalog,
+        RecoveryLog,
     ],
     migrations: ["src/infrastructure/postgres/migrations/*.ts"],
     subscribers: [],

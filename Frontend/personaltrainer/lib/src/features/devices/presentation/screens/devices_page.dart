@@ -26,10 +26,9 @@ class _DevicesPageState extends State<DevicesPage> {
   bool _loading = true;          // scan BLE en curso
   bool _metricsLoading = true;   // pasos/HR en curso
   List<BluetoothDevice> _found = [];
-  /// IDs de dispositivos que vienen de bondedDevices o connectedDevices (no solo scan).
   Set<DeviceIdentifier> _connectedOrBondedIds = {};
   int _stepsToday = 0;
-  double? _lastHr;
+  int? _lastHr;
   StreamSubscription<List<ScanResult>>? _scanSub;
 
   @override
@@ -92,9 +91,8 @@ class _DevicesPageState extends State<DevicesPage> {
   Future<void> _loadMetrics() async {
     if (mounted) setState(() => _metricsLoading = true);
     try {
-      await HealthService.requestPermissions();
-      final steps = await HealthService.fetchStepsToday();
-      final hr    = await HealthService.fetchLastHeartRate();
+      final steps = await HealthService.fetchTodaySteps();
+      final hr    = await HealthService.fetchLatestHeartRate();
       if (mounted) setState(() {
         _stepsToday     = steps;
         _lastHr         = hr;
@@ -144,7 +142,7 @@ class _DevicesPageState extends State<DevicesPage> {
 
     final stepsStr = _metricsLoading ? '…' : _stepsToday.toString();
     final hrStr    = _metricsLoading ? '…'
-        : (_lastHr != null ? _lastHr!.round().toString() : '--');
+        : (_lastHr != null ? _lastHr!.toString() : '--');
 
     final metrics = [
       DeviceMetric(label: 'Pasos hoy',   value: stepsStr, suffix: 'steps'),
@@ -358,9 +356,19 @@ class _PrimaryDeviceCard extends StatelessWidget {
                   children: [
                     _DeviceBadge(label: 'Device'),
                     const SizedBox(height: 12),
-                    Text(device.name, style: DesignTokens.titleFont(fontSize: 22, color: DesignTokens.foreground(b), height: 1.1)),
+                    Text(
+                      device.name, 
+                      style: DesignTokens.titleFont(fontSize: 22, color: DesignTokens.foreground(b), height: 1.1),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
-                    Text(device.sub, style: DesignTokens.bodyFont(fontSize: 12, color: DesignTokens.mutedForeground(b))),
+                    Text(
+                      device.sub, 
+                      style: DesignTokens.bodyFont(fontSize: 12, color: DesignTokens.mutedForeground(b)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),

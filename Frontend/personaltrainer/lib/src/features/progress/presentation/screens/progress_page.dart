@@ -611,106 +611,13 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
     });
     final workouts = await HealthService.fetchWorkoutsForDay(day);
     if (!mounted) return;
-    setState(() => _openDayWorkouts = workouts);
-    if (!mounted) return;
-    setState(() => _loadingDay = false);
-    if (!mounted) return;
-    _showDaySheet();
-  }
-
-  void _showDaySheet() {
-    final day = _openDay;
-    if (day == null) return;
-    final b = Theme.of(context).brightness;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: DesignTokens.card(b),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetCtx) {
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 440,
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: DesignTokens.surface2of(b),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ENTRENOS DEL DÍA',
-                              style: DesignTokens.labelSmall(
-                                  color: DesignTokens.mutedForeground(b))),
-                          const SizedBox(height: 4),
-                          Text('$day de ${widget.monthLabel}',
-                              style: DesignTokens.titleFont(
-                                  fontSize: 22,
-                                  color: DesignTokens.foreground(b))),
-                        ],
-                      ),
-                    ),
-                    _RoundIconButton(
-                      icon: LucideIcons.x,
-                      size: 36,
-                      fillColor: DesignTokens.surface1(b),
-                      onTap: () => Navigator.pop(sheetCtx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if (_loadingDay)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                else if (_openDayWorkouts.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Sin entrenamientos registrados este día.',
-                      style: DesignTokens.bodyFont(
-                          fontSize: 13,
-                          color: DesignTokens.mutedForeground(b)),
-                    ),
-                  )
-                else
-                  for (final w in _openDayWorkouts) ...[
-                    _WorkoutTile(workout: w),
-                    if (w != _openDayWorkouts.last) const SizedBox(height: 10),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    ).whenComplete(() {
-      if (mounted) setState(() => _openDay = null);
+    setState(() {
+      _openDayWorkouts = workouts;
+      _loadingDay = false;
     });
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -729,6 +636,16 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
             ),
             child: Column(
               children: [
+                if (_openDay != null) ...[
+                  _InlineDaySummary(
+                    day: _openDay!,
+                    monthLabel: widget.monthLabel,
+                    workouts: _openDayWorkouts,
+                    isLoading: _loadingDay,
+                    onClose: () => setState(() => _openDay = null),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _MonthHeader(title: widget.monthLabel),
                 const SizedBox(height: 16),
                 const _Weekdays(),
@@ -757,6 +674,64 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
           ),
           const SizedBox(height: 20),
           _WeeklyVolumeChart(weeks: widget.weeklyVolume),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineDaySummary extends StatelessWidget {
+  const _InlineDaySummary({
+    required this.day,
+    required this.monthLabel,
+    required this.workouts,
+    required this.isLoading,
+    required this.onClose,
+  });
+  final int day;
+  final String monthLabel;
+  final List<DayWorkoutSummary> workouts;
+  final bool isLoading;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DesignTokens.surface1(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+        border: Border.all(color: DesignTokens.border(b)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('ENTRENOS DEL DÍA', style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
+                    const SizedBox(height: 4),
+                    Text('$day de $monthLabel', style: DesignTokens.titleFont(fontSize: 20, color: DesignTokens.foreground(b))),
+                  ],
+                ),
+              ),
+              _RoundIconButton(icon: LucideIcons.x, size: 32, fillColor: DesignTokens.surface2of(b), onTap: onClose),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (isLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+          else if (workouts.isEmpty)
+            Text('Sin entrenamientos registrados este día.', style: DesignTokens.bodyFont(fontSize: 13, color: DesignTokens.mutedForeground(b)))
+          else
+            for (final w in workouts) ...[
+              _WorkoutTile(workout: w),
+              if (w != workouts.last) const SizedBox(height: 8),
+            ],
         ],
       ),
     );

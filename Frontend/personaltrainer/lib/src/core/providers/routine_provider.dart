@@ -15,7 +15,13 @@ class RoutineProvider extends ChangeNotifier {
     _setLoading(true);
     _error = null;
     try {
-      final raw = await ApiService.getRoutines();
+      final userId = ApiService.getCurrentUserId();
+      if (userId == null) {
+        _error = 'Usuario no autenticado';
+        _routines = [];
+        return;
+      }
+      final raw = await ApiService.getRoutines(userId);
       _routines = raw.map((e) => Routine.fromJson(e)).toList();
     } catch (e) {
       _error = e.toString();
@@ -43,6 +49,10 @@ class RoutineProvider extends ChangeNotifier {
       if (id != null) {
         response = await ApiService.updateRoutine(id, payload);
       } else {
+        final userId = ApiService.getCurrentUserId();
+        if (userId != null) {
+          payload['userId'] = userId;
+        }
         response = await ApiService.createRoutine(payload);
       }
       final routine = Routine.fromJson(response);

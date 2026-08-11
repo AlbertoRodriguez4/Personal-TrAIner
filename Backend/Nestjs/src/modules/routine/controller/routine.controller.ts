@@ -12,6 +12,11 @@ export class RoutineController {
     return this.routineService.findAll();
   }
 
+  @Get('user/:userId')
+  findByUser(@Param('userId') userId: string) {
+    return this.routineService.findAll(userId);
+  }
+
   @Post()
   create(@Body() dto: CreateRoutineDto) {
     return this.routineService.create(dto);

@@ -6,6 +6,14 @@
 *.swp
 .buildlog/
 .history
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+__pycache__/
+**/__pycache__/
+.env
+
 
 
 

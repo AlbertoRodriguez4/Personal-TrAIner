@@ -147,8 +147,9 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: RefreshIndicator(
-        onRefresh: () => context.read<RoutineProvider>().loadRoutines(),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<RoutineProvider>().loadRoutines(),
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
@@ -190,6 +191,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
             _buildRoutinesGrid(context),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
+        ),
         ),
       ),
     );

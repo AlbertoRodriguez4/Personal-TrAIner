@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../services/api_service.dart';
 import '../../../../core/theme/design_tokens.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_text_field.dart'; // Mantengo la importación aunque no lo usemos, por si acaso
 
 class AuthCard extends StatefulWidget {
@@ -25,6 +26,8 @@ class _AuthCardState extends State<AuthCard> {
   final _nameController = TextEditingController();
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
+
+  static bool _googleSignInInitialized = false;
 
   Future<void> _submit() async {
     if (!_validateInputs()) return;
@@ -82,6 +85,52 @@ class _AuthCardState extends State<AuthCard> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      if (!_googleSignInInitialized) {
+        await GoogleSignIn.instance.initialize(
+          serverClientId: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
+        );
+        _googleSignInInitialized = true;
+      }
+
+      GoogleSignInAccount? googleUser;
+      try {
+        googleUser = await GoogleSignIn.instance.authenticate(
+          scopeHint: ['email', 'profile'],
+        );
+      } on GoogleSignInException catch (e) {
+        if (e.code == GoogleSignInExceptionCode.canceled) {
+          setState(() => _isLoading = false);
+          return; // El usuario canceló
+        }
+        rethrow;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken != null) {
+        final userData = await ApiService.googleLogin(idToken);
+        if (!mounted) return;
+        if (userData != null) {
+          await _checkProfileAndProceed();
+        } else {
+          _showMessage('No se pudo iniciar sesión con Google.');
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Error Google Sign-In: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _checkProfileAndProceed() async {
     final userId = ApiService.getCurrentUserId();
     if (userId == null) {
@@ -92,10 +141,9 @@ class _AuthCardState extends State<AuthCard> {
       final profile = await ApiService.getUserProfile(userId);
       if (!mounted) return;
       if (profile == null || profile['id'] == null) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/onboarding',
-          (route) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/onboarding', (route) => false);
       } else {
         widget.onLoginSuccess?.call();
       }
@@ -229,13 +277,15 @@ class _AuthCardState extends State<AuthCard> {
               ),
               const SizedBox(height: 8),
               Text(
-                _isLogin ? 'Tu IA personal te está esperando.' : 'Empieza a entrenar con inteligencia.',
+                _isLogin
+                    ? 'Tu IA personal te está esperando.'
+                    : 'Empieza a entrenar con inteligencia.',
                 style: TextStyle(fontSize: 14, color: mutedFg),
                 textAlign: TextAlign.center,
               ),
-              
+
               const SizedBox(height: 28),
-              
+
               // Toggle Modo
               Container(
                 padding: const EdgeInsets.all(4),
@@ -274,13 +324,20 @@ class _AuthCardState extends State<AuthCard> {
 
               // Formulario
               if (!_isLogin) ...[
-                _Field(icon: LucideIcons.user, controller: _nameController, hint: 'Nombre completo'),
+                _Field(
+                  icon: LucideIcons.user,
+                  controller: _nameController,
+                  hint: 'Nombre completo',
+                ),
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: _pickBirthDate,
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: surface1,
                       borderRadius: BorderRadius.circular(16),
@@ -307,17 +364,41 @@ class _AuthCardState extends State<AuthCard> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _Field(icon: LucideIcons.arrowUpToLine, controller: _heightController, hint: 'Altura (cm)', isNumber: true)),
+                    Expanded(
+                      child: _Field(
+                        icon: LucideIcons.arrowUpToLine,
+                        controller: _heightController,
+                        hint: 'Altura (cm)',
+                        isNumber: true,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _Field(icon: Icons.monitor_weight_outlined, controller: _weightController, hint: 'Peso (kg)', isNumber: true)),
+                    Expanded(
+                      child: _Field(
+                        icon: Icons.monitor_weight_outlined,
+                        controller: _weightController,
+                        hint: 'Peso (kg)',
+                        isNumber: true,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
               ],
 
-              _Field(icon: LucideIcons.mail, controller: _emailController, hint: 'Correo electrónico', isEmail: true),
+              _Field(
+                icon: LucideIcons.mail,
+                controller: _emailController,
+                hint: 'Correo electrónico',
+                isEmail: true,
+              ),
               const SizedBox(height: 12),
-              _Field(icon: LucideIcons.lock, controller: _passwordController, hint: 'Contraseña', isPassword: true),
+              _Field(
+                icon: LucideIcons.lock,
+                controller: _passwordController,
+                hint: 'Contraseña',
+                isPassword: true,
+              ),
 
               if (_isLogin) ...[
                 const SizedBox(height: 6),
@@ -332,7 +413,11 @@ class _AuthCardState extends State<AuthCard> {
                     ),
                     child: Text(
                       '¿Olvidaste tu contraseña?',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: mutedFg),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: mutedFg,
+                      ),
                     ),
                   ),
                 ),
@@ -355,13 +440,23 @@ class _AuthCardState extends State<AuthCard> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _isLoading ? 'Procesando...' : (_isLogin ? 'Entrar' : 'Crear cuenta'),
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                        _isLoading
+                            ? 'Procesando...'
+                            : (_isLogin ? 'Entrar' : 'Crear cuenta'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                       if (!_isLoading) ...[
                         const SizedBox(width: 8),
-                        const Icon(LucideIcons.arrowRight, size: 16, color: Colors.white),
-                      ]
+                        const Icon(
+                          LucideIcons.arrowRight,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -376,7 +471,12 @@ class _AuthCardState extends State<AuthCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
                       'O CONTINÚA CON',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: mutedFg,
+                      ),
                     ),
                   ),
                   Expanded(child: Divider(color: border)),
@@ -390,7 +490,11 @@ class _AuthCardState extends State<AuthCard> {
                   Expanded(
                     child: _SocialBtn(
                       label: 'Apple',
-                      icon: Icon(PhosphorIcons.appleLogo(PhosphorIconsStyle.fill), size: 16, color: fg),
+                      icon: Icon(
+                        PhosphorIcons.appleLogo(PhosphorIconsStyle.fill),
+                        size: 16,
+                        color: fg,
+                      ),
                       cardColor: card,
                       border: border,
                       fg: fg,
@@ -400,10 +504,15 @@ class _AuthCardState extends State<AuthCard> {
                   Expanded(
                     child: _SocialBtn(
                       label: 'Google',
-                      icon: const Icon(LucideIcons.chrome, size: 16, color: Color(0xFFEA4335)), // Usamos chrome aprox o asset
+                      icon: const Icon(
+                        LucideIcons.chrome,
+                        size: 16,
+                        color: Color(0xFFEA4335),
+                      ), // Usamos chrome aprox o asset
                       cardColor: card,
                       border: border,
                       fg: fg,
+                      onTap: _isLoading ? null : _handleGoogleSignIn,
                     ),
                   ),
                 ],
@@ -415,7 +524,9 @@ class _AuthCardState extends State<AuthCard> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _isLogin ? '¿Aún no tienes cuenta? ' : '¿Ya tienes cuenta? ',
+                    _isLogin
+                        ? '¿Aún no tienes cuenta? '
+                        : '¿Ya tienes cuenta? ',
                     style: TextStyle(fontSize: 12, color: mutedFg),
                   ),
                   InkWell(
@@ -425,7 +536,11 @@ class _AuthCardState extends State<AuthCard> {
                     },
                     child: Text(
                       _isLogin ? 'Regístrate' : 'Inicia sesión',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: fg,
+                      ),
                     ),
                   ),
                 ],
@@ -434,10 +549,17 @@ class _AuthCardState extends State<AuthCard> {
               const SizedBox(height: 12),
 
               InkWell(
-                onTap: () => Navigator.of(context).pushReplacementNamed('/home'), // TODO back logic
+                onTap: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed('/home'), // TODO back logic
                 child: Text(
                   'VOLVER',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: mutedFg,
+                  ),
                 ),
               ),
             ],
@@ -453,7 +575,11 @@ class _ModeButton extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _ModeButton({required this.text, required this.active, required this.onTap});
+  const _ModeButton({
+    required this.text,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -540,11 +666,20 @@ class _FieldState extends State<_Field> {
               obscureText: _obscured,
               keyboardType: widget.isEmail
                   ? TextInputType.emailAddress
-                  : (widget.isNumber ? TextInputType.number : TextInputType.text),
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg),
+                  : (widget.isNumber
+                        ? TextInputType.number
+                        : TextInputType.text),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: fg,
+              ),
               decoration: InputDecoration(
                 hintText: widget.hint,
-                hintStyle: TextStyle(color: mutedFg, fontWeight: FontWeight.w500),
+                hintStyle: TextStyle(
+                  color: mutedFg,
+                  fontWeight: FontWeight.w500,
+                ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -577,6 +712,7 @@ class _SocialBtn extends StatelessWidget {
   final Color cardColor;
   final Color border;
   final Color fg;
+  final VoidCallback? onTap;
 
   const _SocialBtn({
     required this.label,
@@ -584,13 +720,14 @@ class _SocialBtn extends StatelessWidget {
     required this.cardColor,
     required this.border,
     required this.fg,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     return InkWell(
-      onTap: () {},
+      onTap: onTap ?? () {},
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -605,7 +742,14 @@ class _SocialBtn extends StatelessWidget {
           children: [
             icon,
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
           ],
         ),
       ),

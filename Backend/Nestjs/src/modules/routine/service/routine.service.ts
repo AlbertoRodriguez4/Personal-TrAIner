@@ -18,8 +18,10 @@ export class RoutineService {
     private readonly exerciseRepository: Repository<Exercise>,
   ) {}
 
-  async findAll() {
+  async findAll(userId?: string) {
+    const whereCondition = userId ? { userId } : {};
     return this.routineRepository.find({
+      where: whereCondition,
       relations: ['days', 'days.exercises'],
       order: { updated_at: 'DESC' },
     });
@@ -27,6 +29,7 @@ export class RoutineService {
 
   async create(dto: CreateRoutineDto) {
     const routine = this.routineRepository.create({
+      userId: dto.userId, // Esperamos que se pase en el DTO temporalmente o manualmente
       name: dto.name,
       activity_type: dto.activity_type,
       description: dto.description,

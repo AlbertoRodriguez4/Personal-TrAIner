@@ -15,6 +15,7 @@ import 'features/clinic/presentation/screens/clinic_import_page.dart';
 import 'features/focus/presentation/screens/focus_page.dart';
 import 'features/home/presentation/screens/home_page.dart';
 import 'features/onboarding/presentation/screens/onboarding_page.dart';
+import 'features/permissions/presentation/permissions_gate_page.dart';
 import 'services/api_service.dart';
 
 class PersonalTrainerApp extends StatefulWidget {
@@ -64,7 +65,7 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.themeMode,
             home: _isLoggedIn
-                ? HomePage(onSessionClosed: _handleLogout)
+                ? PermissionsGatePage(onSessionClosed: _handleLogout)
                 : AuthPage(onLoginSuccess: _handleLogin),
             routes: {
               '/login': (context) => AuthPage(onLoginSuccess: _handleLogin),
@@ -93,7 +94,7 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
               if (settings.name == '/') {
                 return MaterialPageRoute(
                   builder: (context) => _isLoggedIn
-                      ? HomePage(onSessionClosed: _handleLogout)
+                      ? PermissionsGatePage(onSessionClosed: _handleLogout)
                       : AuthPage(onLoginSuccess: _handleLogin),
                 );
               }

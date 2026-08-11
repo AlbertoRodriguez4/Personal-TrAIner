@@ -108,6 +108,26 @@ class ApiService {
     throw Exception(_extractErrorMessage(response));
   }
 
+  static Future<Map<String, dynamic>?> googleLogin(String idToken) async {
+    try {
+      final decoded = await _request(
+        method: 'POST',
+        path: '/users/google-login',
+        body: {'idToken': idToken},
+      );
+      final userData = _toMap(decoded);
+      if (userData == null) {
+        return null;
+      }
+      _currentUser = userData;
+      _authToken = userData['id']?.toString();
+      await _persistSession();
+      return userData;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>?> login(
     String email,
     String password,
@@ -597,8 +617,8 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
-  static Future<List<Map<String, dynamic>>> getRoutines() async {
-    final decoded = await _request(method: 'GET', path: '/api/routines');
+  static Future<List<Map<String, dynamic>>> getRoutines(String userId) async {
+    final decoded = await _request(method: 'GET', path: '/api/routines/user/$userId');
     return _toMapList(decoded);
   }
 
@@ -680,13 +700,18 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
-  static Future<Map<String, dynamic>> analyzeNutritionPhoto(String base64Image, String userId) async {
+  static Future<Map<String, dynamic>> analyzeNutritionPhoto(String base64Image, String userId, {String? userMessage}) async {
+    String finalPrompt = 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
+    if (userMessage != null && userMessage.isNotEmpty) {
+      finalPrompt += '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
+    }
+
     final decoded = await _request(
       method: 'POST',
       path: '/ai/analizar-nutricion',
       body: {
         'image_base64': base64Image,
-        'prompt': 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).',
+        'prompt': finalPrompt,
         'user_id': userId,
       },
     );
@@ -697,6 +722,27 @@ class ApiService {
     final decoded = await _request(
       method: 'GET',
       path: '/daily/$userId',
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<Map<String, dynamic>> sendChatMessage({
+    required String userId,
+    required String mode,
+    required String message,
+    List<Map<String, String>> history = const [],
+    Map<String, dynamic>? healthContext,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/chat',
+      body: {
+        'userId': userId,
+        'mode': mode,
+        'message': message,
+        'history': history,
+        if (healthContext != null) 'healthContext': healthContext,
+      },
     );
     return _toMap(decoded) ?? {};
   }

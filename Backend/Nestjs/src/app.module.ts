@@ -42,6 +42,9 @@ import { DailySummaryService } from './modules/daily_summary/service/daily_summa
 import { ExerciseCatalog } from './modules/exercises_catalog/entities/exercise_catalog.entity';
 import { ExerciseCatalogController } from './modules/exercises_catalog/controller/exercise_catalog.controller';
 import { ExerciseCatalogService } from './modules/exercises_catalog/service/exercise_catalog.service';
+import { RecoveryLog } from './modules/recovery/entities/recovery_log.entity';
+import { RecoveryController } from './modules/recovery/controller/recovery.controller';
+import { RecoveryService } from './modules/recovery/service/recovery.service';
 
 @Module({
   imports: [
@@ -53,10 +56,10 @@ import { ExerciseCatalogService } from './modules/exercises_catalog/service/exer
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog], 
+      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog], 
       synchronize: false, 
     }),
-    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog]), 
+    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog]), 
   ],
   controllers: [
     UserController,
@@ -73,6 +76,7 @@ import { ExerciseCatalogService } from './modules/exercises_catalog/service/exer
     TelemetryController,
     DailySummaryController,
     ExerciseCatalogController,
+    RecoveryController,
   ],
   providers: [
     UserService,
@@ -89,6 +93,7 @@ import { ExerciseCatalogService } from './modules/exercises_catalog/service/exer
     TelemetryService,
     DailySummaryService,
     ExerciseCatalogService,
+    RecoveryService,
   ],
 })
 export class AppModule {}

@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise_catalog.dart';
+import '../../../../core/theme/design_tokens.dart';
 
 class ExerciseCatalogSheet extends StatefulWidget {
   const ExerciseCatalogSheet({super.key});
@@ -46,12 +47,18 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final fg = DesignTokens.foreground(b);
+    final border = DesignTokens.border(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
@@ -61,22 +68,22 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: mutedFg.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Text(
                 'Catálogo de Ejercicios',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF0B1220),
+                  color: fg,
                 ),
               ),
             ),
-            const Divider(color: Color(0xFFF3F4F6), height: 1),
+            Divider(color: border, height: 1),
             Expanded(
               child: _buildContent(),
             ),
@@ -158,12 +165,18 @@ class _ExerciseCardTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final card = DesignTokens.card(b);
+    final border = DesignTokens.border(b);
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -202,19 +215,19 @@ class _ExerciseCardTile extends StatelessWidget {
                     children: [
                       Text(
                         exercise.nombre,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
+                          color: fg,
                         ),
                       ),
                       if (exercise.equipamiento != null && exercise.equipamiento!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
                           exercise.equipamiento!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: Color(0xFF6B7280),
+                            color: mutedFg,
                           ),
                         ),
                       ],
@@ -238,21 +251,26 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final border = DesignTokens.border(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
     return Container(
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: bg,
         border: Border(
-          bottom: BorderSide(color: const Color(0xFFE5E7EB), width: 1),
+          bottom: BorderSide(color: border, width: 1),
         ),
       ),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF6B7280),
+          color: mutedFg,
           letterSpacing: 1.2,
         ),
       ),

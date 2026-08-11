@@ -2,8 +2,11 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import { User } from '../entities/user.entity';
 import { UserDto } from '../dto/user.dto';
+
+const googleClient = new OAuth2Client('853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com');
 
 @Injectable()
 export class UserService {
@@ -69,6 +72,38 @@ export class UserService {
         // 5. Separamos la contraseña del resto de los datos usando desestructuración
         const { password: _, ...userWithoutPassword } = user;
         
+        return userWithoutPassword;
+    }
+
+    async googleLogin(idToken: string) {
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
+        });
+        const payload = ticket.getPayload();
+        if (!payload) {
+            throw new UnauthorizedException('Token de Google inválido');
+        }
+
+        const { email, name, sub } = payload;
+
+        let user = await this.userRepository.findOne({ where: { email } });
+
+        if (!user) {
+            // Register new user
+            user = this.userRepository.create({
+                email,
+                nombre_completo: name || 'Usuario de Google',
+                mapeo_identidad: sub,
+                fecha_nacimiento: new Date('2000-01-01'), // Valor por defecto
+                estatura_base_cm: 170.0, // Valor por defecto
+                peso_base_kg: 70.0, // Valor por defecto
+                // password es nullable
+            });
+            await this.userRepository.save(user);
+        }
+
+        const { password, ...userWithoutPassword } = user;
         return userWithoutPassword;
     }
 

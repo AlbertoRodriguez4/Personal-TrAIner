@@ -6,6 +6,9 @@ export class Routine {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true }) // Nullable para evitar crashear con rutinas antiguas sin migrar
+  userId: string;
+
   @Column()
   name: string;
 

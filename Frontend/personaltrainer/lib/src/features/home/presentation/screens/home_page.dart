@@ -134,63 +134,76 @@ class _Header extends StatelessWidget {
       radius: 0,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
       shadow: false,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  fecha.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.4,
-                    color: mutedFg,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                RichText(
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: fg,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fecha.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.4,
+                        color: mutedFg,
+                      ),
                     ),
-                    children: const [
-                      TextSpan(text: 'Personal Tr'),
-                      TextSpan(text: 'AI', style: TextStyle(fontStyle: FontStyle.italic)),
-                      TextSpan(text: 'ner'),
-                    ],
-                  ),
+                    const SizedBox(height: 2),
+                    RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          color: fg,
+                        ),
+                        children: const [
+                          TextSpan(text: 'Personal Tr'),
+                          TextSpan(text: 'AI', style: TextStyle(fontStyle: FontStyle.italic)),
+                          TextSpan(text: 'ner'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                onPressed: () => context.read<ThemeProvider>().toggleTheme(context),
+                icon: Icon(
+                  Theme.of(context).brightness == Brightness.dark
+                      ? PhosphorIcons.sun()
+                      : PhosphorIcons.moon(),
+                ),
+                color: fg,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          IconButton(
-            onPressed: () => context.read<ThemeProvider>().toggleTheme(context),
-            icon: Icon(
-              Theme.of(context).brightness == Brightness.dark
-                  ? PhosphorIcons.sun()
-                  : PhosphorIcons.moon(),
-            ),
-            color: fg,
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/devices'),
-            child: const _LiveSync(),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/devices'),
-            child: const _StepsPill(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/devices'),
+                  child: const _LiveSync(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/devices'),
+                  child: const _StepsPill(),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -216,7 +229,6 @@ class _LiveSyncState extends State<_LiveSync> {
   }
 
   Future<void> _load() async {
-    await HealthService.requestPermissions();
     final hr = await HealthService.fetchLatestHeartRate();
     if (mounted) {
       setState(() {
@@ -318,7 +330,6 @@ class _StepsPillState extends State<_StepsPill> {
   }
 
   Future<void> _load() async {
-    await HealthService.requestPermissions();
     final steps = await HealthService.fetchTodaySteps();
     if (mounted) {
       setState(() {
@@ -1206,6 +1217,25 @@ class _RoutineShortcuts extends StatelessWidget {
 class _RagBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final summaryProv = context.watch<DailySummaryProvider>();
+    final summary = summaryProv.summary;
+
+    String textPart1 = 'Hola, he analizado tus métricas y estoy listo para guiar tu entrenamiento y nutrición de hoy.';
+    String textPart2 = '';
+
+    if (summary != null) {
+      if (summary.ultimaSesion != null) {
+        textPart1 = 'He analizado tu última sesión de ${summary.ultimaSesion!.tipoEntrenamiento.toLowerCase()} y ajustado tus métricas. ';
+      } else {
+        textPart1 = 'He ajustado tus métricas basándome en tu perfil. ';
+      }
+      if (summary.consumidoHoy.kcal > 0) {
+        textPart2 = 'Llevas ${summary.consumidoHoy.kcal.toInt()} kcal registradas hoy.';
+      } else {
+        textPart2 = 'Aún no has registrado comidas hoy.';
+      }
+    }
+
     final b = Theme.of(context).brightness;
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
@@ -1249,9 +1279,9 @@ class _RagBubble extends StatelessWidget {
             text: TextSpan(
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: fg, height: 1.35),
               children: [
-                const TextSpan(text: 'Hola, noto por tu voz de ayer que estás estresado. He ajustado tu rutina de '),
-                TextSpan(text: 'fuerza', style: TextStyle(fontWeight: FontWeight.w700)),
-                const TextSpan(text: '.'),
+                TextSpan(text: textPart1),
+                if (textPart2.isNotEmpty)
+                  TextSpan(text: textPart2, style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -1495,7 +1525,6 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () async {
-                            await HealthService.requestPermissions();
                             _fetchData();
                           },
                           icon: const Icon(Icons.key, size: 18),
@@ -1764,6 +1793,13 @@ class _NutritionScreen extends StatefulWidget {
 class _NutritionScreenState extends State<_NutritionScreen> {
   bool _isLoadingAi = false;
   Map<String, dynamic>? _lastScan;
+  final _msgController = TextEditingController();
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    super.dispose();
+  }
 
   Future<void> _takePhoto() async {
     final picker = ImagePicker();
@@ -1778,7 +1814,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
       final base64Image = base64Encode(bytes);
       final userId = ApiService.getCurrentUserId() ?? '';
 
-      final aiResult = await ApiService.analyzeNutritionPhoto(base64Image, userId);
+      final aiResult = await ApiService.analyzeNutritionPhoto(
+        base64Image, 
+        userId,
+        userMessage: _msgController.text.trim(),
+      );
 
       final kcal = (aiResult['calorias_consumidas'] as num?)?.toInt() ?? 0;
       final p = (aiResult['proteinas_g'] as num?)?.toDouble() ?? 0.0;
@@ -1821,6 +1861,21 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _MacrosOverview(),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _msgController,
+            decoration: InputDecoration(
+              hintText: 'Añadir contexto (ej. "plato grande, mucha salsa")',
+              filled: true,
+              fillColor: DesignTokens.surface2of(b),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            style: TextStyle(color: DesignTokens.foreground(b)),
+          ),
           const SizedBox(height: 16),
           _isLoadingAi
               ? Container(

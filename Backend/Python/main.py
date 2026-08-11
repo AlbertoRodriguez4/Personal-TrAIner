@@ -399,3 +399,22 @@ async def analyze_set(data: SetTelemetryInput):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Para ejecutar: uvicorn main:app --reload --port 8000
+
+from chat_engine import run_chat
+from schemas import ChatRequest, ChatResponse
+
+@app.post("/api/ia/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    try:
+        result = run_chat(
+            user_id=request.user_id,
+            mode=request.mode,
+            message=request.message,
+            history=[t.model_dump() for t in request.history],
+            health_context=request.health_context,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

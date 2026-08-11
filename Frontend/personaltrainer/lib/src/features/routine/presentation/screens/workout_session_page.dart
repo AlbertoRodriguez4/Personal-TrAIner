@@ -76,9 +76,11 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
                   ),
               ],
             ),
-            body: p.phase == Phase.finished
-                ? _SummaryView(provider: p)
-                : _SessionBody(provider: p),
+            body: SafeArea(
+              child: p.phase == Phase.finished
+                  ? _SummaryView(provider: p)
+                  : _SessionBody(provider: p),
+            ),
           );
         },
       ),

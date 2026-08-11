@@ -10,6 +10,7 @@ import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
 import '../widgets/exercise_catalog_sheet.dart';
 import '../../models/exercise_catalog.dart';
+import '../../../../core/theme/design_tokens.dart';
 
 class RoutineBuilderPage extends StatefulWidget {
   const RoutineBuilderPage({super.key, this.routine, this.onSave});
@@ -264,7 +265,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
     final result = await showModalBottomSheet<Exercise>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: DesignTokens.background(Theme.of(context).brightness),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -300,10 +301,17 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final fg = DesignTokens.foreground(b);
+    final border = DesignTokens.border(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: bg,
+        foregroundColor: fg,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -351,14 +359,15 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                     controller: _nameController,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0B1220),
+                          color: fg,
                         ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Nombra tu rutina. Ej: Push/Pull/Legs',
+                      hintStyle: TextStyle(color: mutedFg),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF059669)),
+                        borderSide: BorderSide(color: const Color(0xFF059669)),
                       ),
                       contentPadding: EdgeInsets.zero,
                     ),
@@ -397,8 +406,9 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                         selected: active,
                         onSelected: (_) => _toggleDay(day),
                         selectedColor: const Color(0xFF059669),
+                        backgroundColor: bg,
                         labelStyle: TextStyle(
-                          color: active ? Colors.white : const Color(0xFF374151),
+                          color: active ? Colors.white : fg,
                           fontWeight: FontWeight.w600,
                         ),
                         shape: RoundedRectangleBorder(
@@ -406,7 +416,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                           side: BorderSide(
                             color: active
                                 ? const Color(0xFF059669)
-                                : const Color(0xFFE5E7EB),
+                                : border,
                           ),
                         ),
                         showCheckmark: false,
@@ -417,9 +427,9 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                   _buildStepTitle('3. Tu plan semanal'),
                   const SizedBox(height: 12),
                   if (_selectedDays.isEmpty)
-                    const Text(
+                    Text(
                       'Selecciona al menos un día para configurar tu plan.',
-                      style: TextStyle(color: Color(0xFF9CA3AF)),
+                      style: TextStyle(color: mutedFg),
                     )
                   else
                     Column(
@@ -458,10 +468,10 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
           if (MediaQuery.of(context).viewInsets.bottom == 0)
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: bg,
                 border: Border(
-                  top: BorderSide(color: Color(0xFFE5E7EB)),
+                  top: BorderSide(color: border),
                 ),
               ),
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -516,10 +526,10 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: DesignTokens.card(Theme.of(context).brightness),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: selected ? activity.color : const Color(0xFFE5E7EB),
+                color: selected ? activity.color : DesignTokens.border(Theme.of(context).brightness),
                 width: selected ? 2 : 1,
               ),
             ),
@@ -550,7 +560,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                       Text(
                         activity.description,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF9CA3AF),
+                              color: DesignTokens.mutedForeground(Theme.of(context).brightness),
                             ),
                       ),
                     ],
@@ -646,12 +656,20 @@ class _DayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final bg = DesignTokens.background(b);
+    final card = DesignTokens.card(b);
+    final fg = DesignTokens.foreground(b);
+    final border = DesignTokens.border(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final surface1 = DesignTokens.surface1(b);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -732,13 +750,13 @@ class _DayCard extends StatelessWidget {
                   Icon(
                     PhosphorIcons.moon(),
                     size: 16,
-                    color: const Color(0xFF9CA3AF),
+                    color: mutedFg,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'Día de recuperación',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF9CA3AF),
+                          color: mutedFg,
                         ),
                   ),
                 ],
@@ -758,7 +776,7 @@ class _DayCard extends StatelessWidget {
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8F9FB),
+                            color: surface1,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -795,7 +813,7 @@ class _DayCard extends StatelessWidget {
                                             .textTheme
                                             .bodySmall
                                             ?.copyWith(
-                                              color: const Color(0xFF6B7280),
+                                              color: mutedFg,
                                             ),
                                       ),
                                     if (ex.notes != null &&
@@ -806,7 +824,7 @@ class _DayCard extends StatelessWidget {
                                             .textTheme
                                             .bodySmall
                                             ?.copyWith(
-                                              color: const Color(0xFF9CA3AF),
+                                              color: mutedFg,
                                             ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -845,7 +863,7 @@ class _DayCard extends StatelessWidget {
                     child: DottedBorder(
                       borderType: BorderType.RRect,
                       radius: const Radius.circular(12),
-                      color: const Color(0xFF9CA3AF),
+                      color: mutedFg,
                       dashPattern: const [6, 4],
                       strokeWidth: 1.2,
                       child: Container(
@@ -855,12 +873,12 @@ class _DayCard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(PhosphorIcons.plus(),
-                                size: 18, color: Color(0xFF6B7280)),
-                            SizedBox(width: 6),
+                                size: 18, color: mutedFg),
+                            const SizedBox(width: 6),
                             Text(
                               'Añadir ejercicio',
                               style: TextStyle(
-                                color: Color(0xFF6B7280),
+                                color: mutedFg,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),

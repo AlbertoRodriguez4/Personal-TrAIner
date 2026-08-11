@@ -113,7 +113,9 @@ class _ExerciseBottomSheetState extends State<ExerciseBottomSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1D5DB),
+                  color: Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.white24 
+                      : const Color(0xFFD1D5DB),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

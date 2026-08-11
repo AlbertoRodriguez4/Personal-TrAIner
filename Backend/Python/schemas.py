@@ -229,3 +229,23 @@ class SetTelemetryInput(BaseModel):
                 "hr": [95, 102, 110, 118, 126, 134, 141, 145, 147, 148, 148, 148, 150, 150, 151, 169, 176, 178, 181, 184]
             }
         }
+
+class ChatTurn(BaseModel):
+    role: str = Field(..., description="'user' o 'model'")
+    text: str
+
+class ChatRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    mode: str = Field(..., description="creador_rutina | revisor_rutina | sueno_recuperacion | nutricion | entrenamiento")
+    message: str
+    history: List[ChatTurn] = Field(default_factory=list)
+    health_context: Optional[dict] = Field(None, description="Datos crudos de Health Connect, solo para modo sueno_recuperacion")
+
+class ChatAction(BaseModel):
+    tool: str
+    result: dict
+
+class ChatResponse(BaseModel):
+    reply: str
+    actions_taken: List[ChatAction]
+
