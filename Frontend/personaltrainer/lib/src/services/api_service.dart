@@ -622,8 +622,11 @@ class ApiService {
     return _toMapList(decoded);
   }
 
-  static Future<Map<String, dynamic>> getRoutineById(String id) async {
-    final decoded = await _request(method: 'GET', path: '/api/routines/$id');
+  static Future<Map<String, dynamic>> getRoutineById(
+    String id, {
+    required String userId,
+  }) async {
+    final decoded = await _request(method: 'GET', path: '/api/routines/$id?userId=$userId');
     return _toMap(decoded) ?? {};
   }
 
@@ -640,18 +643,22 @@ class ApiService {
 
   static Future<Map<String, dynamic>> updateRoutine(
     String id,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    required String userId,
+  }) async {
     final decoded = await _request(
       method: 'PATCH',
-      path: '/api/routines/$id',
+      path: '/api/routines/$id?userId=$userId',
       body: data,
     );
     return _toMap(decoded) ?? {};
   }
 
-  static Future<void> deleteRoutine(String id) async {
-    await _request(method: 'DELETE', path: '/api/routines/$id');
+  static Future<void> deleteRoutine(
+    String id, {
+    required String userId,
+  }) async {
+    await _request(method: 'DELETE', path: '/api/routines/$id?userId=$userId');
   }
 
   static Future<Map<String, dynamic>> updateUserProfile({

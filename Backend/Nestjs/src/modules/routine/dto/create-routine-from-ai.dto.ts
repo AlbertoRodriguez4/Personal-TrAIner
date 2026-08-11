@@ -1,44 +1,38 @@
 import {
-  ArrayNotEmpty,
   IsArray,
-  IsBoolean,
-  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
-  Max,
-  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class EjercicioDiaDto {
+export class AiExerciseDto {
   @IsString()
   @IsNotEmpty()
   nombre: string;
 
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @IsNotEmpty()
   series: number;
 
-  @IsInt()
-  @Min(1)
+  @IsNumber()
+  @IsNotEmpty()
   repeticiones: number;
 
-  @IsInt()
-  @Min(0)
-  descanso_segundos: number;
+  @IsNumber()
+  @IsOptional()
+  descanso_segundos?: number;
 
   @IsString()
   @IsOptional()
   notas?: string;
 }
 
-export class DiaEntrenamientoDto {
-  @IsInt()
-  @Min(1)
-  @Max(7)
+export class AiRoutineDayDto {
+  @IsNumber()
+  @IsNotEmpty()
   numero_dia: number;
 
   @IsString()
@@ -50,14 +44,13 @@ export class DiaEntrenamientoDto {
   grupo_muscular: string;
 
   @IsArray()
-  @ArrayNotEmpty()
   @ValidateNested({ each: true })
-  @Type(() => EjercicioDiaDto)
-  ejercicios: EjercicioDiaDto[];
+  @Type(() => AiExerciseDto)
+  ejercicios: AiExerciseDto[];
 }
 
-export class CreateCustomRoutineDto {
-  @IsUUID()
+export class CreateRoutineFromAiDto {
+  @IsString()
   @IsNotEmpty()
   userId: string;
 
@@ -69,22 +62,12 @@ export class CreateCustomRoutineDto {
   @IsNotEmpty()
   tipo_entrenamiento: string;
 
-  @IsInt()
-  @Min(1)
-  @Max(7)
-  numero_dias: number;
-
   @IsArray()
-  @ArrayNotEmpty()
   @ValidateNested({ each: true })
-  @Type(() => DiaEntrenamientoDto)
-  dias_entrenamiento: DiaEntrenamientoDto[];
+  @Type(() => AiRoutineDayDto)
+  dias_entrenamiento: AiRoutineDayDto[];
 
   @IsString()
   @IsOptional()
   notas_adicionales?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  activa?: boolean;
 }

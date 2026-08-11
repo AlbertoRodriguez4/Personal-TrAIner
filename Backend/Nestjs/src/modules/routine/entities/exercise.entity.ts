@@ -24,6 +24,9 @@ export class Exercise {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column({ nullable: true })
+  rest_seconds?: number;
+
   @ManyToOne(() => RoutineDay, (day) => day.exercises, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'routine_day_id' })
   day: RoutineDay;

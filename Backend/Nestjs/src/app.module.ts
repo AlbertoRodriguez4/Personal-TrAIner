@@ -16,9 +16,6 @@ import { NutritionLogService } from './modules/nutrition/service/nutrition_log.s
 import { TrainingSession } from './modules/training_sessions/entities/training_session.entity';
 import { TrainingSessionController } from './modules/training_sessions/controller/training_session.controller';
 import { TrainingSessionService } from './modules/training_sessions/service/training_session.service';
-import { CustomRoutine } from './modules/custom_routine/entities/custom_routine.entity';
-import { CustomRoutineController } from './modules/custom_routine/controller/custom_routine.controller';
-import { CustomRoutineService } from './modules/custom_routine/service/custom_routine.service';
 import { BodyAnalysisRecord } from './modules/body_analysis/entities/body_analysis_record.entity';
 import { BodyAnalysisController } from './modules/body_analysis/controller/body_analysis.controller';
 import { BodyAnalysisService } from './modules/body_analysis/service/body_analysis.service';
@@ -56,10 +53,10 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog], 
+      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog], 
       synchronize: false, 
     }),
-    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, CustomRoutine, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog]), 
+    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog]), 
   ],
   controllers: [
     UserController,
@@ -70,7 +67,6 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
     SubscriptionController,
     UserProfileController,
     AiController,
-    CustomRoutineController,
     BodyAnalysisController,
     RoutineController,
     TelemetryController,
@@ -87,7 +83,6 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
     SubscriptionService,
     UserProfileService,
     AiService,
-    CustomRoutineService,
     BodyAnalysisService,
     RoutineService,
     TelemetryService,

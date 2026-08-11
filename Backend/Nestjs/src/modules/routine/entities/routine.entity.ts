@@ -21,6 +21,9 @@ export class Routine {
   @OneToMany(() => RoutineDay, (day) => day.routine, { cascade: true })
   days: RoutineDay[];
 
+  @Column({ default: true })
+  activa: boolean;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 

@@ -32,7 +32,10 @@ class RoutineProvider extends ChangeNotifier {
 
   Future<bool> deleteRoutine(String id) async {
     try {
-      await ApiService.deleteRoutine(id);
+      await ApiService.deleteRoutine(
+        id,
+        userId: ApiService.getCurrentUserId() ?? '',
+      );
       _routines.removeWhere((r) => r.id == id);
       notifyListeners();
       return true;
@@ -47,7 +50,11 @@ class RoutineProvider extends ChangeNotifier {
     try {
       final Map<String, dynamic> response;
       if (id != null) {
-        response = await ApiService.updateRoutine(id, payload);
+        response = await ApiService.updateRoutine(
+          id,
+          payload,
+          userId: ApiService.getCurrentUserId() ?? '',
+        );
       } else {
         final userId = ApiService.getCurrentUserId();
         if (userId != null) {

@@ -54,7 +54,7 @@ crear_rutina_decl = types.FunctionDeclaration(
 
 def crear_rutina_personalizada(user_id: str, **kwargs) -> dict:
     body = {"userId": user_id, "activa": True, **kwargs}
-    return nest.post("/custom-routines", body)
+    return nest.post("/api/routines/ai", body)
 
 
 buscar_ejercicios_decl = types.FunctionDeclaration(
@@ -82,7 +82,7 @@ obtener_rutina_activa_decl = types.FunctionDeclaration(
 )
 
 def obtener_rutina_activa(user_id: str) -> dict:
-    return nest.get(f"/custom-routines/user/{user_id}/active")
+    return nest.get(f"/api/routines/user/{user_id}/active")
 
 
 aplicar_cambios_rutina_decl = types.FunctionDeclaration(
@@ -103,7 +103,7 @@ aplicar_cambios_rutina_decl = types.FunctionDeclaration(
 )
 
 def aplicar_cambios_rutina(user_id: str, routine_id: str, dias_entrenamiento: list) -> dict:
-    return nest.put(f"/custom-routines/{routine_id}", {"dias_entrenamiento": dias_entrenamiento})
+    return nest.put(f"/api/routines/{routine_id}/ai?userId={user_id}", {"dias_entrenamiento": dias_entrenamiento})
 
 
 # ============================================================

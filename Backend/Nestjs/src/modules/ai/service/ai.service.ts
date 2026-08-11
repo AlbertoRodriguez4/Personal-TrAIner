@@ -7,7 +7,7 @@ import { AnalyzeRoutineDto } from '../dto/analyze-routine.dto';
 import { AnalyzeBodyDto } from '../dto/analyze-body.dto';
 import { AiChatDto } from '../dto/chat.dto';
 import { UserProfile } from '../../user_profile/entities/user_profile.entity';
-import { CustomRoutine } from '../../custom_routine/entities/custom_routine.entity';
+import { Routine } from '../../routine/entities/routine.entity';
 import { BodyAnalysisRecord } from '../../body_analysis/entities/body_analysis_record.entity';
 
 type NutritionAiResponse = {
@@ -61,8 +61,8 @@ export class AiService {
     private readonly configService: ConfigService,
     @InjectRepository(UserProfile)
     private readonly profileRepository: Repository<UserProfile>,
-    @InjectRepository(CustomRoutine)
-    private readonly customRoutineRepository: Repository<CustomRoutine>,
+    @InjectRepository(Routine)
+    private readonly routineRepository: Repository<Routine>,
     @InjectRepository(BodyAnalysisRecord)
     private readonly bodyAnalysisRepository: Repository<BodyAnalysisRecord>,
   ) {}
@@ -144,7 +144,7 @@ export class AiService {
     const endpoint = new URL(path, baseUrl).toString();
 
     let userProfile: UserProfile | null = null;
-    let routine: CustomRoutine | null = null;
+    let routine: Routine | null = null;
 
     if (payload.user_id) {
       userProfile = await this.profileRepository.findOne({
@@ -152,15 +152,17 @@ export class AiService {
       });
 
       if (payload.routine_id) {
-        routine = await this.customRoutineRepository.findOne({
+        routine = await this.routineRepository.findOne({
           where: { id: payload.routine_id, userId: payload.user_id },
+          relations: ['days', 'days.exercises'],
         });
         if (!routine) {
           throw new NotFoundException('Rutina no encontrada para este usuario.');
         }
       } else {
-        routine = await this.customRoutineRepository.findOne({
+        routine = await this.routineRepository.findOne({
           where: { userId: payload.user_id, activa: true },
+          relations: ['days', 'days.exercises'],
         });
       }
     }
@@ -198,13 +200,24 @@ export class AiService {
     return decoded;
   }
 
-  private serializeRoutine(routine: CustomRoutine): Record<string, unknown> {
+  private serializeRoutine(routine: Routine): Record<string, unknown> {
     return {
-      nombre_rutina: routine.nombre_rutina,
-      tipo_entrenamiento: routine.tipo_entrenamiento,
-      numero_dias: routine.numero_dias,
-      dias_entrenamiento: routine.dias_entrenamiento,
-      notas_adicionales: routine.notas_adicionales,
+      nombre_rutina: routine.name,
+      tipo_entrenamiento: routine.activity_type,
+      numero_dias: routine.days?.length ?? 0,
+      dias_entrenamiento: routine.days?.map((d, index) => ({
+        numero_dia: index + 1,
+        nombre_dia: d.day_of_week,
+        grupo_muscular: d.focus,
+        ejercicios: d.exercises?.map((e) => ({
+          nombre: e.name,
+          series: e.sets,
+          repeticiones: e.reps,
+          descanso_segundos: e.rest_seconds,
+          notas: e.notes,
+        })),
+      })),
+      notas_adicionales: routine.description,
     };
   }
 
