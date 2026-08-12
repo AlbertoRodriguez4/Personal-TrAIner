@@ -1,7 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AnalyzeNutritionDto } from '../dto/analyze-nutrition.dto';
-import { AnalyzeRoutineDto } from '../dto/analyze-routine.dto';
-import { AnalyzeBodyDto } from '../dto/analyze-body.dto';
+
 import { AiChatDto } from '../dto/chat.dto';
 import { AiService } from '../service/ai.service';
 
@@ -14,15 +13,6 @@ export class AiController {
     return this.aiService.analyzeNutrition(dto);
   }
 
-  @Post('analizar-rutina')
-  analyzeRoutine(@Body() dto: AnalyzeRoutineDto) {
-    return this.aiService.analyzeRoutine(dto);
-  }
-
-  @Post('analizar-fisico')
-  analyzeBody(@Body() dto: AnalyzeBodyDto) {
-    return this.aiService.analyzeBody(dto);
-  }
 
   @Post('chat')
   chat(@Body() dto: AiChatDto) {
