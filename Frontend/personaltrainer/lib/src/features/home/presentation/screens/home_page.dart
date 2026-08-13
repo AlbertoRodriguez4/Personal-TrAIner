@@ -1813,33 +1813,41 @@ class _NutritionScreenState extends State<_NutritionScreen> {
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
       final userId = ApiService.getCurrentUserId() ?? '';
+      final userMessage = _msgController.text.trim();
 
-      final aiResult = await ApiService.analyzeNutritionPhoto(
-        base64Image, 
-        userId,
-        userMessage: _msgController.text.trim(),
-      );
+      String finalPrompt = 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
+      if (userMessage.isNotEmpty) {
+        finalPrompt += '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
+      }
 
-      final kcal = (aiResult['calorias_consumidas'] as num?)?.toInt() ?? 0;
-      final p = (aiResult['proteinas_g'] as num?)?.toDouble() ?? 0.0;
-      final c = (aiResult['carbohidratos_g'] as num?)?.toDouble() ?? 0.0;
-      final f = (aiResult['grasas_g'] as num?)?.toDouble() ?? 0.0;
-      final foodName = 'Análisis IA'; // The notes are inside 'notas' which _ScanResultCard will read directly.
-      
-      _lastScan = aiResult;
-
-      await ApiService.createNutritionLog(
+      final response = await ApiService.sendChatMessage(
         userId: userId,
-        fechaRegistro: DateTime.now().toIso8601String(),
-        caloriasConsumidas: kcal,
-        proteinasG: p,
-        carbohidratosG: c,
-        grasasG: f,
-        notas: foodName,
+        mode: 'nutricion',
+        message: finalPrompt,
+        images: [
+          {'data': base64Image, 'mimeType': file.mimeType ?? 'image/jpeg'},
+        ],
       );
 
-      if (mounted) {
-        await context.read<DailySummaryProvider>().load();
+      final actionsTaken = response['actions_taken'] as List<dynamic>? ?? [];
+      Map<String, dynamic>? savedResult;
+      for (final action in actionsTaken) {
+        if (action is Map<String, dynamic> && action['tool'] == 'registrar_comida') {
+          savedResult = action['result'] as Map<String, dynamic>?;
+          break;
+        }
+      }
+
+      if (savedResult != null) {
+        _lastScan = savedResult;
+        if (mounted) {
+          await context.read<DailySummaryProvider>().load();
+        }
+      } else if (mounted) {
+        final reply = response['reply']?.toString() ?? '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(reply.isNotEmpty ? reply : 'No se pudo identificar la comida en la foto.')),
+        );
       }
     } catch (e) {
       if (mounted) {

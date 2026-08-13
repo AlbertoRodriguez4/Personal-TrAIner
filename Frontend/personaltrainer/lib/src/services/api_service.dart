@@ -707,24 +707,6 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
-  static Future<Map<String, dynamic>> analyzeNutritionPhoto(String base64Image, String userId, {String? userMessage}) async {
-    String finalPrompt = 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
-    if (userMessage != null && userMessage.isNotEmpty) {
-      finalPrompt += '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
-    }
-
-    final decoded = await _request(
-      method: 'POST',
-      path: '/ai/analizar-nutricion',
-      body: {
-        'image_base64': base64Image,
-        'prompt': finalPrompt,
-        'user_id': userId,
-      },
-    );
-    return _toMap(decoded) ?? {};
-  }
-
   static Future<Map<String, dynamic>> getDailySummary(String userId) async {
     final decoded = await _request(
       method: 'GET',
