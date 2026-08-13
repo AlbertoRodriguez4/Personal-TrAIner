@@ -1,3 +1,11 @@
+> **Nota (movido desde `Estructura` en la raíz del repo):** esta tabla es un
+> brainstorm de arquitectura aspiracional, no la implementación real. Es la
+> fuente de la que salieron las descripciones desactualizadas que tenían los
+> `.agents/skills/*/SKILL.md` (RAG vectorial, audio full-duplex, PyTorch/
+> TensorFlow, MQTT/WebSockets, CNNs+SAM 3D, DICOM+Mistral OCR, etc.) — esos
+> skills ya fueron corregidos contra el código real. Tratar todo lo de abajo
+> como ideas a futuro, no implementadas hoy.
+
 Subsistema de Arquitectura	Tecnología y Lenguaje Seleccionado	Justificación Tecnológica y Arquitectónica
 Framework de Cliente (Frontend)	Flutter (Lenguaje Dart)	
 Dictamina un desarrollo multiplataforma (iOS/Android) con base de código único sin el cuello de botella de rendimiento de los puentes JavaScript, ofreciendo un control de renderizado de nivel de píxel optimizado para GPU (motor Impeller) indispensable para la fluidez en el mapeo en vivo de avatares 3D y análisis de movimiento en tiempo real.

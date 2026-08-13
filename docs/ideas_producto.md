@@ -1,3 +1,7 @@
+> Nota: movido desde `README` en la raíz del repo — es una lista informal de
+> ideas de producto/features, no un README del proyecto (ese es
+> `README_EJECUCION.md`).
+
 Análisis de físico
 Agregar otros analisis como dexa para más info 
 Analizar lo que comes con foto sin contar calorias

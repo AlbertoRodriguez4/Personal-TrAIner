@@ -71,6 +71,15 @@
     ]
   },
 
+  // ── MCP: graft (contexto de repo, mismo server que usa Claude Code) ─
+  "mcp": {
+    "graft": {
+      "type": "local",
+      "command": ["npx", "-y", "@nanonets/graft", "mcp"],
+      "enabled": true
+    }
+  },
+
   // ── Permisos: evita prompts innecesarios que generan turnos extra ──
   "permission": {
     "edit": "allow",
