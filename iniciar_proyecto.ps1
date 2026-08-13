@@ -4,7 +4,7 @@
     Script para iniciar todos los servicios del Proyecto Entrenador Personal IA.
 .DESCRIPTION
     Este script verifica prerequisitos y levanta en paralelo:
-      - Backend Python (FastAPI + Ollama) en http://localhost:8000
+      - Backend Python (FastAPI + Gemini) en http://localhost:8000
       - Backend NestJS en http://localhost:3000
       - Frontend Flutter (web por defecto)
 .NOTES

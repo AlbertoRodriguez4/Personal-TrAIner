@@ -10,7 +10,7 @@ once, etc.). Those rules are load-bearing — follow them before reading anythin
 
 Personal TrAIner: a Flutter fitness/AI-coaching app (Android, targets Health Connect + a Xiaomi/Redmi
 smartwatch via Mi Fitness) backed by a NestJS API and a FastAPI service that does the AI coaching work
-(Gemini, migrating off Ollama). Active branch: `healthconnect`.
+via Gemini. Active branch: `healthconnect`.
 
 There is also a `lovable proyect/` folder (React + Vite + Tailwind) — a **visual mockup only**, synced
 from Lovable, not production code. It has its own `AGENTS.md`; don't mix its patterns into the Flutter app.
@@ -28,8 +28,8 @@ iniciar_proyecto.bat/.ps1   Boots all 3 services at once (Windows)
 ## Running things
 
 **All at once (Windows):** double-click `iniciar_proyecto.bat`, or `.\iniciar_proyecto.ps1` from
-PowerShell. Requires Node 18+, Python 3.10+ (`py` launcher), Flutter SDK, PostgreSQL running, Ollama
-installed. Opens 3 terminals: Python (8000), NestJS (3000), Flutter (Chrome).
+PowerShell. Requires Node 18+, Python 3.10+ (`py` launcher), Flutter SDK, PostgreSQL running.
+Opens 3 terminals: Python (8000), NestJS (3000), Flutter (Chrome).
 
 **NestJS** (`Backend/Nestjs/`):
 ```
@@ -95,8 +95,9 @@ sharp edges:
 - If workout records come back empty, check in this order: `WORKOUT_ROUTE` missing from `_types`,
   `hasPermissions` false-positive short-circuiting `requestAuthorization`, missing rationale intent-filter.
 
-**AI service migration in progress:** Python service is moving from Ollama/Gemma to Gemini 3.5 Flash;
-Ollama is being kept only for `analyze_failure()`. Don't assume Ollama is the primary path for new work.
+**AI service:** Python service runs on Gemini 3.5 Flash via `google-genai` — no Ollama/local model
+anywhere in this service. `analyze_failure()` (`skills.py`) is a separate deterministic heuristic
+(Python `statistics` module on heart-rate curves), not AI-based.
 
 ## Google Sign-In
 

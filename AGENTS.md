@@ -22,8 +22,9 @@ Identifica primero en qué componente cae la tarea y limita la lectura a esa car
   - `main.py` — entrypoint / endpoints
   - `schemas.py` — modelos pydantic
   - `skills.py` — funciones de IA (nutrition/body/routine analyzers, skills agénticas)
-  - Migrando de Ollama/Gemma 4 a Gemini 3.5 Flash (Ollama se mantiene SOLO para
-    `analyze_failure()`).
+  - Usa Gemini 3.5 Flash vía `google-genai` (`chat_engine.py`/`chat_tools.py`,
+    modo `nutricion` incluye el análisis de comida por foto). No hay Ollama en
+    este servicio.
 
 Nota: no encontré `prompt_antigravity.md` ni `design_context.md` /
 `flutter_design_context.md` en este clon de `healthconnect` — puede que vivan en
