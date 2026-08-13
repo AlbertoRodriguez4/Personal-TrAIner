@@ -1,11 +1,32 @@
 ---
 name: razonamiento_nutricional_mllm
-description: Reglas para la evaluación nutricional usando Modelos de Lenguaje Multimodales (MLLMs como GPT-4V, Claude 3.5).
+description: Reglas para el modo `nutricion` del AI Coach — razonamiento visual con Gemini sobre fotos de comida, guardando calorías/macros cuantificados.
 ---
 
-# Razonamiento Nutricional Visual-Lingüístico
+# Razonamiento Nutricional Visual (modo `nutricion`)
 
-- **Enfoque Semántico vs Calórico:** Evita la tradicional y tortuosa cuantificación calórica estricta. Prioriza un reconocimiento semántico holístico del alimento.
-- **Discriminación de Componentes:** Aprovecha las matrices de atención de los MLLMs para identificar ingredientes complejos dentro de platos enteros (food recognition).
-- **Métricas Avanzadas:** Determina niveles de hiper-procesamiento (ej. clasificación NOVA) y distribuciones de macronutrientes basadas en contexto volumétrico inferido por la imagen.
-- **Experiencia de Usuario:** El objetivo de este análisis avanzado es reducir la "fatiga transaccional" del usuario; no debe sentirse como llenar un aburrido registro diario de calorías, sino como enviar fotos fluidamente.
+- **Modelo real: Gemini, no GPT-4V ni Claude.** El razonamiento visual sobre fotos
+  de comida lo hace `gemini-3.5-flash` vía `google-genai`
+  (`Backend/Python/chat_engine.py`), en el modo `nutricion` de
+  `chat_tools.py::SYSTEM_PROMPTS`.
+- **La salida es cuantitativa, no una clasificación semántica:** el prompt del
+  modo pide explícitamente estimar calorías y macros a partir de la imagen o
+  descripción y guardarlos con la tool `registrar_comida`
+  (`chat_tools.py::registrar_comida_decl`), que persiste
+  `calorias_consumidas, proteinas_g, carbohidratos_g, grasas_g, notas` en
+  `NutritionLog`
+  (`Backend/Nestjs/src/modules/nutrition/entities/nutrition_log.entity.ts`). Si
+  ajustás este flujo, mantené ese contrato de campos — es lo que consume el resto
+  de la app (resúmenes diarios, gráficos, etc.).
+- **UX real — sí es "sacar una foto y listo":** el usuario adjunta una foto desde
+  `image_picker`, se envía en base64 dentro del mensaje de chat
+  (`ai_coach_page.dart`), y el modelo la analiza en el mismo turno sin pasos
+  intermedios de formulario. Esta parte del objetivo original (reducir la fricción
+  de loguear comidas a mano) sí está lograda — mantenela al tocar este modo.
+- **`obtener_resumen_diario`** trae lo consumido en el día vs. objetivos de
+  macros — usalo para preguntas tipo "¿cómo voy hoy?" en vez de recalcular a mano.
+
+## No implementado (no asumir que existe)
+
+- No hay clasificación de nivel de procesamiento (NOVA) ni ningún campo o lógica
+  relacionada — no la menciones como parte del análisis si tocás este modo.

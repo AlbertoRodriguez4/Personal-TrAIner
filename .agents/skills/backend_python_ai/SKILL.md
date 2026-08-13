@@ -1,11 +1,34 @@
 ---
 name: backend_python_ai
-description: Reglas para el desarrollo del motor de IA pesado y procesamiento médico en Python usando FastAPI.
+description: Reglas para el servicio FastAPI de IA — Gemini (google-genai) vía function calling, sin PyTorch/TensorFlow. Un endpoint legado sigue usando Ollama.
 ---
 
-# Desarrollo Motor de IA (Python / FastAPI)
+# Desarrollo del Servicio de IA (Python / FastAPI)
 
-- **Alto Rendimiento en API:** Usa FastAPI como marco principal aprovechando Pydantic para la validación estricta de esquemas de datos entrantes desde el orquestador Node.js.
-- **Procesamiento Científico y ML:** Emplea integraciones nativas y optimizadas de frameworks como PyTorch o TensorFlow. Asegúrate de ejecutar operaciones pesadas (tensores) en hardware acelerado (GPU) si está disponible, o en hilos separados para no bloquear el loop de eventos de FastAPI.
-- **Integración Segura:** Maneja las librerías científicas y médicas con cuidado de memoria, garantizando que el procesamiento masivo de datos no provoque fugas.
-- **Respuestas Predictibles:** Estructura de forma coherente el flujo de errores cuando los modelos de Machine Learning devuelvan baja confianza en sus predicciones.
+- **Framework real:** FastAPI + Pydantic para validar payloads entrantes desde
+  NestJS (`main.py`, `schemas.py`).
+- **El "motor de IA" es Gemini en la nube, no un modelo local:** no hay PyTorch,
+  TensorFlow ni ninguna inferencia local — `requirements.txt` solo trae `fastapi,
+  uvicorn[standard], pydantic, requests, google-genai, python-dotenv, httpx`. El
+  chat agentic vive en `chat_engine.py` (cliente `google.genai`, modelo
+  `gemini-3.5-flash`, loop de function calling de máx. 5 iteraciones) +
+  `chat_tools.py` (tools/executors/prompts por modo). Las tools no calculan nada
+  pesado localmente: llaman de vuelta a NestJS vía `nest_client.py` (un wrapper
+  fino sobre `requests`).
+- **Endpoint legado en migración — no lo tomes como patrón para código nuevo:**
+  `POST /api/ia/analizar-nutricion` (`main.py`) todavía depende de un Ollama local
+  (`model: "gemma4:e4b"`, llamada HTTP a `localhost:11434`) y arranca el proceso de
+  Ollama si no está corriendo (`ensure_ollama_is_running`). Es el único punto que
+  sigue usando Ollama hoy — para cualquier feature nueva de IA, usá el patrón de
+  `chat_engine.py`/Gemini, no este endpoint.
+- **Errores predecibles:** los endpoints envuelven las excepciones en
+  `HTTPException` con código y detalle explícito (`ValueError` → 400, resto →
+  500/502) — mantené ese patrón en vez de dejar que una excepción cruda llegue a
+  NestJS.
+
+## No implementado (no asumir que existe)
+
+- No hay procesamiento científico/ML pesado (tensores, GPU, hilos separados para no
+  bloquear el loop de eventos) — no hace falta esa gestión de memoria/hardware
+  porque no hay ningún modelo corriendo localmente; todo el cómputo "IA" ocurre del
+  lado de la API de Gemini.
