@@ -126,3 +126,6 @@ app.*.symbols
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.locklogcat_dump.txt
 test_enum.dart
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
