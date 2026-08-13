@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/providers/workout_session_provider.dart';
+import '../../../../core/theme/design_tokens.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/routine.dart';
 import 'routines_home_page.dart';
@@ -70,7 +71,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
               actions: [
                 if (p.phase != Phase.finished)
                   IconButton(
-                    icon: Icon(PhosphorIcons.stop()),
+                    icon: Icon(LucideIcons.square),
                     tooltip: 'Terminar sesión',
                     onPressed: () => p.endSession(),
                   ),
@@ -125,25 +126,26 @@ class _ConnectionBar extends StatelessWidget {
     final isActive = isScanning || isConnecting || isReconnecting;
     final isBleConnected = bleState == BleConnectionState.connected;
 
+    final b = Theme.of(context).brightness;
     final Color statusColor;
     final IconData statusIcon;
     if (isBleConnected) {
-      statusColor = const Color(0xFF059669);
-      statusIcon = PhosphorIcons.bluetoothConnected();
+      statusColor = DesignTokens.success(b);
+      statusIcon = LucideIcons.bluetoothConnected;
     } else if (isActive) {
-      statusColor = const Color(0xFF2563EB);
-      statusIcon = PhosphorIcons.bluetooth();
+      statusColor = DesignTokens.info(b);
+      statusIcon = LucideIcons.bluetooth;
     } else {
-      statusColor = const Color(0xFF9CA3AF);
-      statusIcon = PhosphorIcons.plugs();
+      statusColor = DesignTokens.mutedForeground(b);
+      statusIcon = LucideIcons.bluetoothOff;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+        border: Border.all(color: DesignTokens.border(b)),
       ),
       child: Row(
         children: [
@@ -173,7 +175,7 @@ class _ConnectionBar extends StatelessWidget {
                   Text(
                     'Sin contacto con la piel',
                     style: TextStyle(
-                      color: const Color(0xFFF59E0B),
+                      color: DesignTokens.warning(b),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -192,6 +194,12 @@ class _ConnectionBar extends StatelessWidget {
   }
 }
 
+/// Colores de la tarjeta de FC. Vive sobre un degradado oscuro fijo (no cambia
+/// con el tema), así que sus tonos son siempre los de superficie oscura.
+const _hrSurfaceFrom = Color(0xFF0B1220);
+const _hrSurfaceTo = Color(0xFF1A2B4B);
+const _hrRmssd = Color(0xFFA78BFA); // violet-400, sin token equivalente
+
 class _HrCard extends StatelessWidget {
   const _HrCard({required this.provider});
   final WorkoutSessionProvider provider;
@@ -202,7 +210,7 @@ class _HrCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0B1220), Color(0xFF1A2B4B)],
+          colors: [_hrSurfaceFrom, _hrSurfaceTo],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -214,8 +222,8 @@ class _HrCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                PhosphorIcons.heartbeat(),
-                color: const Color(0xFFEF4444),
+                LucideIcons.heartPulse,
+                color: DesignTokens.progressRed,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -231,13 +239,13 @@ class _HrCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF059669).withOpacity(0.2),
+                    color: DesignTokens.darkSuccess.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'BLE',
                     style: TextStyle(
-                      color: Color(0xFF059669),
+                      color: DesignTokens.darkSuccess,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
                     ),
@@ -247,7 +255,7 @@ class _HrCard extends StatelessWidget {
                 Text(
                   'Entreno detectado',
                   style: TextStyle(
-                    color: const Color(0xFFFBBF24),
+                    color: DesignTokens.hrZoneHigh,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -287,7 +295,7 @@ class _HrCard extends StatelessWidget {
                     Text(
                       '${provider.lastRrMs!.toStringAsFixed(0)} ms',
                       style: TextStyle(
-                        color: const Color(0xFF00F0FF).withOpacity(0.9),
+                        color: DesignTokens.focusFgCyan.withOpacity(0.9),
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
@@ -306,7 +314,7 @@ class _HrCard extends StatelessWidget {
                     Text(
                       '${provider.currentRmssd!.toStringAsFixed(1)}',
                       style: TextStyle(
-                        color: const Color(0xFFA78BFA).withOpacity(0.9),
+                        color: _hrRmssd.withOpacity(0.9),
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
@@ -357,7 +365,7 @@ class _HrGraphPainter extends CustomPainter {
       path.lineTo(x(i), y(data[i]));
     }
     final paint = Paint()
-      ..color = const Color(0xFF00F0FF)
+      ..color = DesignTokens.focusFgCyan
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
@@ -373,7 +381,7 @@ class _HrGraphPainter extends CustomPainter {
     canvas.drawPath(
       fill,
       Paint()
-        ..color = const Color(0xFF00F0FF).withOpacity(0.15)
+        ..color = DesignTokens.focusFgCyan.withOpacity(0.15)
         ..style = PaintingStyle.fill,
     );
   }
@@ -388,13 +396,14 @@ class _ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     final ex = provider.currentExercise!;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+        border: Border.all(color: DesignTokens.border(b)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,13 +413,13 @@ class _ExerciseCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
-                  borderRadius: BorderRadius.circular(10),
+                  color: DesignTokens.activityGym.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
                 ),
                 child: Icon(
-                  PhosphorIcons.barbell(),
+                  LucideIcons.dumbbell,
                   size: 18,
-                  color: const Color(0xFF059669),
+                  color: DesignTokens.activityGym,
                 ),
               ),
               const SizedBox(width: 10),
@@ -452,10 +461,10 @@ class _ExerciseCard extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: done
-                        ? const Color(0xFF059669)
+                        ? DesignTokens.success(b)
                         : active
-                            ? const Color(0xFFFEF3C7)
-                            : const Color(0xFFF3F4F6),
+                            ? DesignTokens.warning(b).withOpacity(0.18)
+                            : DesignTokens.muted(b),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -464,8 +473,8 @@ class _ExerciseCard extends StatelessWidget {
                       color: done
                           ? Colors.white
                           : active
-                              ? const Color(0xFF92400E)
-                              : const Color(0xFF9CA3AF),
+                              ? DesignTokens.warning(b)
+                              : DesignTokens.mutedForeground(b),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -487,13 +496,14 @@ class _Meta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF9CA3AF),
+                color: DesignTokens.mutedForeground(b),
                 fontWeight: FontWeight.w600,
               ),
         ),
@@ -514,11 +524,12 @@ class _PhaseControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     switch (provider.phase) {
       case Phase.idle:
         return _PrimaryButton(
           label: 'Empezar serie',
-          icon: PhosphorIcons.play(),
+          icon: LucideIcons.play,
           onTap: () => provider.startSet(),
         );
       case Phase.inSet:
@@ -528,14 +539,15 @@ class _PhaseControls extends StatelessWidget {
               '${provider.setElapsed}s',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF059669),
+                    color: DesignTokens.success(b),
                   ),
             ),
             const SizedBox(height: 10),
             _PrimaryButton(
               label: 'Terminar y analizar',
-              icon: PhosphorIcons.flag(),
-              color: const Color(0xFF0B1220),
+              icon: LucideIcons.flag,
+              // Acción que dispara el análisis por IA: color de marca.
+              color: DesignTokens.aiVia,
               onTap: () => provider.endSetAndAnalyze(),
             ),
           ],
@@ -549,14 +561,14 @@ class _PhaseControls extends StatelessWidget {
               'Descanso ${provider.restRemaining}s',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF2563EB),
+                    color: DesignTokens.info(b),
                   ),
             ),
             const SizedBox(height: 10),
             _PrimaryButton(
               label: 'Saltar descanso',
-              icon: PhosphorIcons.skipForward(),
-              color: const Color(0xFF2563EB),
+              icon: LucideIcons.skipForward,
+              color: DesignTokens.info(b),
               onTap: () => provider.skipRest(),
             ),
           ],
@@ -588,11 +600,11 @@ class _PrimaryButton extends StatelessWidget {
         icon: Icon(icon, size: 20),
         label: Text(label),
         style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? const Color(0xFF059669),
+          backgroundColor: color ?? DesignTokens.activityGym,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
           ),
         ),
       ),
@@ -609,8 +621,8 @@ class _LoadingPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(14),
+        color: DesignTokens.aiVia,
+        borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -620,7 +632,7 @@ class _LoadingPill extends StatelessWidget {
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Color(0xFF00F0FF),
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 12),
@@ -666,11 +678,12 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     final failureColor = result.reachedFailure
-        ? const Color(0xFFEF4444)
+        ? DesignTokens.destructive(b)
         : result.sufficientIntensity
-            ? const Color(0xFF059669)
-            : const Color(0xFFF59E0B);
+            ? DesignTokens.success(b)
+            : DesignTokens.warning(b);
     final failureLabel = result.reachedFailure
         ? 'Fallo muscular'
         : result.sufficientIntensity
@@ -680,9 +693,9 @@ class _ResultTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+        border: Border.all(color: DesignTokens.border(b)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,7 +746,7 @@ class _ResultTile extends StatelessWidget {
           Text(
             result.feedback,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF4B5563),
+                  color: DesignTokens.mutedForeground(b),
                 ),
           ),
         ],
@@ -749,18 +762,19 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Theme.of(context).dividerColor,
-        borderRadius: BorderRadius.circular(8),
+        color: DesignTokens.muted(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMd),
       ),
       child: Text(
         '$label $value',
-        style: TextStyle(
+        style: DesignTokens.bodyFont(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).textTheme.bodySmall?.color,
+          weight: FontWeight.w600,
+          color: DesignTokens.foreground(b),
         ),
       ),
     );
@@ -773,13 +787,14 @@ class _SummaryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
       children: [
         Icon(
-          PhosphorIcons.medal(),
+          LucideIcons.award,
           size: 56,
-          color: const Color(0xFFF59E0B),
+          color: DesignTokens.warning(b),
         ),
         const SizedBox(height: 12),
         Text(
@@ -795,19 +810,19 @@ class _SummaryView extends StatelessWidget {
             _SummaryStat(
               label: 'Series',
               value: '${provider.completedSets}',
-              color: const Color(0xFF059669),
+              color: DesignTokens.success(b),
             ),
             const SizedBox(width: 12),
             _SummaryStat(
               label: 'Fallo',
               value: '${provider.failureSets}',
-              color: const Color(0xFFEF4444),
+              color: DesignTokens.destructive(b),
             ),
             const SizedBox(width: 12),
             _SummaryStat(
               label: 'Intensa',
               value: '${provider.highIntensitySets}',
-              color: const Color(0xFF2563EB),
+              color: DesignTokens.info(b),
             ),
           ],
         ),
@@ -829,7 +844,7 @@ class _SummaryView extends StatelessWidget {
                 .pushReplacement(MaterialPageRoute(
               builder: (_) => const RoutinesHomePage(),
             )),
-            icon: Icon(PhosphorIcons.arrowLeft()),
+            icon: Icon(LucideIcons.arrowLeft),
             label: const Text('Volver a rutinas'),
           ),
         ),
@@ -850,6 +865,7 @@ class _SummaryStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -869,10 +885,10 @@ class _SummaryStat extends StatelessWidget {
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: DesignTokens.bodyFont(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
+                weight: FontWeight.w600,
+                color: DesignTokens.mutedForeground(b),
               ),
             ),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/health_service.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
 import '../../models/calendar_day_summary.dart';
@@ -128,7 +129,7 @@ class _TopBar extends StatelessWidget {
       child: Row(
         children: [
           if (!isTab) ...[
-            _RoundIconButton(
+            RoundIconButton(
               icon: LucideIcons.arrowLeft,
               onTap: onBack ?? () => Navigator.maybePop(context),
             ),
@@ -204,9 +205,9 @@ class _MonthHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _RoundIconButton(icon: LucideIcons.chevronLeft, size: 32),
+        RoundIconButton(icon: LucideIcons.chevronLeft, size: 32),
         Text(title, style: DesignTokens.titleFont(fontSize: 16, color: DesignTokens.foreground(b))),
-        _RoundIconButton(icon: LucideIcons.chevronRight, size: 32),
+        RoundIconButton(icon: LucideIcons.chevronRight, size: 32),
       ],
     );
   }
@@ -511,7 +512,7 @@ class _DailySheet extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _RoundIconButton(icon: LucideIcons.x, size: 36, fillColor: DesignTokens.surface1(b), onTap: onClose),
+                    RoundIconButton(icon: LucideIcons.x, size: 36, fillColor: DesignTokens.surface1(b), onTap: onClose),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -719,7 +720,7 @@ class _InlineDaySummary extends StatelessWidget {
                   ],
                 ),
               ),
-              _RoundIconButton(icon: LucideIcons.x, size: 32, fillColor: DesignTokens.surface2of(b), onTap: onClose),
+              RoundIconButton(icon: LucideIcons.x, size: 32, fillColor: DesignTokens.surface2of(b), onTap: onClose),
             ],
           ),
           const SizedBox(height: 16),
@@ -1242,30 +1243,3 @@ class _CorrelationTile extends StatelessWidget {
 }
 
 /* ─────────────────────── Shared round icon button ─────────────────────── */
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, this.onTap, this.size = 40, this.fillColor});
-  final IconData icon;
-  final VoidCallback? onTap;
-  final double size;
-  final Color? fillColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: fillColor ?? DesignTokens.surface1(b),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: size * 0.4, color: DesignTokens.foreground(b)),
-      ),
-    );
-  }
-}

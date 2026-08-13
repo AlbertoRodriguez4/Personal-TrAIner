@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:health/health.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -180,8 +179,8 @@ class _Header extends StatelessWidget {
                 onPressed: () => context.read<ThemeProvider>().toggleTheme(context),
                 icon: Icon(
                   Theme.of(context).brightness == Brightness.dark
-                      ? PhosphorIcons.sun()
-                      : PhosphorIcons.moon(),
+                      ? LucideIcons.sun
+                      : LucideIcons.moon,
                 ),
                 color: fg,
               ),
@@ -2177,6 +2176,13 @@ class _ScanResultCard extends StatelessWidget {
     final f = (scanResult?['grasas_g'] as num?)?.toDouble() ?? 0.0;
     final kcal = (scanResult?['calorias_consumidas'] as num?)?.toInt() ?? 0;
 
+    // Reparto calórico de la comida (proteína y carbos 4 kcal/g, grasa 9 kcal/g).
+    // Las tres barras suman el 100% del aporte energético de este plato.
+    final kcalP = p * 4, kcalC = c * 4, kcalF = f * 9;
+    final kcalMacros = kcalP + kcalC + kcalF;
+    double share(double parte) =>
+        kcalMacros > 0 ? (parte / kcalMacros).clamp(0.0, 1.0) : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2210,11 +2216,11 @@ class _ScanResultCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _MacroChip(label: 'Proteína', value: '${p.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Proteína', value: '${p.toInt()}g', pct: share(kcalP), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Carbos', value: '${c.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Carbos', value: '${c.toInt()}g', pct: share(kcalC), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Grasas', value: '${f.toInt()}g', pct: 1.0, fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(child: _MacroChip(label: 'Grasas', value: '${f.toInt()}g', pct: share(kcalF), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
             ],
           ),
         ],

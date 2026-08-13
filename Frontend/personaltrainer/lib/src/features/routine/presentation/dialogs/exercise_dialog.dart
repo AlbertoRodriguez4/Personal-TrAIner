@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/theme/design_tokens.dart';
 import '../../models/exercise.dart';
 
 class ExerciseBottomSheet extends StatefulWidget {
@@ -115,7 +116,7 @@ class _ExerciseBottomSheetState extends State<ExerciseBottomSheet> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).brightness == Brightness.dark 
                       ? Colors.white24 
-                      : const Color(0xFFD1D5DB),
+                      : DesignTokens.border(Theme.of(context).brightness),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -136,7 +137,7 @@ class _ExerciseBottomSheetState extends State<ExerciseBottomSheet> {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(PhosphorIcons.x(), size: 20),
+                      icon: Icon(LucideIcons.x, size: 20),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],

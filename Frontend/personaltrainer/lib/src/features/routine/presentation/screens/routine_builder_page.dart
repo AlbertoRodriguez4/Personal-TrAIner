@@ -1,6 +1,6 @@
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/providers/routine_provider.dart';
@@ -34,36 +34,36 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
       type: 'gym',
       label: 'Gimnasio',
       description: 'Entrenamiento con pesas y máquinas',
-      icon: PhosphorIcons.barbell(),
-      color: Color(0xFF059669),
+      icon: LucideIcons.dumbbell,
+      color: DesignTokens.activityGym,
     ),
     _ActivityOption(
       type: 'cardio',
       label: 'Cardio',
       description: 'Running, bicicleta, elíptica...',
-      icon: PhosphorIcons.personSimpleRun(),
-      color: Color(0xFF2563EB),
+      icon: LucideIcons.activity,
+      color: DesignTokens.activityCardio,
     ),
     _ActivityOption(
       type: 'calistenia',
       label: 'Calistenia',
       description: 'Entrenamiento con peso corporal',
-      icon: PhosphorIcons.personSimple(),
-      color: Color(0xFFD97706),
+      icon: LucideIcons.user,
+      color: DesignTokens.activityCalistenia,
     ),
     _ActivityOption(
       type: 'yoga',
       label: 'Yoga / Pilates',
       description: 'Flexibilidad, equilibrio y control',
-      icon: PhosphorIcons.moon(),
-      color: Color(0xFF7C3AED),
+      icon: LucideIcons.moon,
+      color: DesignTokens.activityYoga,
     ),
     _ActivityOption(
       type: 'deportes',
       label: 'Deportes',
       description: 'Fútbol, baloncesto, paddle...',
-      icon: PhosphorIcons.soccerBall(),
-      color: Color(0xFFEC4899),
+      icon: LucideIcons.trophy,
+      color: DesignTokens.activityDeportes,
     ),
   ];
 
@@ -315,7 +315,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: Icon(PhosphorIcons.arrowLeft()),
+          icon: Icon(LucideIcons.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: _nameController.text.isEmpty
@@ -367,7 +367,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: const Color(0xFF059669)),
+                        borderSide: BorderSide(color: DesignTokens.activityGym),
                       ),
                       contentPadding: EdgeInsets.zero,
                     ),
@@ -405,7 +405,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                         label: Text(day.substring(0, 2)),
                         selected: active,
                         onSelected: (_) => _toggleDay(day),
-                        selectedColor: const Color(0xFF059669),
+                        selectedColor: DesignTokens.activityGym,
                         backgroundColor: bg,
                         labelStyle: TextStyle(
                           color: active ? Colors.white : fg,
@@ -415,7 +415,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(
                             color: active
-                                ? const Color(0xFF059669)
+                                ? DesignTokens.activityGym
                                 : border,
                           ),
                         ),
@@ -479,7 +479,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
+                    backgroundColor: DesignTokens.activityGym,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -577,7 +577,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      PhosphorIcons.check(),
+                      LucideIcons.check,
                       size: 14,
                       color: Colors.white,
                     ),
@@ -631,22 +631,7 @@ class _DayCard extends StatelessWidget {
     required this.onDeleteExercise,
   });
 
-  Color get _dotColor {
-    switch (activityType) {
-      case 'gym':
-        return const Color(0xFF059669);
-      case 'cardio':
-        return const Color(0xFF2563EB);
-      case 'calistenia':
-        return const Color(0xFFD97706);
-      case 'yoga':
-        return const Color(0xFF7C3AED);
-      case 'deportes':
-        return const Color(0xFFEC4899);
-      default:
-        return const Color(0xFF059669);
-    }
-  }
+  Color get _dotColor => DesignTokens.activity(activityType);
 
   String get _shortDay {
     return day.substring(0, 2);
@@ -717,7 +702,7 @@ class _DayCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(PhosphorIcons.dotsThreeVertical(), size: 18),
+                  icon: Icon(LucideIcons.moreVertical, size: 18),
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
@@ -726,7 +711,7 @@ class _DayCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ListTile(
-                              leading: Icon(PhosphorIcons.trash()),
+                              leading: Icon(LucideIcons.trash2),
                               title: const Text('Quitar día'),
                               onTap: () {
                                 Navigator.pop(context);
@@ -748,7 +733,7 @@ class _DayCard extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    PhosphorIcons.moon(),
+                    LucideIcons.moon,
                     size: 16,
                     color: mutedFg,
                   ),
@@ -836,13 +821,13 @@ class _DayCard extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: Icon(PhosphorIcons.pencilSimple(),
+                                    icon: Icon(LucideIcons.pencil,
                                         size: 18),
                                     onPressed: () =>
                                         onEditExercise(ex, idx),
                                   ),
                                   IconButton(
-                                    icon: Icon(PhosphorIcons.trash(),
+                                    icon: Icon(LucideIcons.trash2,
                                         size: 18),
                                     onPressed: () =>
                                         onDeleteExercise(idx),
@@ -872,7 +857,7 @@ class _DayCard extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(PhosphorIcons.plus(),
+                            Icon(LucideIcons.plus,
                                 size: 18, color: mutedFg),
                             const SizedBox(width: 6),
                             Text(

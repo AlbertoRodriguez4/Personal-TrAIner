@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/round_icon_button.dart';
 
 /// Importador de analítica clínica — réplica de `clinic.import.tsx`.
 ///
@@ -130,7 +131,14 @@ class _Header extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _RoundIconButton(icon: LucideIcons.arrowLeft, fillColor: DesignTokens.surface2of(b), onTap: onBack),
+          RoundIconButton(
+            icon: LucideIcons.arrowLeft,
+            size: 36,
+            iconSize: 16,
+            bordered: true,
+            fillColor: DesignTokens.surface2of(b),
+            onTap: onBack,
+          ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,29 +567,3 @@ class _ManualFieldTile extends StatelessWidget {
 }
 
 /* ─────────────────────── Shared ─────────────────────── */
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, this.onTap, this.fillColor});
-  final IconData icon;
-  final VoidCallback? onTap;
-  final Color? fillColor;
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: fillColor ?? DesignTokens.surface1(b),
-          border: Border.all(color: DesignTokens.border(b)),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: 16, color: DesignTokens.foreground(b)),
-      ),
-    );
-  }
-}

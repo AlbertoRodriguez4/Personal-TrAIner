@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise_catalog.dart';
@@ -103,7 +103,7 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(PhosphorIcons.warningCircle(), size: 48, color: Colors.red[300]),
+            Icon(LucideIcons.alertCircle, size: 48, color: DesignTokens.destructive(Theme.of(context).brightness)),
             const SizedBox(height: 16),
             const Text('Error al cargar ejercicios', style: TextStyle(color: Colors.grey)),
             TextButton(
@@ -199,12 +199,12 @@ class _ExerciseCardTile extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF059669).withOpacity(0.1),
+                    color: DesignTokens.activityGym.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    PhosphorIcons.barbell(),
-                    color: const Color(0xFF059669),
+                    LucideIcons.dumbbell,
+                    color: DesignTokens.activityGym,
                     size: 24,
                   ),
                 ),
@@ -234,7 +234,7 @@ class _ExerciseCardTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.add_circle_outline, color: Color(0xFF059669)),
+                const Icon(LucideIcons.plusCircle, color: DesignTokens.activityGym),
               ],
             ),
           ),

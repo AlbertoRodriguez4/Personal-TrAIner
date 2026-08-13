@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Sparkles, TriangleAlert as AlertTriangle, Moon, Heart, Activity } from "lucide-react";
+import { ArrowLeft, Sparkles, AlertTriangle, Moon, Heart, Activity } from "lucide-react";
 
 /* ─────────────── Apple-style light tokens ─────────────── */
 const theme = {

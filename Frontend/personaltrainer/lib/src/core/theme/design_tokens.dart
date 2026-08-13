@@ -69,6 +69,43 @@ class DesignTokens {
     colors: [Color(0xFFFBE8B0), Color(0xFFF4D785)],
   );
 
+  // ===== Color por tipo de actividad =====
+  // Mismos valores que `ACTIVITY_COLORS` en routine.builder.tsx / quick-add.tsx
+  // del repo de diseño. Estaban duplicados en routines_home_page y
+  // routine_builder_page; viven acá para no volver a divergir.
+  static const Color activityGym = Color(0xFF059669); // emerald-600
+  static const Color activityCardio = Color(0xFF2563EB); // blue-600
+  static const Color activityCalistenia = Color(0xFFD97706); // amber-600
+  static const Color activityYoga = Color(0xFF7C3AED); // violet-600
+  static const Color activityDeportes = Color(0xFFEC4899); // pink-500
+
+  static Color activity(String type) {
+    switch (type) {
+      case 'cardio':
+        return activityCardio;
+      case 'calistenia':
+        return activityCalistenia;
+      case 'yoga':
+        return activityYoga;
+      case 'deportes':
+        return activityDeportes;
+      case 'gym':
+      default:
+        return activityGym;
+    }
+  }
+
+  // ===== Estados semánticos (éxito / aviso / info) =====
+  // `success` lo usan los chips de "acción realizada" del chat y los estados
+  // completados de la sesión de entreno; `warning` e `info`, los estados de
+  // conexión del pulsómetro y los avisos de sensor.
+  static const Color lightSuccess = Color(0xFF059669); // emerald-600, legible en claro
+  static const Color darkSuccess = Color(0xFF34D399); // emerald-400, legible en oscuro
+  static const Color lightWarning = Color(0xFFD97706); // amber-600
+  static const Color darkWarning = Color(0xFFFBBF24); // amber-400
+  static const Color lightInfo = Color(0xFF2563EB); // blue-600
+  static const Color darkInfo = Color(0xFF60A5FA); // blue-400
+
   // ===== Chart colors =====
   static const Color chart1 = Color(0xFFE76F51);
   static const Color chart2 = Color(0xFF2A9D8F);
@@ -157,6 +194,12 @@ class DesignTokens {
       b == Brightness.dark ? darkRing : lightRing;
   static Color destructive(Brightness b) =>
       b == Brightness.dark ? darkDestructive : lightDestructive;
+  static Color success(Brightness b) =>
+      b == Brightness.dark ? darkSuccess : lightSuccess;
+  static Color warning(Brightness b) =>
+      b == Brightness.dark ? darkWarning : lightWarning;
+  static Color info(Brightness b) =>
+      b == Brightness.dark ? darkInfo : lightInfo;
 
   // Radios del design system (0.625rem base)
   static const double radius = 10.0;

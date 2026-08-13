@@ -8,6 +8,7 @@ import {
   Dumbbell, Bike, HeartPulse, Wind, Trophy, Pencil, Trash2, Zap,
   Search, Copy, GripVertical, Check,
   AlertTriangle,
+  CheckCircle2, ClipboardCheck, LineChart,
 } from 'lucide-react';
 import { useNav } from './nav';
 
@@ -32,20 +33,175 @@ function TopBar({ title, onBack }: { title: string; onBack: () => void }) {
 
 /* ============================== CHAT ============================== */
 
-const SUGGESTIONS = [
-  '¿Cómo voy de recuperación hoy?',
-  'Plan de comida alta en proteína',
-  'Rutina rápida de 20 min',
-  'Interpreta mi última FC media',
-];
+type PulsoModule = {
+  id: 'builder' | 'reviewer' | 'sleep' | 'progress';
+  label: string;
+  Icon: typeof Dumbbell;
+};
+
+const PULSO_MODULES: Record<PulsoModule['id'], PulsoModule> = {
+  builder: { id: 'builder', label: 'Creador de Rutina', Icon: Dumbbell },
+  reviewer: { id: 'reviewer', label: 'Revisor de Rutina', Icon: ClipboardCheck },
+  sleep: { id: 'sleep', label: 'Análisis de Sueño', Icon: Moon },
+  progress: { id: 'progress', label: 'Seguimiento de Progreso', Icon: LineChart },
+};
+
+const MODULE_ORDER: PulsoModule['id'][] = ['builder', 'reviewer', 'sleep', 'progress'];
+
+const MODULE_PROMPTS: Record<PulsoModule['id'], string[]> = {
+  builder: ['Créame una rutina de 6 días de hipertrofia', 'Rutina rápida de 20 min en casa'],
+  reviewer: ['Revisa mi rutina actual', '¿Estoy entrenando poco el tren inferior?'],
+  sleep: ['Analiza mi sueño de esta semana', '¿Cómo voy de recuperación hoy?'],
+  progress: ['Resumen de mi progreso del mes', 'Compara mi tonelaje semanal'],
+};
+
+const MODULE_TAGLINE: Record<PulsoModule['id'], string> = {
+  builder: 'Crea y guarda rutinas por ti',
+  reviewer: 'Audita y mejora tu plan actual',
+  sleep: 'Interpreta sueño, VFC y recuperación',
+  progress: 'Tendencias de fuerza y composición',
+};
+
+function inferPulsoModule(msgs: { role: 'user' | 'assistant'; text: string }[]): PulsoModule {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const text = (msgs[i].text || '').toLowerCase();
+    if (!text) continue;
+    if (/(sueñ|dormir|descans|recuperaci)/.test(text)) return PULSO_MODULES.sleep;
+    if (/(progres|tonelaje|volumen|grasa|peso corporal)/.test(text)) return PULSO_MODULES.progress;
+    if (/(revis|analiza|evalu|opini).*rutina|rutina.*(revis|analiza)/.test(text)) return PULSO_MODULES.reviewer;
+    if (/(crear|nueva|diseñ|arma|genera).*rutina|rutina.*(crear|nueva)/.test(text)) return PULSO_MODULES.builder;
+  }
+  return PULSO_MODULES.builder;
+}
+
+function ModuleSelector({
+  active,
+  pinned,
+  onPick,
+}: {
+  active: PulsoModule;
+  pinned: boolean;
+  onPick: (id: PulsoModule['id'] | null) => void;
+}) {
+  return (
+    <div className="flex gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <button
+        onClick={() => onPick(null)}
+        className={
+          'shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ' +
+          (pinned
+            ? 'bg-surface-2 text-muted-foreground ring-1 ring-border'
+            : 'bg-ai-gradient text-white shadow-soft')
+        }
+      >
+        Auto
+      </button>
+      {MODULE_ORDER.map((id) => {
+        const { label, Icon } = PULSO_MODULES[id];
+        const isActive = active.id === id;
+        return (
+          <button
+            key={id}
+            onClick={() => onPick(id)}
+            className={
+              'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition active:scale-95 ' +
+              (isActive
+                ? 'bg-ai-gradient text-white shadow-soft'
+                : 'bg-surface-2 text-foreground/70 ring-1 ring-border')
+            }
+          >
+            <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AssistantBubble({ text }: { text: string }) {
+  const trimmed = text.trim();
+  const [confirmState, setConfirmState] = useState<'pending' | 'confirmed' | 'cancelled'>('pending');
+
+  if (trimmed.startsWith('::action::')) {
+    const body = trimmed.replace(/^::action::\s*/, '');
+    return (
+      <div className="max-w-[88%] rounded-[20px] rounded-bl-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 shadow-soft">
+        <div className="flex items-start gap-2">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+              Acción realizada
+            </p>
+            <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+              {body}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (trimmed.startsWith('::confirm::')) {
+    const body = trimmed.replace(/^::confirm::\s*/, '');
+    return (
+      <div className="max-w-[88%] rounded-[20px] rounded-bl-md border border-amber-500/40 bg-warn-soft px-4 py-3 shadow-soft">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+              Confirmación pendiente
+            </p>
+            <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+              {body}
+            </p>
+            {confirmState === 'pending' ? (
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmState('confirmed')}
+                  className="bg-ai-gradient inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold text-white shadow-soft transition-opacity hover:opacity-95"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmState('cancelled')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-4 py-1.5 text-[13px] font-semibold text-foreground/80 ring-1 ring-border transition-colors hover:bg-surface-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2 text-[12px] font-medium text-muted-foreground">
+                {confirmState === 'confirmed' ? 'Confirmado' : 'Cancelado'}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[88%] whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+      {text}
+    </div>
+  );
+}
 
 export function ChatScreen() {
   const { goBack } = useNav();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ id: number; role: 'user' | 'assistant'; text: string }[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [pinnedModule, setPinnedModule] = useState<PulsoModule['id'] | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const activeModule = pinnedModule ? PULSO_MODULES[pinnedModule] : inferPulsoModule(messages);
 
   useEffect(() => {
     taRef.current?.focus();
@@ -74,7 +230,7 @@ export function ChatScreen() {
   return (
     <div className="min-h-screen w-full bg-surface-2">
       <div className="relative mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-background">
-        <header className="sticky top-0 z-20 glass">
+        <header className="sticky top-0 z-20 glass border-b border-border/60">
           <div className="flex items-center gap-3 px-4 pb-3 pt-5">
             <button
               onClick={goBack}
@@ -83,39 +239,81 @@ export function ChatScreen() {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-ai-gradient text-white">
-                <Sparkles className="h-4 w-4" />
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <div className="relative grid h-10 w-10 place-items-center rounded-2xl bg-ai-gradient text-white shadow-soft">
+                <span aria-hidden className="absolute inset-0 rounded-2xl bg-white/20 animate-ai-pulse" />
+                <Sparkles className="relative h-5 w-5" />
+                <span className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold leading-tight">AI Coach</p>
+                <p className="truncate text-[16px] font-bold leading-tight tracking-tight">Pulso</p>
                 <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  En línea · contexto de tus datos
+                  <activeModule.Icon className="h-3 w-3" />
+                  {MODULE_TAGLINE[activeModule.id]}
                 </p>
               </div>
             </div>
           </div>
+          <ModuleSelector
+            active={activeModule}
+            pinned={pinnedModule !== null}
+            onPick={(id) => setPinnedModule(id)}
+          />
         </header>
 
-        <main className="flex-1 px-4 pb-40 pt-4">
+        <main className="flex-1 px-4 pb-44 pt-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center pt-10 text-center">
-              <div className="bg-ai-gradient mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-soft">
-                <Sparkles className="h-7 w-7 text-white" />
-              </div>
-              <h1 className="text-[22px] font-semibold tracking-tight">¿En qué te ayudo hoy?</h1>
-              <p className="mt-1 max-w-[300px] text-sm text-muted-foreground">
-                Tu coach personal con acceso a tus métricas, entrenamientos y nutrición.
+            <div className="pt-4">
+              <section className="bg-ai-gradient relative overflow-hidden rounded-[28px] p-5 text-white shadow-card">
+                <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/20 blur-2xl" />
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">
+                  Pulso · AI Coach
+                </p>
+                <h1 className="mt-1 text-[24px] font-bold leading-tight tracking-tight">
+                  ¿En qué te ayudo hoy?
+                </h1>
+                <p className="mt-2 text-[13px] leading-snug text-white/85">
+                  Leo tus entrenamientos, sueño y nutrición — y puedo crear o editar tus rutinas por ti.
+                </p>
+              </section>
+
+              <p className="mt-5 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Módulos
               </p>
-              <div className="mt-6 grid w-full grid-cols-1 gap-2">
-                {SUGGESTIONS.map((s) => (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {MODULE_ORDER.map((id) => {
+                  const { label, Icon } = PULSO_MODULES[id];
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setPinnedModule(id)}
+                      className={
+                        'rounded-2xl p-3 text-left shadow-soft transition active:scale-[0.98] ' +
+                        (activeModule.id === id ? 'bg-ai-soft ring-1 ring-border' : 'bg-surface-2 ring-1 ring-border')
+                      }
+                    >
+                      <span className="grid h-8 w-8 place-items-center rounded-xl bg-ai-gradient text-white">
+                        <Icon className="h-4 w-4" strokeWidth={2.25} />
+                      </span>
+                      <p className="mt-2 text-[13px] font-semibold leading-tight">{label}</p>
+                      <p className="text-[11px] leading-snug text-muted-foreground">{MODULE_TAGLINE[id]}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-5 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Sugerencias
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-2">
+                {MODULE_PROMPTS[activeModule.id].map((s) => (
                   <button
                     key={s}
                     onClick={() => submit(s)}
-                    className="rounded-2xl bg-surface-2 px-4 py-3 text-left text-sm text-foreground/90 ring-1 ring-border transition-colors hover:bg-surface-1"
+                    className="flex items-center justify-between gap-2 rounded-2xl bg-card px-4 py-3 text-left text-[14px] text-foreground/90 shadow-soft transition active:scale-[0.99]"
                   >
                     {s}
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
                 ))}
               </div>
@@ -123,23 +321,31 @@ export function ChatScreen() {
           ) : (
             <div className="space-y-4">
               {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={
-                      m.role === 'user'
-                        ? 'rounded-[22px] rounded-br-md bg-primary px-4 py-2.5 text-[15px] leading-relaxed text-primary-foreground shadow-soft max-w-[82%]'
-                        : 'max-w-[88%] whitespace-pre-wrap text-[15px] leading-relaxed text-foreground'
-                    }
-                  >
-                    {m.text}
-                  </div>
+                <div key={m.id} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {m.role === 'user' ? (
+                    <div className="max-w-[82%] rounded-[22px] rounded-br-md bg-primary px-4 py-2.5 text-[15px] leading-relaxed text-primary-foreground shadow-soft">
+                      {m.text}
+                    </div>
+                  ) : (
+                    <>
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ai-gradient text-white">
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </span>
+                      <AssistantBubble text={m.text} />
+                    </>
+                  )}
                 </div>
               ))}
               {isTyping && (
-                <div className="flex items-center gap-1.5 px-1 text-muted-foreground">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.2s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.1s]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" />
+                <div className="flex items-center gap-2">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ai-gradient text-white">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-2 ring-1 ring-border">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.2s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.1s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60" />
+                  </div>
                 </div>
               )}
             </div>
@@ -166,7 +372,7 @@ export function ChatScreen() {
                     submit(input);
                   }
                 }}
-                placeholder="Pregunta a tu AI Coach…"
+                placeholder={`Pregunta a Pulso · ${activeModule.label}…`}
                 rows={1}
                 className="max-h-32 flex-1 resize-none bg-transparent py-2 pl-2 text-[15px] leading-snug outline-none placeholder:text-muted-foreground"
               />

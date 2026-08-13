@@ -25,6 +25,12 @@ export class AiExerciseDto {
   @IsOptional()
   descanso_segundos?: number;
 
+  // Carga sugerida por la IA. Opcional: solo viene cuando hay base real para estimarla
+  // (nivel del usuario, cargas que ya mueve); se omite en ejercicios de peso corporal.
+  @IsNumber()
+  @IsOptional()
+  peso_sugerido_kg?: number;
+
   @IsString()
   @IsOptional()
   notas?: string;

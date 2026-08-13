@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../../../core/providers/routine_provider.dart';
+import '../../../../core/theme/design_tokens.dart';
 import '../../models/routine.dart';
 import 'routine_builder_page.dart';
 import 'workout_session_page.dart';
@@ -16,31 +17,31 @@ class RoutinesHomePage extends StatefulWidget {
 }
 
 class _RoutinesHomePageState extends State<RoutinesHomePage> {
-  static final List<_ActivityItem> _activities = [
+  static const List<_ActivityItem> _activities = [
     _ActivityItem(
       label: 'Gimnasio',
-      icon: PhosphorIcons.barbell(),
-      color: Color(0xFF059669),
+      icon: LucideIcons.dumbbell,
+      color: DesignTokens.activityGym,
     ),
     _ActivityItem(
       label: 'Cardio',
-      icon: PhosphorIcons.personSimpleRun(),
-      color: Color(0xFF2563EB),
+      icon: LucideIcons.activity,
+      color: DesignTokens.activityCardio,
     ),
     _ActivityItem(
       label: 'Calistenia',
-      icon: PhosphorIcons.personSimple(),
-      color: Color(0xFFD97706),
+      icon: LucideIcons.user,
+      color: DesignTokens.activityCalistenia,
     ),
     _ActivityItem(
       label: 'Yoga / Pilates',
-      icon: PhosphorIcons.moon(),
-      color: Color(0xFF7C3AED),
+      icon: LucideIcons.moon,
+      color: DesignTokens.activityYoga,
     ),
     _ActivityItem(
       label: 'Deportes',
-      icon: PhosphorIcons.soccerBall(),
-      color: Color(0xFFEC4899),
+      icon: LucideIcons.trophy,
+      color: DesignTokens.activityDeportes,
     ),
   ];
 
@@ -54,10 +55,13 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
 
   Future<void> _confirmDelete(Routine routine) async {
     final provider = context.read<RoutineProvider>();
+    final b = Theme.of(context).brightness;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radius3xl),
+        ),
         title: const Text('Eliminar rutina'),
         content: Text('¿Seguro que quieres eliminar "${routine.name}"?'),
         actions: [
@@ -68,7 +72,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: DesignTokens.destructive(b),
               foregroundColor: Colors.white,
             ),
             child: const Text('Eliminar'),
@@ -109,124 +113,105 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
     );
   }
 
-  Color _activityColor(String type) {
-    switch (type) {
-      case 'gym':
-        return const Color(0xFF059669);
-      case 'cardio':
-        return const Color(0xFF2563EB);
-      case 'calistenia':
-        return const Color(0xFFD97706);
-      case 'yoga':
-        return const Color(0xFF7C3AED);
-      case 'deportes':
-        return const Color(0xFFEC4899);
-      default:
-        return const Color(0xFF059669);
-    }
-  }
-
   IconData _activityIcon(String type) {
     switch (type) {
-      case 'gym':
-        return PhosphorIcons.barbell();
       case 'cardio':
-        return PhosphorIcons.personSimpleRun();
+        return LucideIcons.activity;
       case 'calistenia':
-        return PhosphorIcons.personSimple();
+        return LucideIcons.user;
       case 'yoga':
-        return PhosphorIcons.moon();
+        return LucideIcons.moon;
       case 'deportes':
-        return PhosphorIcons.soccerBall();
+        return LucideIcons.trophy;
+      case 'gym':
       default:
-        return PhosphorIcons.barbell();
+        return LucideIcons.dumbbell;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: DesignTokens.background(b),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => context.read<RoutineProvider>().loadRoutines(),
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHero(context),
-                  _buildActivitiesPreview(context),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Tus rutinas guardadas',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHero(context),
+                    _buildActivitiesPreview(context),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Tus rutinas guardadas',
+                              style: DesignTokens.titleFont(
+                                fontSize: 20,
+                                color: DesignTokens.foreground(b),
+                              ),
+                            ),
                           ),
-                        ),
-                        Selector<RoutineProvider, bool>(
-                          selector: (_, p) => p.routines.isNotEmpty,
-                          builder: (_, hasRoutines, _) {
-                            if (!hasRoutines) return const SizedBox.shrink();
-                            return TextButton.icon(
-                              onPressed: () => _openBuilder(context),
-                              icon: Icon(PhosphorIcons.plus(), size: 18),
-                              label: const Text('Nueva'),
-                            );
-                          },
-                        ),
-                      ],
+                          Selector<RoutineProvider, bool>(
+                            selector: (_, p) => p.routines.isNotEmpty,
+                            builder: (_, hasRoutines, _) {
+                              if (!hasRoutines) return const SizedBox.shrink();
+                              return TextButton.icon(
+                                onPressed: () => _openBuilder(context),
+                                icon: const Icon(LucideIcons.plus, size: 18),
+                                label: const Text('Nueva'),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            _buildRoutinesGrid(context),
-            const SliverToBoxAdapter(child: SizedBox(height: 40)),
-          ],
-        ),
+              _buildRoutinesGrid(context),
+              const SliverToBoxAdapter(child: SizedBox(height: 40)),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildHero(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Container(
       width: double.infinity,
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: DesignTokens.background(b),
       padding: const EdgeInsets.fromLTRB(20, 48, 20, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'CONSTRUCTOR DE RUTINAS',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6B7280),
-                ),
+            style: DesignTokens.labelSmall(
+              color: DesignTokens.mutedForeground(b),
+            ),
           ),
           const SizedBox(height: 10),
           RichText(
             text: TextSpan(
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0B1220),
-                    height: 1.15,
-                  ),
+              style: DesignTokens.titleFont(
+                fontSize: 30,
+                color: DesignTokens.foreground(b),
+                height: 1.15,
+              ),
               children: const [
                 TextSpan(text: 'Diseña tu semana de '),
                 TextSpan(
                   text: 'entrenamiento',
-                  style: TextStyle(color: Color(0xFF059669)),
+                  style: TextStyle(color: DesignTokens.activityGym),
                 ),
               ],
             ),
@@ -234,27 +219,28 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
           const SizedBox(height: 10),
           Text(
             'Crea rutinas personalizadas, organiza tus días de entrenamiento y lleva tu progreso al siguiente nivel.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
-                ),
+            style: DesignTokens.bodyFont(
+              color: DesignTokens.mutedForeground(b),
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _openBuilder(context),
-              icon: Icon(PhosphorIcons.plus()),
+              icon: const Icon(LucideIcons.plus),
               label: const Text('Empezar ahora'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
+                backgroundColor: DesignTokens.activityGym,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
                 ),
-                textStyle: const TextStyle(
+                textStyle: DesignTokens.bodyFont(
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  weight: FontWeight.w700,
                 ),
               ),
             ),
@@ -265,18 +251,20 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   }
 
   Widget _buildActivitiesPreview(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Container(
       width: double.infinity,
-      color: Theme.of(context).brightness == Brightness.light ? const Color(0xFFF8F9FB) : Theme.of(context).scaffoldBackgroundColor,
+      color: DesignTokens.surface1(b),
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Actividades disponibles',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: DesignTokens.titleFont(
+              fontSize: 20,
+              color: DesignTokens.foreground(b),
+            ),
           ),
           const SizedBox(height: 14),
           GridView.count(
@@ -289,9 +277,9 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
             children: _activities.map((activity) {
               return Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Theme.of(context).dividerColor),
+                  color: DesignTokens.card(b),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+                  border: Border.all(color: DesignTokens.border(b)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
@@ -300,7 +288,8 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: activity.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(DesignTokens.radiusLg),
                       ),
                       child: Icon(
                         activity.icon,
@@ -312,9 +301,10 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                     Expanded(
                       child: Text(
                         activity.label,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: DesignTokens.bodyFont(
+                          weight: FontWeight.w600,
+                          color: DesignTokens.foreground(b),
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -329,6 +319,7 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
   }
 
   Widget _buildRoutinesGrid(BuildContext context) {
+    final b = Theme.of(context).brightness;
     return Selector<RoutineProvider, (bool, List<Routine>)>(
       selector: (_, provider) => (provider.isLoading, provider.routines),
       builder: (_, state, _) {
@@ -340,8 +331,8 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                (context, index) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
                   child: _SkeletonCard(),
                 ),
                 childCount: 3,
@@ -357,30 +348,31 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
               child: Column(
                 children: [
                   Icon(
-                    PhosphorIcons.barbell(),
+                    LucideIcons.dumbbell,
                     size: 56,
-                    color: const Color(0xFFD1D5DB),
+                    color: DesignTokens.mutedForeground(b).withOpacity(0.5),
                   ),
                   const SizedBox(height: 14),
                   Text(
                     'Aún no tienes rutinas',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF6B7280),
-                        ),
+                    style: DesignTokens.titleFont(
+                      fontSize: 16,
+                      color: DesignTokens.mutedForeground(b),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Crea tu primera rutina y empieza a organizar tu entrenamiento.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF9CA3AF),
-                        ),
+                    style: DesignTokens.bodyFont(
+                      fontSize: 13,
+                      color: DesignTokens.mutedForeground(b),
+                    ),
                   ),
                   const SizedBox(height: 18),
                   ElevatedButton.icon(
                     onPressed: () => _openBuilder(context),
-                    icon: Icon(PhosphorIcons.plus()),
+                    icon: const Icon(LucideIcons.plus),
                     label: const Text('Crear primera rutina'),
                   ),
                 ],
@@ -395,14 +387,16 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final routine = routines[index];
-                final color = _activityColor(routine.activityType);
+                final color = DesignTokens.activity(routine.activityType);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Theme.of(context).dividerColor),
+                      color: DesignTokens.card(b),
+                      borderRadius:
+                          BorderRadius.circular(DesignTokens.radius2xl),
+                      border: Border.all(color: DesignTokens.border(b)),
+                      boxShadow: DesignTokens.shadowSoft(b),
                     ),
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -415,7 +409,8 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
                                 color: color.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(
+                                    DesignTokens.radiusMd),
                               ),
                               child: Icon(
                                 _activityIcon(routine.activityType),
@@ -427,22 +422,20 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                             Expanded(
                               child: Text(
                                 routine.activityLabel,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: color,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                style: DesignTokens.bodyFont(
+                                  fontSize: 13,
+                                  color: color,
+                                  weight: FontWeight.w700,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             GestureDetector(
                               onTap: () => _confirmDelete(routine),
                               child: Icon(
-                                PhosphorIcons.trash(),
+                                LucideIcons.trash2,
                                 size: 18,
-                                color: const Color(0xFF9CA3AF),
+                                color: DesignTokens.mutedForeground(b),
                               ),
                             ),
                           ],
@@ -450,10 +443,10 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                         const SizedBox(height: 10),
                         Text(
                           routine.name,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: DesignTokens.titleFont(
+                            fontSize: 16,
+                            color: DesignTokens.foreground(b),
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -463,10 +456,10 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               routine.description!,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: const Color(0xFF9CA3AF)),
+                              style: DesignTokens.bodyFont(
+                                fontSize: 13,
+                                color: DesignTokens.mutedForeground(b),
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -477,11 +470,11 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                           runSpacing: 8,
                           children: [
                             _MetaChip(
-                              icon: PhosphorIcons.calendar(),
+                              icon: LucideIcons.calendar,
                               label: '${routine.days.length} días',
                             ),
                             _MetaChip(
-                              icon: PhosphorIcons.listBullets(),
+                              icon: LucideIcons.list,
                               label: '${routine.totalExercises} ejercicios',
                             ),
                           ],
@@ -494,12 +487,15 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                                 onPressed: () =>
                                     _openBuilder(context, routine: routine),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(
+                                        DesignTokens.radiusLg),
                                   ),
-                                  side: BorderSide(color: Theme.of(context).dividerColor),
-                                  foregroundColor: Theme.of(context).textTheme.bodyMedium?.color,
+                                  side: BorderSide(
+                                      color: DesignTokens.border(b)),
+                                  foregroundColor: DesignTokens.foreground(b),
                                 ),
                                 child: const Text('Editar'),
                               ),
@@ -508,18 +504,20 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                             Expanded(
                               child: FilledButton.icon(
                                 onPressed: () => _openSession(context, routine),
-                                icon: Icon(PhosphorIcons.play(), size: 16),
+                                icon: const Icon(LucideIcons.play, size: 16),
                                 label: const Text('Iniciar'),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF059669),
+                                  backgroundColor: DesignTokens.activityGym,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(
+                                        DesignTokens.radiusLg),
                                   ),
-                                  textStyle: const TextStyle(
+                                  textStyle: DesignTokens.bodyFont(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                                    weight: FontWeight.w700,
                                   ),
                                 ),
                               ),
@@ -541,15 +539,21 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
 }
 
 class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    // El shimmer necesita un bloque sólido debajo: los hijos se pintan con
+    // `card` y el degradado del shimmer va de `muted` a `surface2`.
+    final block = DesignTokens.card(b);
     return Shimmer.fromColors(
-      baseColor: const Color(0xFFF3F4F6),
-      highlightColor: const Color(0xFFE5E7EB),
+      baseColor: DesignTokens.muted(b),
+      highlightColor: DesignTokens.surface2of(b),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: block,
+          borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
         ),
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -560,26 +564,28 @@ class _SkeletonCard extends StatelessWidget {
                 Container(
                   width: 32,
                   height: 32,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                  decoration: BoxDecoration(
+                    color: block,
+                    borderRadius:
+                        BorderRadius.circular(DesignTokens.radiusMd),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   width: 80,
                   height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                  decoration: BoxDecoration(
+                    color: block,
+                    borderRadius:
+                        BorderRadius.circular(DesignTokens.radiusSm),
                   ),
                 ),
                 const Spacer(),
                 Container(
                   width: 18,
                   height: 18,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: block,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -589,9 +595,9 @@ class _SkeletonCard extends StatelessWidget {
             Container(
               width: 160,
               height: 16,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.all(Radius.circular(6)),
+              decoration: BoxDecoration(
+                color: block,
+                borderRadius: BorderRadius.circular(DesignTokens.radiusSm),
               ),
             ),
             const Spacer(),
@@ -600,18 +606,20 @@ class _SkeletonCard extends StatelessWidget {
                 Container(
                   width: 60,
                   height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                  decoration: BoxDecoration(
+                    color: block,
+                    borderRadius:
+                        BorderRadius.circular(DesignTokens.radiusSm),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Container(
                   width: 80,
                   height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                  decoration: BoxDecoration(
+                    color: block,
+                    borderRadius:
+                        BorderRadius.circular(DesignTokens.radiusSm),
                   ),
                 ),
               ],
@@ -643,17 +651,20 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final muted = DesignTokens.mutedForeground(b);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
+        Icon(icon, size: 13, color: muted),
         const SizedBox(width: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6B7280),
-                fontWeight: FontWeight.w600,
-              ),
+          style: DesignTokens.bodyFont(
+            fontSize: 13,
+            color: muted,
+            weight: FontWeight.w600,
+          ),
         ),
       ],
     );

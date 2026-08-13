@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/health_service.dart';
 
 /// Pantalla de gestión de wearables — réplica de `devices.tsx`.
@@ -225,7 +226,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
       child: Row(
         children: [
-          _RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
+          RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
           const SizedBox(width: 12),
           Text(title.toUpperCase(), style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
         ],
@@ -580,25 +581,4 @@ class OtherDevice {
   final String sub;
   final String status;
   final bool muted;
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, this.onTap});
-  final IconData icon;
-  final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: DesignTokens.surface1(b), shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: DesignTokens.foreground(b)),
-      ),
-    );
-  }
 }

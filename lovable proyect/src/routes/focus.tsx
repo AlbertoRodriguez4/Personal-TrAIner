@@ -428,7 +428,11 @@ function AIRestCard({
         </div>
 
         {/* AI Voice FAB */}
-        <button className="group relative grid h-14 w-14 place-items-center rounded-full transition active:scale-95">
+        <button
+          className="group relative grid h-14 w-14 place-items-center rounded-full transition active:scale-95"
+          aria-pressed={isResting}
+          onClick={() => setIsResting(!isResting)}
+        >
           {/* Animated gradient background */}
           <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-violet-600 via-indigo-500 to-cyan-500 opacity-100 transition group-active:opacity-80" />
           {/* Glow ring */}

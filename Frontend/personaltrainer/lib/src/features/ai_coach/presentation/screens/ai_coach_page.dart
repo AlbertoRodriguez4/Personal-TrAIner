@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:health/health.dart';
@@ -607,6 +608,17 @@ class _ChatMessage {
   final DateTime createdAt;
 }
 
+/// Etiqueta del chip por tool que la IA ejecutó. Solo las que escriben algo:
+/// las de lectura se filtran antes de llegar acá.
+const Map<String, String> _actionLabels = {
+  'crear_rutina_personalizada': '✅ Rutina guardada',
+  'aplicar_cambios_rutina': '✅ Rutina actualizada',
+  'registrar_comida': '✅ Comida registrada',
+  'guardar_analisis_recuperacion': '✅ Recuperación guardada',
+  'registrar_sesion_entrenamiento': '✅ Entrenamiento guardado',
+  'guardar_analisis_fisico': '✅ Análisis físico guardado',
+};
+
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({
     required this.message,
@@ -652,12 +664,14 @@ class _ChatBubble extends StatelessWidget {
                           ? Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF06B6D4), // Primary color
+                                color: DesignTokens.aiVia,
+                                // Esquina inferior "cuadrada" del lado del emisor: es la
+                                // cola de burbuja del chat de referencia (chat.tsx).
                                 borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(22),
-                                  topRight: Radius.circular(22),
-                                  bottomLeft: Radius.circular(22),
-                                  bottomRight: Radius.circular(6),
+                                  topLeft: Radius.circular(DesignTokens.radius3xl),
+                                  topRight: Radius.circular(DesignTokens.radius3xl),
+                                  bottomLeft: Radius.circular(DesignTokens.radius3xl),
+                                  bottomRight: Radius.circular(DesignTokens.radiusSm),
                                 ),
                                 boxShadow: DesignTokens.shadowSoft(b),
                               ),
@@ -668,9 +682,15 @@ class _ChatBubble extends StatelessWidget {
                             )
                           : text.startsWith('CAL:')
                               ? _AiMetricsCard(raw: text)
-                              : Text(
+                              // La IA responde en Markdown (ver BASE_GUIDELINES en
+                              // chat_tools.py); sin renderer se verían los ** y - literales.
+                              : GptMarkdown(
                                   text,
-                                  style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b), height: 1.5),
+                                  style: DesignTokens.bodyFont(
+                                    fontSize: 15,
+                                    color: DesignTokens.foreground(b),
+                                    height: 1.5,
+                                  ),
                                 ),
                     ),
                   if (message.actionsTaken.isNotEmpty && !isUser)
@@ -680,17 +700,26 @@ class _ChatBubble extends StatelessWidget {
                         spacing: 8,
                         children: message.actionsTaken.map((action) {
                           final tool = action['tool'] as String? ?? '';
-                          String label = '✅ Acción realizada';
-                          if (tool == 'crear_rutina_personalizada') label = '✅ Rutina guardada';
-                          else if (tool == 'registrar_comida') label = '✅ Comida registrada';
-                          else if (tool == 'guardar_analisis_recuperacion') label = '✅ Recuperación guardada';
-                          else if (tool == 'registrar_sesion_entrenamiento') label = '✅ Entrenamiento guardado';
-                          else if (tool == 'aplicar_cambios_rutina') label = '✅ Rutina actualizada';
-                          else if (tool == 'buscar_ejercicios_catalogo') return const SizedBox.shrink();
-                          
+                          // Las tools de solo lectura no merecen chip: no cambiaron nada.
+                          if (tool == 'buscar_ejercicios_catalogo' ||
+                              tool == 'obtener_rutina_activa' ||
+                              tool == 'obtener_resumen_diario' ||
+                              tool == 'obtener_historial_recuperacion') {
+                            return const SizedBox.shrink();
+                          }
+                          final label = _actionLabels[tool] ?? '✅ Acción realizada';
+                          final success = DesignTokens.success(b);
+
                           return Chip(
-                            label: Text(label, style: const TextStyle(fontSize: 12, color: Colors.green)),
-                            backgroundColor: Colors.green.withOpacity(0.1),
+                            label: Text(
+                              label,
+                              style: DesignTokens.bodyFont(
+                                fontSize: 12,
+                                color: success,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            backgroundColor: success.withOpacity(0.12),
                             side: BorderSide.none,
                           );
                         }).toList(),

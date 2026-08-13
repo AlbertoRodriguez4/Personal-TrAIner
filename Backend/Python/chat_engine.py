@@ -3,10 +3,19 @@ import os
 from google import genai
 from google.genai import types
 
-from chat_tools import TOOLS_BY_MODE, EXECUTORS, SYSTEM_PROMPTS
+from chat_tools import TOOLS_BY_MODE, EXECUTORS, SYSTEM_PROMPTS, BASE_GUIDELINES
 
 MODEL = "gemini-3.5-flash"  # mismo modelo que ya usa regenerate_design_context.py
 MAX_TOOL_ITERATIONS = 5     # guarda contra loops infinitos de function calling
+
+# Grounding con Google Search, apagado por defecto.
+# Verificado contra la API real: la búsqueda tiene su propia cuota, aparte de la de
+# generate_content, y con la key actual devuelve 429 RESOURCE_EXHAUSTED tanto sola como
+# combinada con function_declarations (las llamadas normales y las de function calling
+# sí funcionan). No es una incompatibilidad técnica entre grounding y tools: es cuota de
+# facturación. Cuando la cuenta tenga búsqueda habilitada, poner
+# GEMINI_ENABLE_SEARCH_GROUNDING=1 en el .env y esto se activa sin tocar código.
+ENABLE_SEARCH_GROUNDING = os.environ.get("GEMINI_ENABLE_SEARCH_GROUNDING", "").lower() in ("1", "true", "yes")
 
 _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
@@ -26,8 +35,13 @@ def run_chat(
     if mode not in TOOLS_BY_MODE:
         raise ValueError(f"Modo desconocido: {mode}")
 
-    tool = types.Tool(function_declarations=TOOLS_BY_MODE[mode])
-    system_instruction = SYSTEM_PROMPTS[mode]
+    tools = [types.Tool(function_declarations=TOOLS_BY_MODE[mode])]
+    if ENABLE_SEARCH_GROUNDING:
+        tools.append(types.Tool(google_search=types.GoogleSearch()))
+
+    # Las reglas de formato y rigor son las mismas para los 6 modos; el prompt del modo
+    # solo aporta lo suyo encima.
+    system_instruction = f"{SYSTEM_PROMPTS[mode]}\n\n{BASE_GUIDELINES}"
 
     contents = [
         types.Content(role=turn["role"], parts=[types.Part.from_text(text=turn["text"])])
@@ -52,7 +66,7 @@ def run_chat(
 
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
-        tools=[tool],
+        tools=tools,
     )
 
     actions_taken = []
