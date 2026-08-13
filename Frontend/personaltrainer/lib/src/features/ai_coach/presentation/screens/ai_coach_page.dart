@@ -63,8 +63,8 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
       if (summary != null) {
         print("  - Horas de sueño: ${summary.sleepMinutes / 60.0}");
         print("  - FC Reposo (Noche): ${summary.avgNightHr}");
-        print("  - HRV Status: ${summary.hrvStatus}");
-        print("  - Readiness Score: ${summary.readinessScore}");
+        print("  - Nivel de recuperación: ${summary.level}");
+        print("  - Kcal activas (ayer): ${summary.activeKcalYesterday}");
       } else {
         print("  - No se obtuvieron datos de sueño/readiness.");
       }
@@ -107,6 +107,47 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
         SnackBar(content: Text('Error al capturar imagen: $e')),
       );
     }
+  }
+
+  Future<void> _pickPhotos() async {
+    if (_attachedPhotos.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Máximo 4 fotos por mensaje.')),
+      );
+      return;
+    }
+    final b = Theme.of(context).brightness;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: DesignTokens.surface2of(b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Icon(Icons.camera_alt_outlined, color: DesignTokens.foreground(b)),
+                title: Text('Tomar foto', style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b))),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.image_outlined, color: DesignTokens.foreground(b)),
+                title: Text('Elegir de galería', style: DesignTokens.bodyFont(fontSize: 15, color: DesignTokens.foreground(b))),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   String _mimeFromPath(String path) {
@@ -211,18 +252,6 @@ class _AiCoachPageState extends State<AiCoachPage> with TickerProviderStateMixin
     }
 
     _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   @override
