@@ -328,26 +328,26 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
           Text('ZONAS DE ENTRENAMIENTO', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(999),
             child: SizedBox(
               height: 12,
               child: Row(
                 children: [
-                  if (p1 > 0) Expanded(flex: (p1 * 100).toInt(), child: Container(color: const Color(0xFF378ADD))),
-                  if (p2 > 0) Expanded(flex: (p2 * 100).toInt(), child: Container(color: const Color(0xFF639922))),
-                  if (p3 > 0) Expanded(flex: (p3 * 100).toInt(), child: Container(color: const Color(0xFFBA7517))),
-                  if (p4 > 0) Expanded(flex: (p4 * 100).toInt(), child: Container(color: const Color(0xFFD85A30))),
-                  if (p5 > 0) Expanded(flex: (p5 * 100).toInt(), child: Container(color: const Color(0xFFA32D2D))),
+                  if (p1 > 0) Expanded(flex: (p1 * 100).toInt(), child: Container(color: DesignTokens.effortLow)),
+                  if (p2 > 0) Expanded(flex: (p2 * 100).toInt(), child: Container(color: DesignTokens.effortModerate)),
+                  if (p3 > 0) Expanded(flex: (p3 * 100).toInt(), child: Container(color: DesignTokens.effortHigh)),
+                  if (p4 > 0) Expanded(flex: (p4 * 100).toInt(), child: Container(color: DesignTokens.effortVeryHigh)),
+                  if (p5 > 0) Expanded(flex: (p5 * 100).toInt(), child: Container(color: DesignTokens.effortMax)),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 20),
-          _buildZoneLegendRow('Calentamiento', p1, 'Quema grasa', p2, const Color(0xFF378ADD), const Color(0xFF639922), fg),
+          _buildZoneLegendRow('Calentamiento', p1, 'Quema grasa', p2, DesignTokens.effortLow, DesignTokens.effortModerate, fg),
           const SizedBox(height: 8),
-          _buildZoneLegendRow('Cardio', p3, 'Anaeróbico', p4, const Color(0xFFBA7517), const Color(0xFFD85A30), fg),
+          _buildZoneLegendRow('Cardio', p3, 'Anaeróbico', p4, DesignTokens.effortHigh, DesignTokens.effortVeryHigh, fg),
           const SizedBox(height: 8),
-          _buildZoneLegendRow('Pico', p5, '', 0, const Color(0xFFA32D2D), Colors.transparent, fg),
+          _buildZoneLegendRow('Pico', p5, '', 0, DesignTokens.effortMax, Colors.transparent, fg),
         ],
       ),
     );
@@ -393,9 +393,14 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('INTENSIDAD', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+              Text('INTENSIDAD DEL ENTRENO', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
               const SizedBox(height: 2),
-              Text(label, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
+              // El % de FC máx. ya se calculaba para elegir la etiqueta, pero
+              // nunca se enseñaba: es el dato que explica POR QUÉ pone "Alta".
+              Text(
+                '$label · ${(pct * 100).round()}% FC máx.',
+                style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           Row(
@@ -406,7 +411,10 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                 width: 12, height: 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: active ? Color.lerp(const Color(0xFF639922), const Color(0xFFA32D2D), i / 4) : border,
+                  // Los inactivos son anillos huecos, no puntos rellenos: así
+                  // el nivel se lee de un vistazo por cuántos están "encendidos".
+                  color: active ? DesignTokens.effortRamp[i] : Colors.transparent,
+                  border: active ? null : Border.all(color: border, width: 1.5),
                 ),
               );
             }),
@@ -427,13 +435,23 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     double totalDur = 0;
     double totalKcal = 0;
     int validKcal = 0;
+    // Intensidad = kcal por minuto. Es lo único comparable entre sesiones sin
+    // relanzar una consulta de FC por cada entreno histórico, y sigue siendo un
+    // dato real derivado, no una estimación inventada.
+    double totalKcalPerMin = 0;
+    int validKcalPerMin = 0;
 
     for (var w in sameType) {
-      totalDur += w.dateTo.difference(w.dateFrom).inMinutes;
+      final mins = w.dateTo.difference(w.dateFrom).inMinutes;
+      totalDur += mins;
       final val = w.value as WorkoutHealthValue;
       if (val.totalEnergyBurned != null) {
         totalKcal += val.totalEnergyBurned!;
         validKcal++;
+        if (mins > 0) {
+          totalKcalPerMin += val.totalEnergyBurned! / mins;
+          validKcalPerMin++;
+        }
       }
     }
 
@@ -443,6 +461,18 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final durDelta = (_durationMinutes - avgDur).toDouble();
     final kcalDelta = (_workoutValue.totalEnergyBurned ?? 0).toDouble() - avgKcal;
 
+    // Delta de intensidad en %, solo si hay base y duración con la que dividir.
+    double? intensityDelta;
+    if (validKcalPerMin > 0 && _durationMinutes > 0) {
+      final avgKcalPerMin = totalKcalPerMin / validKcalPerMin;
+      final currentKcalPerMin =
+          (_workoutValue.totalEnergyBurned ?? 0).toDouble() / _durationMinutes;
+      if (avgKcalPerMin > 0 && currentKcalPerMin > 0) {
+        intensityDelta =
+            ((currentKcalPerMin - avgKcalPerMin) / avgKcalPerMin) * 100;
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: border, width: 0.5)),
       padding: const EdgeInsets.all(16),
@@ -451,9 +481,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         children: [
           Text('COMPARATIVA PERSONAL', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
-          _buildCompRow(LucideIcons.clock, 'Duración', durDelta, 'min', fg, muted),
+          _buildCompRow(LucideIcons.clock, 'Duración', durDelta, 'min', fg, muted, border),
           const SizedBox(height: 12),
-          _buildCompRow(LucideIcons.flame, 'Calorías', kcalDelta, 'kcal', fg, muted),
+          _buildCompRow(LucideIcons.flame, 'Calorías', kcalDelta, 'kcal', fg, muted, border),
+          if (intensityDelta != null) ...[
+            const SizedBox(height: 12),
+            _buildCompRow(LucideIcons.activity, 'Intensidad', intensityDelta, '%', fg, muted, border),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
@@ -467,21 +501,41 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     );
   }
 
-  Widget _buildCompRow(IconData icon, String label, double delta, String unit, Color fg, Color muted) {
+  Widget _buildCompRow(IconData icon, String label, double delta, String unit, Color fg, Color muted, Color border) {
     final absDelta = delta.abs().round();
     final isSimilar = absDelta < 5;
     final color = isSimilar ? muted : (delta > 0 ? const Color(0xFF4ADE80) : const Color(0xFFF87171));
     final sign = delta > 0 ? '+' : '-';
-    final text = isSimilar ? 'similar a tu media' : '$sign$absDelta $unit que tu media';
+    // '%' va pegado al número; el resto de unidades separadas.
+    final amount = unit == '%' ? '$sign$absDelta$unit' : '$sign$absDelta $unit';
+    final text = isSimilar ? 'similar a tu media' : '$amount que tu media';
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border.withOpacity(0.5), width: 0.5),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: muted),
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: muted),
+          ),
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: TextStyle(color: fg, fontSize: 14, fontWeight: FontWeight.w500))),
+          if (!isSimilar) ...[
+            Icon(delta > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+                size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
           Text(text, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
         ],
       ),

@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flutter-web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "Set-Location -LiteralPath 'C:\\Users\\altf4\\Desktop\\Proyecto entrenador personal IA\\Personal TrAIner\\Frontend\\personaltrainer'; flutter run -d web-server --web-port 8765"
+      ],
+      "port": 8765
+    }
+  ]
+}

@@ -10,7 +10,7 @@ once, etc.). Those rules are load-bearing — follow them before reading anythin
 
 Personal TrAIner: a Flutter fitness/AI-coaching app (Android, targets Health Connect + a Xiaomi/Redmi
 smartwatch via Mi Fitness) backed by a NestJS API and a FastAPI service that does the AI coaching work
-via Gemini. Active branch: `healthconnect`.
+via Gemini and Groq. Active branch: `healthconnect`.
 
 There is also a `lovable proyect/` folder (React + Vite + Tailwind) — a **visual mockup only**, synced
 from Lovable, not production code. It has its own `AGENTS.md`; don't mix its patterns into the Flutter app.
@@ -70,8 +70,9 @@ client) so the AI chat can read/write real user data — this is the tool-execut
 coach. `chat_engine.py` runs the chat loop, `chat_tools.py` defines what the model can call.
 
 **NestJS modules** (`src/modules/`): `ai`, `billing`, `body_analysis`, `clinical_data`, `daily_summary`,
-`exercises_catalog`, `identity`, `nutrition`, `physical_analysis`, `recovery`, `routine`, `telemetry`,
-`training_sessions`, `user_profile`. Each follows controller/service/entities/dto. `src/infrastructure/`
+`exercises_catalog`, `identity`, `nutrition`, `physical_analysis`, `recovery`, `routine`, `supplements`,
+`telemetry`, `training_sessions`, `user_profile`. Each follows controller/service/entities/dto.
+`src/infrastructure/`
 holds cross-cutting config (Postgres data-source, an unused InfluxDB scaffold). Never read
 `Backend/Nestjs/dist/` — it's the compiled build, duplicates `src/` in JS.
 
@@ -95,8 +96,12 @@ sharp edges:
 - If workout records come back empty, check in this order: `WORKOUT_ROUTE` missing from `_types`,
   `hasPermissions` false-positive short-circuiting `requestAuthorization`, missing rationale intent-filter.
 
-**AI service:** Python service runs on Gemini 3.5 Flash via `google-genai` — no Ollama/local model
-anywhere in this service. `analyze_failure()` (`skills.py`) is a separate deterministic heuristic
+**AI service:** Two LLM providers, split strictly by mode — never mixed within a turn. Image modes
+(`nutricion`, `analisis_fisico`) always go to Gemini (`google-genai`, default model
+`gemini-3.5-flash-lite`); the other four text modes always go to Groq (`openai/gpt-oss-120b`). No
+Ollama/local model anywhere. When touching `chat_engine.py`, never default Groq to
+`llama-3.3-70b-versatile` or `qwen/qwen3-32b` — both deprecated; `openai/gpt-oss-120b` is the current
+recommended replacement. `analyze_failure()` (`skills.py`) is a separate deterministic heuristic
 (Python `statistics` module on heart-rate curves), not AI-based.
 
 ## Google Sign-In

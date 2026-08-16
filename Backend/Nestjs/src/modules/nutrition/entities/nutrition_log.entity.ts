@@ -25,4 +25,7 @@ export class NutritionLog {
 
   @Column({ type: 'text', nullable: true })
   notas?: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'otro' })
+  tipo_comida: string;
 }

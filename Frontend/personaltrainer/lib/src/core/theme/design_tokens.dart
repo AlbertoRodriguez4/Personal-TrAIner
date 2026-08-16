@@ -106,6 +106,25 @@ class DesignTokens {
   static const Color lightInfo = Color(0xFF2563EB); // blue-600
   static const Color darkInfo = Color(0xFF60A5FA); // blue-400
 
+  // ===== Rampa de esfuerzo (5 pasos) =====
+  // Un único ramp azul→verde→ámbar→naranja→rojo compartido por las zonas de FC
+  // del detalle de entreno (`workout.$id.tsx`) y las bandas de intensidad de la
+  // sesión en vivo (`session.tsx`). Estaban duplicadas y divergidas: el detalle
+  // usaba tonos apagados propios y la sesión los repetía a mano.
+  static const Color effortLow = Color(0xFF378ADD);      // calentamiento / ligero
+  static const Color effortModerate = Color(0xFF22C55E); // quema grasa / moderado
+  static const Color effortHigh = Color(0xFFF5C84B);     // cardio / intenso
+  static const Color effortVeryHigh = Color(0xFFF08A3D); // anaeróbico / cerca del fallo
+  static const Color effortMax = Color(0xFFE0473A);      // pico / fallo muscular
+
+  static const List<Color> effortRamp = [
+    effortLow,
+    effortModerate,
+    effortHigh,
+    effortVeryHigh,
+    effortMax,
+  ];
+
   // ===== Chart colors =====
   static const Color chart1 = Color(0xFFE76F51);
   static const Color chart2 = Color(0xFF2A9D8F);
@@ -129,7 +148,10 @@ class DesignTokens {
   static const Color recoveryAlertTo = Color(0xFFF4D785);
   static const Color recoveryAlertText = Color(0xFF9A3412);
   static const Color recoveryAlertIcon = Color(0xFFC2410C);
-  static const Color recoveryStageAwake = Color(0xFF3A3F4D);
+  // Gris claro deliberado: "Despierto" es el segmento que menos debe pesar
+  // visualmente en la barra de fases (ver recovery.tsx). Antes era un slate
+  // oscuro que lo convertía en el más llamativo de los cuatro.
+  static const Color recoveryStageAwake = Color(0xFFC7C7CC);
 
   static const LinearGradient recoveryHeroGradient = LinearGradient(
     begin: Alignment.topLeft,

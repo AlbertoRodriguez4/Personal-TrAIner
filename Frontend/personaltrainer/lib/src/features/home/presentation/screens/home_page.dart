@@ -1,5 +1,5 @@
-import 'dart:ui';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -15,13 +15,16 @@ import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/ai_animations.dart';
 import '../../../../core/ui/ai_gradient_text.dart';
 import '../../../../core/ui/glass_card.dart';
-import '../../../../core/ui/metric_ring.dart';
 import '../../../../services/api_service.dart';
 import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
-import '../../../routine/presentation/screens/routines_home_page.dart';
+import '../../../nutrition/presentation/widgets/hydration_card.dart';
+import '../../../nutrition/presentation/widgets/supplements_card.dart';
+import '../../../routine/models/exercise.dart';
+import '../../../routine/presentation/screens/quick_add_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
+import '../../../routine/presentation/screens/routine_view_page.dart';
+import '../../../routine/presentation/screens/workout_session_page.dart';
 import '../../../../core/route_loaders.dart';
-import '../../models/daily_summary.dart';
 import 'backend_features_page.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
 
@@ -59,7 +62,7 @@ class _HomePageState extends State<HomePage> {
           color: bg,
           child: Column(
             children: [
-              _Header(),
+              _Header(onLogout: _logout),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
@@ -88,12 +91,7 @@ class _HomePageState extends State<HomePage> {
       case 'health':
         return const _HealthScreen();
       default:
-        return _DashboardScreen(
-          routinesCount: routines.length,
-          onOpenRoutines: _openRoutines,
-          onOpenAiCoach: _openAiCoach,
-          onLogout: _logout,
-        );
+        return _DashboardScreen(onOpenAiCoach: _openAiCoach);
     }
   }
 
@@ -104,28 +102,49 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
   }
 
-  void _openRoutines(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const RoutinesHomePage()),
-      );
+  void _openAiCoach(BuildContext context) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const AiCoachPage()));
 
-  void _openAiCoach(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const AiCoachPage()),
-      );
-
-  void _openBackend(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const BackendFeaturesPage()),
-      );
+  void _openBackend(BuildContext context) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const BackendFeaturesPage()));
 }
 
 /* ============================== HEADER ============================== */
 
 class _Header extends StatelessWidget {
+  const _Header({this.onLogout});
+  final Future<void> Function(BuildContext)? onLogout;
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-    final meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    final fecha = '${dias[now.weekday - 1]} · ${now.day} ${meses[now.month - 1]}';
+    final dias = [
+      'Lunes',
+      'Martes',
+      'Miércoles',
+      'Jueves',
+      'Viernes',
+      'Sábado',
+      'Domingo',
+    ];
+    final meses = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
+    ];
+    final fecha =
+        '${dias[now.weekday - 1]} · ${now.day} ${meses[now.month - 1]}';
     final mutedFg = DesignTokens.mutedForeground(Theme.of(context).brightness);
     final fg = DesignTokens.foreground(Theme.of(context).brightness);
 
@@ -166,7 +185,10 @@ class _Header extends StatelessWidget {
                         ),
                         children: const [
                           TextSpan(text: 'Personal Tr'),
-                          TextSpan(text: 'AI', style: TextStyle(fontStyle: FontStyle.italic)),
+                          TextSpan(
+                            text: 'AI',
+                            style: TextStyle(fontStyle: FontStyle.italic),
+                          ),
                           TextSpan(text: 'ner'),
                         ],
                       ),
@@ -176,7 +198,8 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               IconButton(
-                onPressed: () => context.read<ThemeProvider>().toggleTheme(context),
+                onPressed: () =>
+                    context.read<ThemeProvider>().toggleTheme(context),
                 icon: Icon(
                   Theme.of(context).brightness == Brightness.dark
                       ? LucideIcons.sun
@@ -184,6 +207,22 @@ class _Header extends StatelessWidget {
                 ),
                 color: fg,
               ),
+              if (onLogout != null)
+                PopupMenuButton<void>(
+                  icon: Icon(LucideIcons.userCircle2, color: fg),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      onTap: () => onLogout!(context),
+                      child: const Row(
+                        children: [
+                          Icon(LucideIcons.logOut, size: 18),
+                          SizedBox(width: 10),
+                          Text('Cerrar sesión'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -370,8 +409,8 @@ class _StepsPillState extends State<_StepsPill> {
                   text: _loading
                       ? '--'
                       : (_steps >= 1000
-                          ? '${(_steps / 1000).toStringAsFixed(1)}k'
-                          : '$_steps'),
+                            ? '${(_steps / 1000).toStringAsFixed(1)}k'
+                            : '$_steps'),
                 ),
                 TextSpan(
                   text: 'pasos',
@@ -392,109 +431,213 @@ class _StepsPillState extends State<_StepsPill> {
 
 /* ============================== DASHBOARD ============================== */
 
+/// Dashboard de Inicio: solo 3 secciones a propósito — acceso al chat de
+/// Pulso, la alerta predictiva, y los últimos entrenamientos. El resto de lo
+/// que vivía aquí (accesos rápidos, anillos de carga/macros, hidratación y
+/// suplementos, atajo de rutinas) ya tiene un hogar en sus propias pestañas
+/// (Nutrición, Progreso, Entrenar); duplicarlo en Inicio era ruido.
 class _DashboardScreen extends StatelessWidget {
-  const _DashboardScreen({
-    required this.routinesCount,
-    required this.onOpenRoutines,
-    required this.onOpenAiCoach,
-    required this.onLogout,
-  });
+  const _DashboardScreen({required this.onOpenAiCoach});
 
-  final int routinesCount;
-  final void Function(BuildContext) onOpenRoutines;
   final void Function(BuildContext) onOpenAiCoach;
-  final Future<void> Function(BuildContext) onLogout;
 
   @override
   Widget build(BuildContext context) {
-    final userName = ApiService.getCurrentUserName() ?? 'Usuario';
-    final firstName = userName.split(' ').first;
-    final summaryProv = context.watch<DailySummaryProvider>();
-    final summary = summaryProv.summary;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _HeroCard(firstName: firstName),
+          _AICoachCTA(onTalk: () => onOpenAiCoach(context)),
           const SizedBox(height: 16),
           _PredictiveAlert(),
           const SizedBox(height: 16),
-          _AICoachCTA(onTalk: () => onOpenAiCoach(context)),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/progress'),
-            child: _DailySummary(summary: summary, loading: summaryProv.isLoading, error: summaryProv.error),
-          ),
-          const SizedBox(height: 16),
-          _WorkoutCard(
-            routinesCount: summary?.rutinasCount ?? routinesCount,
-            onTap: () => onOpenRoutines(context),
-            onLongPress: () => Navigator.pushNamed(context, '/focus'),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () => onLogout(context),
-            icon: const Icon(LucideIcons.logOut, size: 18),
-            label: const Text('Cerrar sesión'),
-          ),
+          const _RecentWorkoutsSection(),
         ],
       ),
     );
   }
 }
 
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.firstName});
-  final String firstName;
+/// Los 2-3 entrenamientos más recientes de Health Connect, en formato
+/// compacto (a diferencia del antiguo `_WorkoutCard`, que mostraba solo el
+/// último a tamaño completo).
+class _RecentWorkoutsSection extends StatefulWidget {
+  const _RecentWorkoutsSection();
+
+  @override
+  State<_RecentWorkoutsSection> createState() => _RecentWorkoutsSectionState();
+}
+
+class _RecentWorkoutsSectionState extends State<_RecentWorkoutsSection> {
+  bool _isLoading = true;
+  List<HealthDataPoint> _workouts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final all = await HealthService.fetchWorkouts();
+    final valid = all.where((w) {
+      if (w.value is WorkoutHealthValue) {
+        return (w.value as WorkoutHealthValue).workoutActivityType !=
+            HealthWorkoutActivityType.WALKING;
+      }
+      return true;
+    }).toList()..sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
+
+    if (!mounted) return;
+    setState(() {
+      _workouts = valid.take(3).toList();
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final card = DesignTokens.card(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
+    if (_isLoading) {
+      return Container(
+        height: 140,
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: DesignTokens.shadowCard(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ÚLTIMOS ENTRENAMIENTOS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.4,
+              color: mutedFg,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_workouts.isEmpty)
+            Text(
+              'Aún no hay entrenamientos registrados.',
+              style: TextStyle(fontSize: 13, color: mutedFg),
+            )
+          else
+            for (var i = 0; i < _workouts.length; i++) ...[
+              if (i > 0) Divider(height: 20, color: DesignTokens.border(b)),
+              _RecentWorkoutRow(workout: _workouts[i]),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentWorkoutRow extends StatelessWidget {
+  const _RecentWorkoutRow({required this.workout});
+  final HealthDataPoint workout;
 
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: DesignTokens.aiGradientSoft,
-        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-        boxShadow: DesignTokens.shadowCard(b),
+
+    int kcal = 0;
+    String typeName = 'Entrenamiento';
+    if (workout.value is WorkoutHealthValue) {
+      final w = workout.value as WorkoutHealthValue;
+      kcal = (w.totalEnergyBurned ?? 0).toInt();
+      typeName = HealthService.translateWorkoutActivityType(
+        w.workoutActivityType,
+      );
+    }
+    final min = workout.dateTo.difference(workout.dateFrom).inMinutes;
+
+    final now = DateTime.now();
+    final isToday =
+        workout.dateFrom.year == now.year &&
+        workout.dateFrom.month == now.month &&
+        workout.dateFrom.day == now.day;
+    final isYesterday =
+        workout.dateFrom.year == now.year &&
+        workout.dateFrom.month == now.month &&
+        workout.dateFrom.day == now.day - 1;
+    final dateStr = isToday
+        ? 'Hoy'
+        : (isYesterday
+              ? 'Ayer'
+              : '${workout.dateFrom.day}/${workout.dateFrom.month}');
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => WorkoutDetailPage(workout: workout)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hola, $firstName',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: fg,
-                    letterSpacing: -0.8,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: DesignTokens.aiGradientSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(LucideIcons.heart, size: 16, color: fg),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    typeName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Listo para entrenar con tu Coach IA hoy?',
-                  style: TextStyle(fontSize: 14, color: mutedFg),
-                ),
-              ],
+                  Text(
+                    '$dateStr · $min min',
+                    style: TextStyle(fontSize: 12, color: mutedFg),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Image.asset(
-              'assets/logo.jpg',
-              height: 56,
-              width: 56,
-              fit: BoxFit.cover,
-            ),
-          ),
-        ],
+            if (kcal > 0)
+              Text(
+                '$kcal kcal',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: mutedFg,
+                ),
+              ),
+            const SizedBox(width: 6),
+            Icon(LucideIcons.chevronRight, size: 16, color: mutedFg),
+          ],
+        ),
       ),
     );
   }
@@ -542,20 +685,21 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
     }
 
     final title = _readiness?.alertTitle ?? 'ESTADO � SIN DATOS HC';
-    final body = _readiness?.alertBody ??
+    final body =
+        _readiness?.alertBody ??
         'Activa Health Connect para ver tu alerta de readiness.';
     final level = _readiness?.level ?? ReadinessLevel.ok;
 
     final iconColor = level == ReadinessLevel.fatigue
         ? const Color(0xFFC2410C)
         : level == ReadinessLevel.warning
-            ? const Color(0xFFD97706)
-            : const Color(0xFF059669);
+        ? const Color(0xFFD97706)
+        : const Color(0xFF059669);
     final titleColor = level == ReadinessLevel.fatigue
         ? const Color(0xFF9A3412)
         : level == ReadinessLevel.warning
-            ? const Color(0xFF92400E)
-            : const Color(0xFF065F46);
+        ? const Color(0xFF92400E)
+        : const Color(0xFF065F46);
     final iconData = level == ReadinessLevel.ok
         ? LucideIcons.checkCircle
         : LucideIcons.alertTriangle;
@@ -619,183 +763,26 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
   }
 }
 
-class _DailySummary extends StatelessWidget {
-  const _DailySummary({required this.summary, required this.loading, required this.error});
-  final DailySummary? summary;
-  final bool loading;
-  final String? error;
-
-  /// Future cacheado a nivel de clase para evitar llamadas repetidas en rebuild.
-  static final Future<({int pct, String label})?> _loadFuture =
-      HealthService.fetchPhysicalLoadScore();
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading || summary == null || error != null) {
-      return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
-    }
-    final s = summary!;
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    final surface1 = DesignTokens.surface1(b);
-
-    final pctK = (s.cumplKcal.porcentaje / 100).clamp(0.0, 1.0);
-
-    return FutureBuilder<({int pct, String label})?>(
-      future: _loadFuture,
-      builder: (context, snap) {
-        final physLoad = snap.data;
-        final double pctCarga;
-        final String loadValue;
-        final String loadLabel;
-
-        if (physLoad != null) {
-          pctCarga  = (physLoad.pct / 100).clamp(0.0, 1.0);
-          loadValue = '${physLoad.pct}';
-          loadLabel = physLoad.label;
-        } else {
-          pctCarga  = 0;
-          loadValue = '—';
-          loadLabel = snap.connectionState == ConnectionState.waiting
-              ? 'cargando…'
-              : 'sin datos';
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Cuadrados superiores (Carga Física, Macros)
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: card,
-                      borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-                      boxShadow: DesignTokens.shadowSoft(b),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('CARGA FÍSICA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            MetricRing(value: loadValue, unit: '%', pct: pctCarga),
-                            const SizedBox(width: 12),
-                            Text(loadLabel, style: TextStyle(fontSize: 12, color: mutedFg)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: card,
-                      borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-                      boxShadow: DesignTokens.shadowSoft(b),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('MACROS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            MetricRing(value: (s.consumidoHoy.kcal / 1000).toStringAsFixed(1), unit: 'k', pct: pctK),
-                            const SizedBox(width: 12),
-                            Text('kcal · ${(s.objetivos.kcal / 1000).toStringAsFixed(1)}k', style: TextStyle(fontSize: 12, color: mutedFg)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MacroBox extends StatelessWidget {
-  const _MacroBox({
-    required this.label,
-    required this.val,
-    required this.total,
-    required this.color,
-    required this.surface1,
-    required this.fg,
-    required this.mutedFg,
-    required this.muted,
-  });
-  final String label;
-  final int val;
-  final int total;
-  final Color color;
-  final Color surface1;
-  final Color fg;
-  final Color mutedFg;
-  final Color muted;
-
-  @override
-  Widget build(BuildContext context) {
-    double pct = total > 0 ? (val / total).clamp(0.0, 1.0) : 0.0;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: surface1, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: mutedFg)),
-          const SizedBox(height: 4),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg),
-              children: [
-                TextSpan(text: '$val'),
-                TextSpan(text: '/${total}g', style: TextStyle(fontSize: 11, color: mutedFg, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 4,
-            width: double.infinity,
-            decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: pct,
-              child: Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999))),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Row extends StatelessWidget {
   const _Row({required this.a, required this.b});
   final Widget a;
   final Widget b;
   @override
   Widget build(BuildContext context) => Row(
-        children: [Expanded(child: a), const SizedBox(width: 12), Expanded(child: b)],
-      );
+    children: [
+      Expanded(child: a),
+      const SizedBox(width: 12),
+      Expanded(child: b),
+    ],
+  );
 }
 
 class _WorkoutCard extends StatefulWidget {
-  const _WorkoutCard({required this.routinesCount, required this.onTap, this.onLongPress});
+  const _WorkoutCard({
+    required this.routinesCount,
+    required this.onTap,
+    this.onLongPress,
+  });
   final int routinesCount;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
@@ -819,11 +806,12 @@ class _WorkoutCardState extends State<_WorkoutCard> {
     final allWorkouts = await HealthService.fetchWorkouts();
     final validWorkouts = allWorkouts.where((w) {
       if (w.value is WorkoutHealthValue) {
-        return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
+        return (w.value as WorkoutHealthValue).workoutActivityType !=
+            HealthWorkoutActivityType.WALKING;
       }
       return true;
     }).toList();
-    
+
     validWorkouts.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
 
     if (validWorkouts.isNotEmpty) {
@@ -835,10 +823,15 @@ class _WorkoutCardState extends State<_WorkoutCard> {
         });
       }
 
-      final details = await HealthService.fetchWorkoutDetails(latest.dateFrom, latest.dateTo);
+      final details = await HealthService.fetchWorkoutDetails(
+        latest.dateFrom,
+        latest.dateTo,
+      );
       final hrData = details['heart_rate'] ?? [];
       if (hrData.isNotEmpty) {
-        final hrValues = hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
+        final hrValues = hrData
+            .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
+            .toList();
         final avg = hrValues.reduce((a, b) => a + b) / hrValues.length;
         if (mounted) {
           setState(() {
@@ -864,7 +857,10 @@ class _WorkoutCardState extends State<_WorkoutCard> {
     if (_isLoading) {
       return Container(
         height: 180,
-        decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(28)),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(28),
+        ),
         child: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -885,14 +881,25 @@ class _WorkoutCardState extends State<_WorkoutCard> {
       final workout = w.value as WorkoutHealthValue;
       kcal = (workout.totalEnergyBurned ?? 0).toInt();
       dist = (workout.totalDistance ?? 0) / 1000;
-      typeName = HealthService.translateWorkoutActivityType(workout.workoutActivityType);
+      typeName = HealthService.translateWorkoutActivityType(
+        workout.workoutActivityType,
+      );
     }
 
     final now = DateTime.now();
-    final isToday = w.dateFrom.year == now.year && w.dateFrom.month == now.month && w.dateFrom.day == now.day;
-    final isYesterday = w.dateFrom.year == now.year && w.dateFrom.month == now.month && w.dateFrom.day == now.day - 1;
-    String dateStr = isToday ? 'Hoy' : (isYesterday ? 'Ayer' : '${w.dateFrom.day}/${w.dateFrom.month}');
-    String timeStr = '${w.dateFrom.hour.toString().padLeft(2, '0')}:${w.dateFrom.minute.toString().padLeft(2, '0')}';
+    final isToday =
+        w.dateFrom.year == now.year &&
+        w.dateFrom.month == now.month &&
+        w.dateFrom.day == now.day;
+    final isYesterday =
+        w.dateFrom.year == now.year &&
+        w.dateFrom.month == now.month &&
+        w.dateFrom.day == now.day - 1;
+    String dateStr = isToday
+        ? 'Hoy'
+        : (isYesterday ? 'Ayer' : '${w.dateFrom.day}/${w.dateFrom.month}');
+    String timeStr =
+        '${w.dateFrom.hour.toString().padLeft(2, '0')}:${w.dateFrom.minute.toString().padLeft(2, '0')}';
 
     return GestureDetector(
       onTap: () {
@@ -915,34 +922,109 @@ class _WorkoutCardState extends State<_WorkoutCard> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ÚLTIMA ACTIVIDAD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+                Text(
+                  'ÚLTIMA ACTIVIDAD',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: mutedFg,
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(999)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                   child: Row(
                     children: [
-                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFFF6900), shape: BoxShape.circle)),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF6900),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                       const SizedBox(width: 4),
-                      const Text('XIAOMI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
+                      const Text(
+                        'XIAOMI',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text(typeName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+            Text(
+              typeName,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: fg,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text('$dateStr · $timeStr', style: TextStyle(fontSize: 13, color: mutedFg, fontWeight: FontWeight.w500)),
+            Text(
+              '$dateStr · $timeStr',
+              style: TextStyle(
+                fontSize: 13,
+                color: mutedFg,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(child: _StatPill(val: '$min min', sub: 'DURACIÓN', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                Expanded(
+                  child: _StatPill(
+                    val: '$min min',
+                    sub: 'DURACIÓN',
+                    surface1: surface1,
+                    fg: fg,
+                    mutedFg: mutedFg,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _StatPill(val: _bpm, sub: 'BPM MED', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                Expanded(
+                  child: _StatPill(
+                    val: _bpm,
+                    sub: 'BPM MED',
+                    surface1: surface1,
+                    fg: fg,
+                    mutedFg: mutedFg,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _StatPill(val: kcal > 0 ? '$kcal' : '--', sub: 'KCAL', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                Expanded(
+                  child: _StatPill(
+                    val: kcal > 0 ? '$kcal' : '--',
+                    sub: 'KCAL',
+                    surface1: surface1,
+                    fg: fg,
+                    mutedFg: mutedFg,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _StatPill(val: dist > 0 ? '${dist.toStringAsFixed(1)} km' : '--', sub: 'DIST.', surface1: surface1, fg: fg, mutedFg: mutedFg)),
+                Expanded(
+                  child: _StatPill(
+                    val: dist > 0 ? '${dist.toStringAsFixed(1)} km' : '--',
+                    sub: 'DIST.',
+                    surface1: surface1,
+                    fg: fg,
+                    mutedFg: mutedFg,
+                  ),
+                ),
               ],
             ),
           ],
@@ -953,7 +1035,13 @@ class _WorkoutCardState extends State<_WorkoutCard> {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({required this.val, required this.sub, required this.surface1, required this.fg, required this.mutedFg});
+  const _StatPill({
+    required this.val,
+    required this.sub,
+    required this.surface1,
+    required this.fg,
+    required this.mutedFg,
+  });
   final String val;
   final String sub;
   final Color surface1;
@@ -964,12 +1052,30 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(color: surface1, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: surface1,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children: [
-          Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: fg)),
+          Text(
+            val,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(sub, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: mutedFg)),
+          Text(
+            sub,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: mutedFg,
+            ),
+          ),
         ],
       ),
     );
@@ -982,63 +1088,279 @@ class _AICoachCTA extends StatelessWidget {
   const _AICoachCTA({required this.onTalk});
   final VoidCallback onTalk;
 
+  static const _modules = [
+    (icon: LucideIcons.dumbbell, label: 'Crear rutina'),
+    (icon: LucideIcons.moon, label: 'Sueño'),
+    (icon: LucideIcons.apple, label: 'Nutrición'),
+    (icon: LucideIcons.lineChart, label: 'Progreso'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    final bg = DesignTokens.background(b);
-
-    return GestureDetector(
-      onTap: onTalk,
-      child: Container(
-        padding: const EdgeInsets.all(1),
-        decoration: BoxDecoration(
-          gradient: DesignTokens.aiGradient,
-          borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-          boxShadow: DesignTokens.shadowCard(b),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(DesignTokens.cardRadius - 1),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              color: bg.withOpacity(0.85),
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: DesignTokens.aiGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: DesignTokens.shadowSoft(b),
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: DesignTokens.aiGradient,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: DesignTokens.shadowCard(Theme.of(context).brightness),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -40,
+            top: -56,
+            child: _GlowBlob(size: 176, opacity: 0.20),
+          ),
+          Positioned(
+            left: -40,
+            bottom: -64,
+            child: _GlowBlob(size: 160, opacity: 0.10),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          AiPulseEffect(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.20),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  const Icon(
+                                    LucideIcons.sparkles,
+                                    size: 28,
+                                    color: Colors.white,
+                                  ),
+                                  Positioned(
+                                    right: -2,
+                                    top: -2,
+                                    child: Container(
+                                      width: 14,
+                                      height: 14,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF34D399),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.8),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'PULSO · AI COACH',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.6,
+                                    color: Colors.white.withOpacity(0.75),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Tu entrenador IA',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.3,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: const Icon(LucideIcons.sparkles, size: 20, color: Colors.white),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'EN LÍNEA',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Crea y edita rutinas, interpreta tu sueño y ajusta tus macros. Pulso lee tus datos reales y actúa por ti.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.88),
+                    height: 1.35,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('TU COACH · IA',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-                        const SizedBox(height: 2),
-                        Text('Pregunta cualquier cosa',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg, height: 1.2, letterSpacing: -0.3)),
-                        const SizedBox(height: 2),
-                        Text('Rutinas, macros o recuperación',
-                            style: TextStyle(fontSize: 12, color: mutedFg)),
-                      ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    for (final m in _modules) ...[
+                      if (m != _modules.first) const SizedBox(width: 8),
+                      Expanded(
+                        child: _ModuleShortcut(
+                          icon: m.icon,
+                          label: m.label,
+                          onTap: onTalk,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  child: InkWell(
+                    onTap: onTalk,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.messageSquare,
+                            size: 16,
+                            color: DesignTokens.lightForeground.withOpacity(
+                              0.35,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Escribe a Pulso…',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: DesignTokens.lightForeground.withOpacity(
+                                  0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 32,
+                            height: 32,
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              gradient: DesignTokens.aiGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.chevronRight,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Icon(LucideIcons.chevronRight, size: 20, color: mutedFg),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  const _GlowBlob({required this.size, required this.opacity});
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(opacity),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModuleShortcut extends StatelessWidget {
+  const _ModuleShortcut({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: Colors.white),
+              const SizedBox(height: 5),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1131,9 +1453,19 @@ class _NavTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(tile.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+                    Text(
+                      tile.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(tile.sub, style: TextStyle(fontSize: 11, color: mutedFg)),
+                    Text(
+                      tile.sub,
+                      style: TextStyle(fontSize: 11, color: mutedFg),
+                    ),
                   ],
                 ),
               ),
@@ -1146,9 +1478,12 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-
-
-
+/// Pestaña "Entrenar": la rutina de hoy (real, de `RoutineProvider`) primero,
+/// luego el resumen de la sesión de hoy si ya se entrenó, el insight de
+/// `_RagBubble`, el historial de Mi Band y los atajos de rutina. `onOpen`
+/// (abrir el chat de Pulso) ya no hace falta aquí — vivía en el botón central
+/// del antiguo `_VoiceHero`, una UI de voz decorativa sin backend real detrás;
+/// el acceso a Pulso ya está en la home y en el propio bottom nav.
 class _CoachScreen extends StatelessWidget {
   const _CoachScreen({required this.onOpen});
   final VoidCallback onOpen;
@@ -1160,53 +1495,462 @@ class _CoachScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const _TodayRoutineHero(),
+          const SizedBox(height: 16),
+          const _TodaySummaryStats(),
+          const SizedBox(height: 16),
           _RagBubble(),
+          const SizedBox(height: 16),
           _XiaomiWorkouts(),
           const SizedBox(height: 16),
           _RoutineShortcuts(),
-          const SizedBox(height: 16),
-          _VoiceHero(onTalk: onOpen),
-          const SizedBox(height: 16),
-          _FocusModeCard(),
         ],
       ),
     );
   }
 }
 
-class _RoutineShortcuts extends StatelessWidget {
+class _TodayRoutineHero extends StatelessWidget {
+  const _TodayRoutineHero();
+
+  static const _diasSemana = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _NavTile(
-            tile: (
-              icon: LucideIcons.hammer,
-              title: 'Constructor',
-              sub: 'Crear Rutina',
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final routines = context.watch<RoutineProvider>().routines;
+    // La más reciente hace de "activa": mismo criterio que ya usa
+    // `_openQuickAddForToday` más arriba en este archivo — el backend ordena
+    // por `updated_at DESC` y pone `activa: true` solo en la última creada.
+    final routine = routines.isNotEmpty ? routines.first : null;
+    final hoy = _diasSemana[DateTime.now().weekday - 1];
+    final dayIndex = routine?.days.indexWhere((d) => d.dayOfWeek == hoy) ?? -1;
+    final day = dayIndex >= 0 ? routine!.days[dayIndex] : null;
+
+    if (routine == null || day == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: DesignTokens.card(b),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: DesignTokens.shadowCard(b),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              routine == null
+                  ? 'Sin rutina todavía'
+                  : 'Hoy ($hoy) toca descanso',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: fg,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              routine == null
+                  ? 'Crea tu primera rutina para ver aquí el día de hoy.'
+                  : 'Tu rutina activa no tiene ejercicios asignados a $hoy.',
+              style: TextStyle(fontSize: 13, color: mutedFg),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final totalSeries = day.exercises.fold<int>(
+      0,
+      (sum, e) => sum + (e.sets ?? 0),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: DesignTokens.shadowCard(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'HOY · ${hoy.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: mutedFg,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradientSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Rutina activa',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            day.focus?.isNotEmpty == true ? day.focus! : routine.name,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
+          Text(
+            routine.activityLabel,
+            style: TextStyle(fontSize: 13, color: mutedFg),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${day.exercises.length} ejercicios · $totalSeries series',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: mutedFg,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => RoutineBuilderPage(
-                    onSave: () => context.read<RoutineProvider>().loadRoutines(),
-                  ),
+                  builder: (_) => WorkoutSessionPage(routine: routine),
+                ),
+              ),
+              borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+                  boxShadow: DesignTokens.shadowCard(b),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(LucideIcons.play, size: 18, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Iniciar ${day.focus?.isNotEmpty == true ? day.focus! : hoy}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _NavTile(
-            tile: (
-              icon: LucideIcons.zap,
-              title: 'Añadir',
-              sub: 'Rápido',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const RoutinesHomePage()),
+        ],
+      ),
+    );
+  }
+}
+
+/// FC media / duración / calorías del entrenamiento de HOY (Health Connect).
+/// No incluye "volumen" (tonelaje): ni `WorkoutSessionProvider` ni el modelo
+/// de ejercicios guardan peso×reps completados, así que no hay de dónde
+/// sacar ese dato real — mejor 3 stats reales que 4 con una inventada.
+class _TodaySummaryStats extends StatefulWidget {
+  const _TodaySummaryStats();
+
+  @override
+  State<_TodaySummaryStats> createState() => _TodaySummaryStatsState();
+}
+
+class _TodaySummaryStatsState extends State<_TodaySummaryStats> {
+  bool _isLoading = true;
+  HealthDataPoint? _todayWorkout;
+  String _bpm = '--';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final all = await HealthService.fetchWorkouts();
+    final now = DateTime.now();
+    final today = all.where((w) {
+      if (w.value is WorkoutHealthValue &&
+          (w.value as WorkoutHealthValue).workoutActivityType ==
+              HealthWorkoutActivityType.WALKING) {
+        return false;
+      }
+      return w.dateFrom.year == now.year &&
+          w.dateFrom.month == now.month &&
+          w.dateFrom.day == now.day;
+    }).toList()..sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
+
+    if (!mounted) return;
+    if (today.isEmpty) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    final w = today.first;
+    setState(() {
+      _todayWorkout = w;
+      _isLoading = false;
+    });
+
+    final details = await HealthService.fetchWorkoutDetails(
+      w.dateFrom,
+      w.dateTo,
+    );
+    final hrData = details['heart_rate'] ?? [];
+    if (hrData.isNotEmpty) {
+      final values = hrData
+          .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
+          .toList();
+      final avg = values.reduce((a, b) => a + b) / values.length;
+      if (mounted) setState(() => _bpm = avg.round().toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading || _todayWorkout == null) return const SizedBox.shrink();
+
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+    final surface1 = DesignTokens.surface1(b);
+    final w = _todayWorkout!;
+    final min = w.dateTo.difference(w.dateFrom).inMinutes;
+    int kcal = 0;
+    if (w.value is WorkoutHealthValue) {
+      kcal = ((w.value as WorkoutHealthValue).totalEnergyBurned ?? 0).toInt();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: DesignTokens.shadowCard(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'RESUMEN DE HOY',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.4,
+                  color: mutedFg,
+                ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: DesignTokens.success(b).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Completado',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: DesignTokens.success(b),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _StatPill(
+                  val: _bpm,
+                  sub: 'FC MEDIA',
+                  surface1: surface1,
+                  fg: fg,
+                  mutedFg: mutedFg,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatPill(
+                  val: '$min min',
+                  sub: 'DURACIÓN',
+                  surface1: surface1,
+                  fg: fg,
+                  mutedFg: mutedFg,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatPill(
+                  val: kcal > 0 ? '$kcal' : '--',
+                  sub: 'CALORÍAS',
+                  surface1: surface1,
+                  fg: fg,
+                  mutedFg: mutedFg,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Abre la alta rápida sobre el día de HOY de la primera rutina guardada y
+/// persiste lo añadido. Si no hay rutina todavía, manda al constructor: no
+/// tiene sentido añadir ejercicios a ningún sitio.
+Future<void> _openQuickAddForToday(BuildContext context) async {
+  const dias = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
+  final hoy = dias[DateTime.now().weekday - 1];
+
+  final provider = context.read<RoutineProvider>();
+  if (provider.routines.isEmpty) {
+    await provider.loadRoutines();
+  }
+  if (!context.mounted) return;
+
+  if (provider.routines.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Crea primero una rutina para añadirle ejercicios.'),
+      ),
+    );
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RoutineBuilderPage(onSave: provider.loadRoutines),
+      ),
+    );
+    return;
+  }
+
+  final routine = provider.routines.first;
+
+  final added = await Navigator.of(context).push<List<Exercise>>(
+    MaterialPageRoute(
+      builder: (_) =>
+          QuickAddPage(dayLabel: hoy, activityType: routine.activityType),
+    ),
+  );
+  if (added == null || added.isEmpty || !context.mounted) return;
+
+  final saved = await provider.addExercisesToDay(routine, hoy, added);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        saved != null
+            ? '${added.length} ejercicios añadidos a $hoy.'
+            : 'No se pudieron guardar los ejercicios.',
+      ),
+    ),
+  );
+}
+
+class _RoutineShortcuts extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _NavTile(
+          tile: (
+            icon: LucideIcons.clipboardList,
+            title: 'Ver mi rutina',
+            sub: 'Plan semanal completo por días',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RoutineViewPage()),
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _NavTile(
+                tile: (
+                  icon: LucideIcons.dumbbell,
+                  title: 'Constructor',
+                  sub: 'Crea tu rutina semanal',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RoutineBuilderPage(
+                        onSave: () =>
+                            context.read<RoutineProvider>().loadRoutines(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NavTile(
+                tile: (
+                  icon: LucideIcons.zap,
+                  title: 'Añadir rápido',
+                  sub: 'Catálogo con búsqueda',
+                  // Abre la alta rápida sobre el día de hoy. Antes caía en la
+                  // lista de rutinas, que no tiene nada que ver con "añadir".
+                  onTap: () => _openQuickAddForToday(context),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1219,17 +1963,20 @@ class _RagBubble extends StatelessWidget {
     final summaryProv = context.watch<DailySummaryProvider>();
     final summary = summaryProv.summary;
 
-    String textPart1 = 'Hola, he analizado tus métricas y estoy listo para guiar tu entrenamiento y nutrición de hoy.';
+    String textPart1 =
+        'Hola, he analizado tus métricas y estoy listo para guiar tu entrenamiento y nutrición de hoy.';
     String textPart2 = '';
 
     if (summary != null) {
       if (summary.ultimaSesion != null) {
-        textPart1 = 'He analizado tu última sesión de ${summary.ultimaSesion!.tipoEntrenamiento.toLowerCase()} y ajustado tus métricas. ';
+        textPart1 =
+            'He analizado tu última sesión de ${summary.ultimaSesion!.tipoEntrenamiento.toLowerCase()} y ajustado tus métricas. ';
       } else {
         textPart1 = 'He ajustado tus métricas basándome en tu perfil. ';
       }
       if (summary.consumidoHoy.kcal > 0) {
-        textPart2 = 'Llevas ${summary.consumidoHoy.kcal.toInt()} kcal registradas hoy.';
+        textPart2 =
+            'Llevas ${summary.consumidoHoy.kcal.toInt()} kcal registradas hoy.';
       } else {
         textPart2 = 'Aún no has registrado comidas hoy.';
       }
@@ -1264,109 +2011,44 @@ class _RagBubble extends StatelessWidget {
                   gradient: DesignTokens.aiGradient,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(LucideIcons.sparkles, size: 12, color: Colors.white),
+                child: const Icon(
+                  LucideIcons.sparkles,
+                  size: 12,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(width: 8),
               Flexible(
-                child: Text('MEMORIA CONTEXTUAL · RAG',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: mutedFg)),
+                child: Text(
+                  'MEMORIA CONTEXTUAL · RAG',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                    color: mutedFg,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           RichText(
             text: TextSpan(
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: fg, height: 1.35),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: fg,
+                height: 1.35,
+              ),
               children: [
                 TextSpan(text: textPart1),
                 if (textPart2.isNotEmpty)
-                  TextSpan(text: textPart2, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  TextSpan(
+                    text: textPart2,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VoiceHero extends StatelessWidget {
-  const _VoiceHero({required this.onTalk});
-  final VoidCallback onTalk;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    final surface2 = DesignTokens.surface2of(b);
-    final bg = DesignTokens.background(b);
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 224,
-            height: 224,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(shape: BoxShape.circle),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 176,
-                  height: 176,
-                  decoration: BoxDecoration(
-                    gradient: DesignTokens.aiGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: DesignTokens.shadowCard(b),
-                  ),
-                ),
-                Container(
-                  width: 144,
-                  height: 144,
-                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: List.generate(8, (i) {
-                      final heights = [0.4, 0.8, 0.55, 1.0, 0.7, 0.9, 0.45, 0.75];
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        width: 6,
-                        height: 40 * heights[i],
-                        decoration: BoxDecoration(
-                          gradient: DesignTokens.aiGradient,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text('Escuchando…', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg)),
-          const SizedBox(height: 4),
-          Text('Conversación full-duplex en tiempo real', style: TextStyle(fontSize: 12, color: mutedFg)),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _CircleBtn(icon: LucideIcons.volume2, size: 44, bg: surface2, fg: fg.withOpacity(0.7)),
-              const SizedBox(width: 12),
-              _CircleBtn(icon: LucideIcons.pause, size: 56, bg: fg, fg: bg, onTap: onTalk),
-              const SizedBox(width: 12),
-              _CircleBtn(icon: LucideIcons.mic, size: 44, bg: surface2, fg: fg.withOpacity(0.7)),
-            ],
           ),
         ],
       ),
@@ -1394,10 +2076,11 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     final allWorkouts = await HealthService.fetchWorkouts();
-    
+
     final validWorkouts = allWorkouts.where((w) {
       if (w.value is WorkoutHealthValue) {
-        return (w.value as WorkoutHealthValue).workoutActivityType != HealthWorkoutActivityType.WALKING;
+        return (w.value as WorkoutHealthValue).workoutActivityType !=
+            HealthWorkoutActivityType.WALKING;
       }
       return true;
     }).toList();
@@ -1413,10 +2096,15 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
 
     // Load BPMs async
     for (var w in validWorkouts.take(4)) {
-      final details = await HealthService.fetchWorkoutDetails(w.dateFrom, w.dateTo);
+      final details = await HealthService.fetchWorkoutDetails(
+        w.dateFrom,
+        w.dateTo,
+      );
       final hrData = details['heart_rate'] ?? [];
       if (hrData.isNotEmpty) {
-        final hrValues = hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
+        final hrValues = hrData
+            .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
+            .toList();
         final avg = hrValues.reduce((a, b) => a + b) / hrValues.length;
         if (mounted) {
           setState(() {
@@ -1433,7 +2121,10 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
       barrierDismissible: false,
       builder: (c) => const AlertDialog(
         title: Text('Ejecutando diagnóstico profundo...'),
-        content: SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+        content: SizedBox(
+          height: 60,
+          child: Center(child: CircularProgressIndicator()),
+        ),
       ),
     );
 
@@ -1451,13 +2142,16 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
         builder: (c) => AlertDialog(
           title: const Text('Diagnóstico HC (90 días)'),
           content: SingleChildScrollView(
-            child: Text(resultText, style: const TextStyle(height: 1.3, fontSize: 13)),
+            child: Text(
+              resultText,
+              style: const TextStyle(height: 1.3, fontSize: 13),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c),
               child: const Text('CERRAR'),
-            )
+            ),
           ],
         ),
       );
@@ -1487,21 +2181,56 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('REGISTROS · MI BAND',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+              Text(
+                'REGISTROS · MI BAND',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.4,
+                  color: mutedFg,
+                ),
+              ),
               InkWell(
                 onTap: _fetchData,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(999)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                   child: Row(
                     children: [
                       if (_isLoading)
-                        const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 1.5))
+                        const SizedBox(
+                          width: 8,
+                          height: 8,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 1.5,
+                          ),
+                        )
                       else
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFFF6900), shape: BoxShape.circle)),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF6900),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       const SizedBox(width: 4),
-                      Text(_isLoading ? 'SINCRONIZANDO' : 'XIAOMI', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
+                      Text(
+                        _isLoading ? 'SINCRONIZANDO' : 'XIAOMI',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1509,7 +2238,14 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
             ],
           ),
           const SizedBox(height: 8),
-          Text('Entrenamientos Xiaomi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg)),
+          Text(
+            'Entrenamientos Xiaomi',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
           const SizedBox(height: 24),
           if (_workouts.isEmpty && !_isLoading)
             Padding(
@@ -1517,7 +2253,10 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
               child: Center(
                 child: Column(
                   children: [
-                    Text('No se encontraron entrenamientos.', style: TextStyle(color: mutedFg)),
+                    Text(
+                      'No se encontraron entrenamientos.',
+                      style: TextStyle(color: mutedFg),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1556,19 +2295,22 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
               // Extraer duración
               final duration = w.dateTo.difference(w.dateFrom);
               final min = duration.inMinutes;
-              
+
               int kcal = 0;
               double dist = 0.0;
               String typeName = 'Entrenamiento';
-              
+
               if (w.value is WorkoutHealthValue) {
                 final workout = w.value as WorkoutHealthValue;
                 kcal = (workout.totalEnergyBurned ?? 0).toInt();
                 dist = (workout.totalDistance ?? 0) / 1000;
-                typeName = HealthService.translateWorkoutActivityType(workout.workoutActivityType);
+                typeName = HealthService.translateWorkoutActivityType(
+                  workout.workoutActivityType,
+                );
               }
-              
-              String desc = '${w.dateFrom.day}/${w.dateFrom.month} · ${w.dateFrom.hour}:${w.dateFrom.minute.toString().padLeft(2, '0')} · $min min';
+
+              String desc =
+                  '${w.dateFrom.day}/${w.dateFrom.month} · ${w.dateFrom.hour}:${w.dateFrom.minute.toString().padLeft(2, '0')} · $min min';
               if (dist > 0) desc += ' · ${dist.toStringAsFixed(1)} km';
 
               return Padding(
@@ -1634,7 +2376,14 @@ class _WorkoutRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(desc, style: TextStyle(fontSize: 12, color: mutedFg)),
             ],
@@ -1645,135 +2394,28 @@ class _WorkoutRow extends StatelessWidget {
           children: [
             RichText(
               text: TextSpan(
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg),
-                children: [TextSpan(text: bpm), TextSpan(text: 'bpm', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mutedFg))],
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: fg,
+                ),
+                children: [
+                  TextSpan(text: bpm),
+                  TextSpan(
+                    text: 'bpm',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: mutedFg,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 4),
             Text('$kcal kcal', style: TextStyle(fontSize: 12, color: mutedFg)),
           ],
         ),
-      ],
-    );
-  }
-}
-
-class _CircleBtn extends StatelessWidget {
-  const _CircleBtn({required this.icon, required this.size, required this.bg, required this.fg, this.onTap});
-  final IconData icon;
-  final double size;
-  final Color bg;
-  final Color fg;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          boxShadow: DesignTokens.shadowCard(Theme.of(context).brightness),
-        ),
-        child: Icon(icon, size: size * 0.36, color: fg),
-      ),
-    );
-  }
-}
-
-class _FocusModeCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('MODO FOCUS · EJERCICIO 3 / 8',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text('Edge AI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg),
-              children: [const TextSpan(text: 'Press Inclinado'), TextSpan(text: ' · Mancuernas', style: TextStyle(color: mutedFg))],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _MetaBig(value: '4', unit: 'series', fg: fg, mutedFg: mutedFg),
-              const SizedBox(width: 20),
-              _MetaBig(value: '8–10', unit: 'reps', fg: fg, mutedFg: mutedFg),
-              const SizedBox(width: 20),
-              _MetaBig(value: '22kg', unit: '', fg: fg, mutedFg: mutedFg),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              gradient: DesignTokens.aiGradient,
-              borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-              boxShadow: DesignTokens.shadowCard(b),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(LucideIcons.camera, size: 18, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Activar Cámara Edge AI',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaBig extends StatelessWidget {
-  const _MetaBig({required this.value, required this.unit, required this.fg, required this.mutedFg});
-  final String value;
-  final String unit;
-  final Color fg;
-  final Color mutedFg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg)),
-        if (unit.isNotEmpty) Text(unit, style: TextStyle(fontSize: 11, color: mutedFg)),
       ],
     );
   }
@@ -1791,7 +2433,9 @@ class _NutritionScreen extends StatefulWidget {
 
 class _NutritionScreenState extends State<_NutritionScreen> {
   bool _isLoadingAi = false;
+  bool _isSavingScan = false;
   Map<String, dynamic>? _lastScan;
+  Map<String, dynamic>? _pendingScan;
   final _msgController = TextEditingController();
 
   @override
@@ -1806,7 +2450,10 @@ class _NutritionScreenState extends State<_NutritionScreen> {
     if (file == null) return;
 
     if (!mounted) return;
-    setState(() => _isLoadingAi = true);
+    setState(() {
+      _isLoadingAi = true;
+      _pendingScan = null;
+    });
 
     try {
       final bytes = await file.readAsBytes();
@@ -1814,9 +2461,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
       final userId = ApiService.getCurrentUserId() ?? '';
       final userMessage = _msgController.text.trim();
 
-      String finalPrompt = 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
+      String finalPrompt =
+          'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
       if (userMessage.isNotEmpty) {
-        finalPrompt += '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
+        finalPrompt +=
+            '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
       }
 
       final response = await ApiService.sendChatMessage(
@@ -1829,34 +2478,101 @@ class _NutritionScreenState extends State<_NutritionScreen> {
       );
 
       final actionsTaken = response['actions_taken'] as List<dynamic>? ?? [];
+      Map<String, dynamic>? estimate;
       Map<String, dynamic>? savedResult;
       for (final action in actionsTaken) {
-        if (action is Map<String, dynamic> && action['tool'] == 'registrar_comida') {
+        if (action is! Map<String, dynamic>) continue;
+        if (action['tool'] == 'estimar_comida') {
+          estimate = action['result'] as Map<String, dynamic>?;
+        } else if (action['tool'] == 'registrar_comida') {
           savedResult = action['result'] as Map<String, dynamic>?;
-          break;
         }
       }
 
       if (savedResult != null) {
+        // El modelo guardó directo (turno de confirmación por texto en un chat
+        // previo) — ya está en BD, no hace falta pasar por el botón de confirmar.
         _lastScan = savedResult;
         if (mounted) {
           await context.read<DailySummaryProvider>().load();
         }
+      } else if (estimate != null) {
+        setState(() => _pendingScan = estimate);
       } else if (mounted) {
         final reply = response['reply']?.toString() ?? '';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(reply.isNotEmpty ? reply : 'No se pudo identificar la comida en la foto.')),
+          SnackBar(
+            content: Text(
+              reply.isNotEmpty
+                  ? reply
+                  : 'No se pudo identificar la comida en la foto.',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error procesando imagen: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error procesando imagen: $e')));
       }
     } finally {
       if (mounted) {
         setState(() => _isLoadingAi = false);
       }
     }
+  }
+
+  Future<void> _confirmPendingScan() async {
+    final scan = _pendingScan;
+    if (scan == null || _isSavingScan) return;
+    setState(() => _isSavingScan = true);
+    try {
+      final userId = ApiService.getCurrentUserId() ?? '';
+      final now = DateTime.now();
+      final fechaRegistro =
+          '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      final saved = await ApiService.createNutritionLog(
+        userId: userId,
+        fechaRegistro: fechaRegistro,
+        caloriasConsumidas:
+            (scan['calorias_consumidas'] as num?)?.toInt() ?? 0,
+        proteinasG: (scan['proteinas_g'] as num?)?.toDouble() ?? 0.0,
+        carbohidratosG: (scan['carbohidratos_g'] as num?)?.toDouble() ?? 0.0,
+        grasasG: (scan['grasas_g'] as num?)?.toDouble() ?? 0.0,
+        notas: scan['notas']?.toString(),
+        tipoComida: scan['tipo_comida']?.toString(),
+      );
+      if (!mounted) return;
+      setState(() {
+        // El endpoint no devuelve nombre_alimento (no es columna en BD):
+        // conservamos el de la estimación para que la tarjeta no lo pierda.
+        _lastScan = {...saved, 'food_name': scan['nombre_alimento']};
+        _pendingScan = null;
+      });
+      await context.read<DailySummaryProvider>().load();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Comida guardada.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar la comida: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingScan = false);
+      }
+    }
+  }
+
+  void _discardPendingScan() {
+    setState(() => _pendingScan = null);
   }
 
   @override
@@ -1869,6 +2585,10 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         children: [
           _MacrosOverview(),
           const SizedBox(height: 16),
+          const HydrationCard(),
+          const SizedBox(height: 16),
+          const SupplementsCard(),
+          const SizedBox(height: 16),
           TextField(
             controller: _msgController,
             decoration: InputDecoration(
@@ -1879,7 +2599,10 @@ class _NutritionScreenState extends State<_NutritionScreen> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
             style: TextStyle(color: DesignTokens.foreground(b)),
           ),
@@ -1889,26 +2612,101 @@ class _NutritionScreenState extends State<_NutritionScreen> {
                   height: 240,
                   decoration: BoxDecoration(
                     color: DesignTokens.card(b),
-                    borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+                    borderRadius: BorderRadius.circular(
+                      DesignTokens.cardRadius,
+                    ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const CircularProgressIndicator(),
                       const SizedBox(height: 16),
-                      Text('Procesando ingredientes...', style: TextStyle(color: DesignTokens.foreground(b), fontWeight: FontWeight.w600)),
+                      Text(
+                        'Procesando ingredientes...',
+                        style: TextStyle(
+                          color: DesignTokens.foreground(b),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text('Red neuronal multicapa', style: TextStyle(color: DesignTokens.mutedForeground(b), fontSize: 12)),
+                      Text(
+                        'Red neuronal multicapa',
+                        style: TextStyle(
+                          color: DesignTokens.mutedForeground(b),
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 )
               : _CameraViewer(onTap: _takePhoto),
           const SizedBox(height: 16),
-          _ScanResultCard(scanResult: _lastScan),
+          if (_pendingScan != null)
+            _ScanResultCard(
+              scanResult: _pendingScan,
+              pending: true,
+              isSaving: _isSavingScan,
+              onConfirm: _confirmPendingScan,
+              onDiscard: _discardPendingScan,
+            )
+          else
+            _ScanResultCard(scanResult: _lastScan),
+          const SizedBox(height: 16),
+          _NavTile(
+            tile: (
+              icon: LucideIcons.trendingUp,
+              title: 'Ver calendario de nutrición',
+              sub: 'Historial diario de kcal y macros',
+              onTap: () => Navigator.pushNamed(context, '/progress'),
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+/// Anillo de kcal: pista completa + arco de progreso con el gradiente IA,
+/// arrancando a las 12 en punto.
+class _KcalDialPainter extends CustomPainter {
+  const _KcalDialPainter({required this.pct, required this.track});
+  final double pct;
+  final Color track;
+
+  static const _stroke = 6.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width / 2) - (_stroke / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = track
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _stroke,
+    );
+
+    if (pct <= 0) return;
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * pct,
+      false,
+      Paint()
+        ..shader = DesignTokens.aiGradient.createShader(rect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_KcalDialPainter old) =>
+      old.pct != pct || old.track != track;
 }
 
 class _MacrosOverview extends StatelessWidget {
@@ -1922,17 +2720,18 @@ class _MacrosOverview extends StatelessWidget {
     final summary = context.watch<DailySummaryProvider>().summary;
     final obj = summary?.objetivos;
     final cons = summary?.consumidoHoy;
-    final faltan = summary?.cumplKcal;
 
     final tkcal = obj?.kcal.toInt() ?? 2000;
-    final fkcal = ((tkcal - (cons?.kcal.toInt() ?? 0)).clamp(0, 9999)).toInt();
-    
+    final ckcal = cons?.kcal.toInt() ?? 0;
+    final fkcal = ((tkcal - ckcal).clamp(0, 9999)).toInt();
+    final pctKcal = tkcal > 0 ? (ckcal / tkcal).clamp(0.0, 1.0) : 0.0;
+
     final tprot = obj?.proteinasG.toInt() ?? 150;
     final cprot = cons?.proteinasG.toInt() ?? 0;
-    
+
     final tcarb = obj?.carbohidratosG.toInt() ?? 200;
     final ccarb = cons?.carbohidratosG.toInt() ?? 0;
-    
+
     final tfat = obj?.grasasG.toInt() ?? 70;
     final cfat = cons?.grasasG.toInt() ?? 0;
 
@@ -1953,37 +2752,99 @@ class _MacrosOverview extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('HOY',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: mutedFg)),
+                  Text(
+                    'HOY',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      color: mutedFg,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text('Tus macros', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+                  Text(
+                    'Tus macros',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: fg,
+                    ),
+                  ),
                 ],
               ),
-              Container(
+              // Arco proporcional a lo consumido, no un borde fijo: el número
+              // dice cuánto queda, el anillo dice cuánto se lleva.
+              SizedBox(
                 width: 72,
                 height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: b == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                  border: Border.all(color: b == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 6),
-                ),
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text('$fkcal', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg, height: 1.0)),
-                    Text('RESTAN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: mutedFg, letterSpacing: 0.5)),
+                    CustomPaint(
+                      size: const Size(72, 72),
+                      painter: _KcalDialPainter(
+                        pct: pctKcal,
+                        track: DesignTokens.muted(b),
+                      ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$fkcal',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: fg,
+                            height: 1.0,
+                          ),
+                        ),
+                        Text(
+                          'RESTAN',
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: mutedFg,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
-          _MacroRow(label: 'Proteína', val: cprot, total: tprot, color: const Color(0xFF9D7BFF), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(
+            label: 'Proteína',
+            val: cprot,
+            total: tprot,
+            color: const Color(0xFF9D7BFF),
+            fg: fg,
+            mutedFg: mutedFg,
+            muted: DesignTokens.muted(b),
+          ),
           const SizedBox(height: 16),
-          _MacroRow(label: 'Carbohidratos', val: ccarb, total: tcarb, color: const Color(0xFF06B6D4), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(
+            label: 'Carbohidratos',
+            val: ccarb,
+            total: tcarb,
+            color: const Color(0xFF06B6D4),
+            fg: fg,
+            mutedFg: mutedFg,
+            muted: DesignTokens.muted(b),
+          ),
           const SizedBox(height: 16),
-          _MacroRow(label: 'Grasas', val: cfat, total: tfat, color: const Color(0xFFF87171), fg: fg, mutedFg: mutedFg, muted: DesignTokens.muted(b)),
+          _MacroRow(
+            label: 'Grasas',
+            val: cfat,
+            total: tfat,
+            color: const Color(0xFFF87171),
+            fg: fg,
+            mutedFg: mutedFg,
+            muted: DesignTokens.muted(b),
+          ),
         ],
       ),
     );
@@ -2012,21 +2873,44 @@ class _MacroRow extends StatelessWidget {
   Widget build(BuildContext context) {
     int faltan = (total - val).clamp(0, 9999);
     double pct = total > 0 ? (val / total).clamp(0.0, 1.0) : 0.0;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
             RichText(
               text: TextSpan(
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
                 children: [
                   TextSpan(text: '$val', style: const TextStyle(fontSize: 13)),
-                  TextSpan(text: ' / ${total}g', style: TextStyle(color: mutedFg, fontWeight: FontWeight.w500)),
-                  TextSpan(text: ' · faltan ${faltan}g', style: TextStyle(color: mutedFg, fontWeight: FontWeight.w500)),
+                  TextSpan(
+                    text: ' / ${total}g',
+                    style: TextStyle(
+                      color: mutedFg,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' · faltan ${faltan}g',
+                    style: TextStyle(
+                      color: mutedFg,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2035,11 +2919,19 @@ class _MacroRow extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           height: 6,
-          decoration: BoxDecoration(color: muted, borderRadius: BorderRadius.circular(999)),
+          decoration: BoxDecoration(
+            color: muted,
+            borderRadius: BorderRadius.circular(999),
+          ),
           alignment: Alignment.centerLeft,
           child: FractionallySizedBox(
             widthFactor: pct,
-            child: Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999))),
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
           ),
         ),
       ],
@@ -2091,12 +2983,29 @@ class _CameraViewer extends StatelessWidget {
                       color: Colors.white.withOpacity(0.10),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(LucideIcons.camera, size: 20, color: Colors.white),
+                    child: const Icon(
+                      LucideIcons.camera,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  Text('Fotografía tu comida', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                  Text(
+                    'Fotografía tu comida',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Visión MLLM · sin inputs manuales', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
+                  Text(
+                    'Visión MLLM · sin inputs manuales',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2114,13 +3023,19 @@ class _CameraViewer extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.4), width: 4),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.4),
+                        width: 4,
+                      ),
                     ),
                     alignment: Alignment.center,
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration: const BoxDecoration(gradient: DesignTokens.aiGradient, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        gradient: DesignTokens.aiGradient,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
                 ),
@@ -2138,16 +3053,26 @@ class _CameraViewer extends StatelessWidget {
       height: 40,
       decoration: BoxDecoration(
         border: Border(
-          left: left ? const BorderSide(color: Color(0xCCFFFFFF), width: 2) : BorderSide.none,
-          top: top ? const BorderSide(color: Color(0xCCFFFFFF), width: 2) : BorderSide.none,
-          right: !left ? const BorderSide(color: Color(0xCCFFFFFF), width: 2) : BorderSide.none,
-          bottom: !top ? const BorderSide(color: Color(0xCCFFFFFF), width: 2) : BorderSide.none,
+          left: left
+              ? const BorderSide(color: Color(0xCCFFFFFF), width: 2)
+              : BorderSide.none,
+          top: top
+              ? const BorderSide(color: Color(0xCCFFFFFF), width: 2)
+              : BorderSide.none,
+          right: !left
+              ? const BorderSide(color: Color(0xCCFFFFFF), width: 2)
+              : BorderSide.none,
+          bottom: !top
+              ? const BorderSide(color: Color(0xCCFFFFFF), width: 2)
+              : BorderSide.none,
         ),
         borderRadius: BorderRadius.only(
           topLeft: (left && top) ? const Radius.circular(12) : Radius.zero,
           topRight: (!left && top) ? const Radius.circular(12) : Radius.zero,
           bottomLeft: (left && !top) ? const Radius.circular(12) : Radius.zero,
-          bottomRight: (!left && !top) ? const Radius.circular(12) : Radius.zero,
+          bottomRight: (!left && !top)
+              ? const Radius.circular(12)
+              : Radius.zero,
         ),
       ),
     );
@@ -2155,8 +3080,22 @@ class _CameraViewer extends StatelessWidget {
 }
 
 class _ScanResultCard extends StatelessWidget {
-  const _ScanResultCard({this.scanResult});
+  const _ScanResultCard({
+    this.scanResult,
+    this.pending = false,
+    this.isSaving = false,
+    this.onConfirm,
+    this.onDiscard,
+  });
   final Map<String, dynamic>? scanResult;
+
+  /// Si es `true`, esta estimación todavía no está guardada en BD: la
+  /// tarjeta muestra los botones de confirmar/descartar en vez de tratarla
+  /// como un registro histórico.
+  final bool pending;
+  final bool isSaving;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onDiscard;
 
   @override
   Widget build(BuildContext context) {
@@ -2169,7 +3108,10 @@ class _ScanResultCard extends StatelessWidget {
     final surface1 = DesignTokens.surface1(b);
     final muted = DesignTokens.muted(b);
 
-    final foodName = scanResult?['food_name']?.toString() ?? 'Análisis completado';
+    final foodName =
+        (scanResult?['food_name'] ?? scanResult?['nombre_alimento'])
+            ?.toString() ??
+        'Análisis completado';
     final notas = scanResult?['notas']?.toString() ?? '';
     final p = (scanResult?['proteinas_g'] as num?)?.toDouble() ?? 0.0;
     final c = (scanResult?['carbohidratos_g'] as num?)?.toDouble() ?? 0.0;
@@ -2193,11 +3135,24 @@ class _ScanResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Última Comida Escaneada',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg, letterSpacing: -0.5)),
+          Text(
+            pending ? 'Confirma esta comida' : 'Última Comida Escaneada',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: fg,
+              letterSpacing: -0.5,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(foodName,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: mutedFg)),
+          Text(
+            '$foodName · $kcal kcal',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: mutedFg,
+            ),
+          ),
           if (notas.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
@@ -2216,13 +3171,74 @@ class _ScanResultCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _MacroChip(label: 'Proteína', value: '${p.toInt()}g', pct: share(kcalP), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(
+                child: _MacroChip(
+                  label: 'Proteína',
+                  value: '${p.toInt()}g',
+                  pct: share(kcalP),
+                  fg: fg,
+                  mutedFg: mutedFg,
+                  surface1: surface1,
+                  muted: muted,
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Carbos', value: '${c.toInt()}g', pct: share(kcalC), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(
+                child: _MacroChip(
+                  label: 'Carbos',
+                  value: '${c.toInt()}g',
+                  pct: share(kcalC),
+                  fg: fg,
+                  mutedFg: mutedFg,
+                  surface1: surface1,
+                  muted: muted,
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: _MacroChip(label: 'Grasas', value: '${f.toInt()}g', pct: share(kcalF), fg: fg, mutedFg: mutedFg, surface1: surface1, muted: muted)),
+              Expanded(
+                child: _MacroChip(
+                  label: 'Grasas',
+                  value: '${f.toInt()}g',
+                  pct: share(kcalF),
+                  fg: fg,
+                  mutedFg: mutedFg,
+                  surface1: surface1,
+                  muted: muted,
+                ),
+              ),
             ],
           ),
+          if (pending) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isSaving ? null : onDiscard,
+                    child: const Text('Descartar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: isSaving ? null : onConfirm,
+                    child: isSaving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Text('Confirmar e insertar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -2230,7 +3246,15 @@ class _ScanResultCard extends StatelessWidget {
 }
 
 class _MacroChip extends StatelessWidget {
-  const _MacroChip({required this.label, required this.value, required this.pct, required this.fg, required this.mutedFg, required this.surface1, required this.muted});
+  const _MacroChip({
+    required this.label,
+    required this.value,
+    required this.pct,
+    required this.fg,
+    required this.mutedFg,
+    required this.surface1,
+    required this.muted,
+  });
   final String label;
   final String value;
   final double pct;
@@ -2243,13 +3267,31 @@ class _MacroChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: surface1, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: surface1,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: mutedFg)),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+              color: mutedFg,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
@@ -2257,7 +3299,9 @@ class _MacroChip extends StatelessWidget {
               value: pct,
               minHeight: 6,
               backgroundColor: muted,
-              valueColor: const AlwaysStoppedAnimation<Color>(DesignTokens.aiVia),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                DesignTokens.aiVia,
+              ),
             ),
           ),
         ],
@@ -2289,7 +3333,6 @@ class _HealthScreen extends StatelessWidget {
   }
 }
 
-
 class _CompositionChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -2310,13 +3353,31 @@ class _CompositionChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('COMPOSICIÓN · 6 MESES',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+          Text(
+            'COMPOSICIÓN · 6 MESES',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.4,
+              color: mutedFg,
+            ),
+          ),
           const SizedBox(height: 4),
           RichText(
             text: TextSpan(
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fg),
-              children: [const TextSpan(text: 'Grasa visceral '), TextSpan(text: 'vs.', style: TextStyle(color: mutedFg)), const TextSpan(text: ' masa magra')],
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+              children: [
+                const TextSpan(text: 'Grasa visceral '),
+                TextSpan(
+                  text: 'vs.',
+                  style: TextStyle(color: mutedFg),
+                ),
+                const TextSpan(text: ' masa magra'),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -2330,17 +3391,42 @@ class _CompositionChart extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Container(width: 8, height: 8, decoration: const BoxDecoration(gradient: DesignTokens.aiGradient, shape: BoxShape.circle)),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 6),
               Text('Masa magra', style: TextStyle(fontSize: 12, color: fg)),
               const SizedBox(width: 4),
-              const Icon(LucideIcons.trendingUp, size: 14, color: Color(0xFF059669)),
+              const Icon(
+                LucideIcons.trendingUp,
+                size: 14,
+                color: Color(0xFF059669),
+              ),
               const Spacer(),
-              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFFB923C), shape: BoxShape.circle)),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFB923C),
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 6),
-              Text('Grasa visceral', style: TextStyle(fontSize: 12, color: mutedFg)),
+              Text(
+                'Grasa visceral',
+                style: TextStyle(fontSize: 12, color: mutedFg),
+              ),
               const SizedBox(width: 4),
-              const Icon(LucideIcons.trendingDown, size: 14, color: Color(0xFF059669)),
+              const Icon(
+                LucideIcons.trendingDown,
+                size: 14,
+                color: Color(0xFF059669),
+              ),
             ],
           ),
         ],
@@ -2350,7 +3436,12 @@ class _CompositionChart extends StatelessWidget {
 }
 
 class _CompPainter extends CustomPainter {
-  const _CompPainter({required this.lean, required this.fat, required this.min, required this.max});
+  const _CompPainter({
+    required this.lean,
+    required this.fat,
+    required this.min,
+    required this.max,
+  });
   final List<int> lean;
   final List<int> fat;
   final int min;
@@ -2364,11 +3455,14 @@ class _CompPainter extends CustomPainter {
       for (int i = 0; i < arr.length; i++) {
         final x = (i / (arr.length - 1)) * w;
         final y = h - ((arr[i] - min) / (max - min)) * h;
-        if (i == 0) p.moveTo(x, y);
-        else p.lineTo(x, y);
+        if (i == 0)
+          p.moveTo(x, y);
+        else
+          p.lineTo(x, y);
       }
       return p;
     }
+
     // lean fill
     final leanPath = path(lean);
     final fillPath = Path.from(leanPath)
@@ -2379,14 +3473,25 @@ class _CompPainter extends CustomPainter {
     final grad = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [DesignTokens.aiVia.withOpacity(0.35), DesignTokens.aiVia.withOpacity(0)],
+      colors: [
+        DesignTokens.aiVia.withOpacity(0.35),
+        DesignTokens.aiVia.withOpacity(0),
+      ],
     ).createShader(rect);
-    canvas.drawPath(fillPath, Paint()..shader = grad..style = PaintingStyle.fill);
-    canvas.drawPath(leanPath, Paint()
-      ..color = DesignTokens.aiVia
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round);
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..shader = grad
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      leanPath,
+      Paint()
+        ..color = DesignTokens.aiVia
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
     // fat dashed
     final fatPath = path(fat);
     _drawDashed(canvas, fatPath, const Color(0xFFFB923C), 2.5);
@@ -2411,10 +3516,51 @@ class _CompPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CompPainter old) => old.lean != lean || old.fat != fat;
+  bool shouldRepaint(covariant _CompPainter old) =>
+      old.lean != lean || old.fat != fat;
 }
 
-class _PostureMesh extends StatelessWidget {
+class _PostureMesh extends StatefulWidget {
+  @override
+  State<_PostureMesh> createState() => _PostureMeshState();
+}
+
+class _PostureMeshState extends State<_PostureMesh> {
+  late Future<List<Map<String, dynamic>>> _capturesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _capturesFuture = _load();
+  }
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return const [];
+    try {
+      final list = await ApiService.getPostureEvaluationsByUser(userId);
+      // Más reciente primero: el historial se lee de arriba abajo.
+      list.sort(
+        (a, b) => (b['fecha_evaluacion']?.toString() ?? '').compareTo(
+          a['fecha_evaluacion']?.toString() ?? '',
+        ),
+      );
+      return list;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _newCapture() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const AiCoachPage(initialMode: ChatMode.analisisFisico),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _capturesFuture = _load());
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
@@ -2437,22 +3583,44 @@ class _PostureMesh extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('POSTURA 3D · HISTÓRICO',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4, color: mutedFg)),
+                    Text(
+                      'POSTURA 3D · HISTÓRICO',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: mutedFg,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('Asimetría corregida',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: fg)),
+                    Text(
+                      'Asimetría corregida',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text('−38%',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF047857))),
+                child: const Text(
+                  '−38%',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF047857),
+                  ),
+                ),
               ),
             ],
           ),
@@ -2461,8 +3629,80 @@ class _PostureMesh extends StatelessWidget {
             children: [
               Expanded(child: _MeshFigure(label: 'Ene', tilt: -8, muted: true)),
               const SizedBox(width: 12),
-              Expanded(child: _MeshFigure(label: 'Hoy', tilt: -1, muted: false)),
+              Expanded(
+                child: _MeshFigure(label: 'Hoy', tilt: -1, muted: false),
+              ),
             ],
+          ),
+          const SizedBox(height: 16),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: _newCapture,
+              borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(LucideIcons.camera, size: 17, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Tomar nueva imagen',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'CALENDARIO DE CAPTURAS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.4,
+              color: mutedFg,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _capturesFuture,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final captures = snap.data ?? const [];
+              if (captures.isEmpty) {
+                // Sin capturas reales no se inventa un historial: se explica
+                // qué hace falta para que aparezca.
+                return Text(
+                  'Todavía no hay capturas guardadas. Toma una imagen para '
+                  'empezar tu histórico de postura.',
+                  style: TextStyle(fontSize: 12.5, color: mutedFg, height: 1.4),
+                );
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < captures.length && i < 6; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _CaptureRow(capture: captures[i], isCurrent: i == 0),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -2470,8 +3710,138 @@ class _PostureMesh extends StatelessWidget {
   }
 }
 
+/// Fila del historial de capturas de postura.
+class _CaptureRow extends StatelessWidget {
+  const _CaptureRow({required this.capture, required this.isCurrent});
+  final Map<String, dynamic> capture;
+  final bool isCurrent;
+
+  static const _meses = [
+    'Ene',
+    'Feb',
+    'Mar',
+    'Abr',
+    'May',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dic',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fecha = DateTime.tryParse(
+      capture['fecha_evaluacion']?.toString() ?? '',
+    );
+    final mes = fecha != null ? _meses[fecha.month - 1] : '—';
+    final dia = fecha != null ? fecha.day.toString().padLeft(2, '0') : '—';
+    final score = capture['puntuacion_postura'];
+    final scoreLabel = score is num
+        ? 'Puntuación ${score.toStringAsFixed(0)} · malla 3D'
+        : 'Malla 3D';
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: DesignTokens.surface1(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: DesignTokens.card(b),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  mes,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: DesignTokens.mutedForeground(b),
+                  ),
+                ),
+                Text(
+                  dia,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                    color: DesignTokens.foreground(b),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Captura $mes',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: DesignTokens.foreground(b),
+                  ),
+                ),
+                Text(
+                  scoreLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: DesignTokens.mutedForeground(b),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isCurrent)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: DesignTokens.success(b).withOpacity(0.14),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Actual',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: DesignTokens.success(b),
+                ),
+              ),
+            )
+          else
+            Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: DesignTokens.mutedForeground(b),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MeshFigure extends StatelessWidget {
-  const _MeshFigure({required this.label, required this.tilt, required this.muted});
+  const _MeshFigure({
+    required this.label,
+    required this.tilt,
+    required this.muted,
+  });
   final String label;
   final double tilt;
   final bool muted;
@@ -2497,14 +3867,14 @@ class _MeshFigure extends StatelessWidget {
             Center(
               child: Transform.rotate(
                 angle: tilt * 3.1416 / 180,
-                child: Icon(LucideIcons.user,
-                    size: 96, color: muted ? fg.withOpacity(0.3) : fg.withOpacity(0.7)),
+                child: Icon(
+                  LucideIcons.user,
+                  size: 96,
+                  color: muted ? fg.withOpacity(0.3) : fg.withOpacity(0.7),
+                ),
               ),
             ),
-            CustomPaint(
-              size: Size.infinite,
-              painter: _GridPainter(),
-            ),
+            CustomPaint(size: Size.infinite, painter: _GridPainter()),
             Positioned(
               bottom: 8,
               left: 8,
@@ -2514,7 +3884,14 @@ class _MeshFigure extends StatelessWidget {
                   color: Colors.white.withOpacity(0.85),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF1B1B20))),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B1B20),
+                  ),
+                ),
               ),
             ),
           ],
@@ -2572,7 +3949,9 @@ class _BottomNav extends StatelessWidget {
           children: items.map((it) {
             final isActive = it.$1 == active;
             final fg = DesignTokens.foreground(Theme.of(context).brightness);
-            final mutedFg = DesignTokens.mutedForeground(Theme.of(context).brightness);
+            final mutedFg = DesignTokens.mutedForeground(
+              Theme.of(context).brightness,
+            );
             return Expanded(
               child: InkWell(
                 onTap: () => onChange(it.$1),
@@ -2584,8 +3963,14 @@ class _BottomNav extends StatelessWidget {
                     children: [
                       Icon(it.$3, size: 22, color: isActive ? fg : mutedFg),
                       const SizedBox(height: 4),
-                      AiGradientText(it.$2,
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: isActive ? fg : mutedFg)),
+                      AiGradientText(
+                        it.$2,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: isActive ? fg : mutedFg,
+                        ),
+                      ),
                     ],
                   ),
                 ),

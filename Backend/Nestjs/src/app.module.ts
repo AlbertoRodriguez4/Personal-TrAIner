@@ -42,6 +42,10 @@ import { ExerciseCatalogService } from './modules/exercises_catalog/service/exer
 import { RecoveryLog } from './modules/recovery/entities/recovery_log.entity';
 import { RecoveryController } from './modules/recovery/controller/recovery.controller';
 import { RecoveryService } from './modules/recovery/service/recovery.service';
+import { Supplement } from './modules/supplements/entities/supplement.entity';
+import { SupplementLog } from './modules/supplements/entities/supplement_log.entity';
+import { SupplementController } from './modules/supplements/controller/supplement.controller';
+import { SupplementService } from './modules/supplements/service/supplement.service';
 
 @Module({
   imports: [
@@ -53,10 +57,10 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog], 
-      synchronize: false, 
+      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog],
+      synchronize: false,
     }),
-    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog]), 
+    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog]),
   ],
   controllers: [
     UserController,
@@ -73,6 +77,7 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
     DailySummaryController,
     ExerciseCatalogController,
     RecoveryController,
+    SupplementController,
   ],
   providers: [
     UserService,
@@ -89,6 +94,7 @@ import { RecoveryService } from './modules/recovery/service/recovery.service';
     DailySummaryService,
     ExerciseCatalogService,
     RecoveryService,
+    SupplementService,
   ],
 })
 export class AppModule {}

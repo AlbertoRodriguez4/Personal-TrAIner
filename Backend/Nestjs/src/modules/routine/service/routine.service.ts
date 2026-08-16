@@ -65,9 +65,27 @@ export class RoutineService {
       );
     }
 
-    const days = (dto.dias_entrenamiento ?? []).map((day) =>
+    // day_of_week tiene que ser un día real de la semana: la app Flutter lo cruza contra
+    // su lista fija (Lunes..Domingo) para pintar el plan semanal. El viejo `Día N` no
+    // casaba con ninguno, así que la rutina se guardaba pero la pantalla de edición
+    // salía vacía y al guardar se perdían los días. El fallback por índice cubre el caso
+    // de que la IA no mande dia_semana.
+    const DIAS_SEMANA = [
+      'Lunes',
+      'Martes',
+      'Miércoles',
+      'Jueves',
+      'Viernes',
+      'Sábado',
+      'Domingo',
+    ];
+
+    const days = (dto.dias_entrenamiento ?? []).map((day, index) =>
       this.dayRepository.create({
-        day_of_week: `Día ${day.numero_dia}`,
+        day_of_week:
+          day.dia_semana && DIAS_SEMANA.includes(day.dia_semana)
+            ? day.dia_semana
+            : DIAS_SEMANA[index % 7],
         focus: `${day.nombre_dia} — ${day.grupo_muscular}`,
         exercises: (day.ejercicios ?? []).map((ex) =>
           this.exerciseRepository.create({

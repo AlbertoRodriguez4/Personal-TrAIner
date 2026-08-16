@@ -9,6 +9,7 @@ import '../../models/routine.dart';
 import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
 import '../widgets/exercise_catalog_sheet.dart';
+import 'quick_add_page.dart';
 import '../../models/exercise_catalog.dart';
 import '../../../../core/theme/design_tokens.dart';
 
@@ -287,6 +288,25 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
     }
   }
 
+  /// Alta rápida: abre la pantalla de catálogo con lista en construcción y
+  /// vuelca de golpe todo lo que el usuario haya montado para ese día.
+  Future<void> _openQuickAdd(int dayIndex) async {
+    final added = await Navigator.of(context).push<List<Exercise>>(
+      MaterialPageRoute(
+        builder: (_) => QuickAddPage(
+          dayLabel: _days[dayIndex].dayOfWeek,
+          activityType: _activityType,
+        ),
+      ),
+    );
+    if (added == null || added.isEmpty) return;
+    setState(() {
+      _days[dayIndex] = _days[dayIndex].copyWith(
+        exercises: [..._days[dayIndex].exercises, ...added],
+      );
+    });
+  }
+
   void _deleteExercise(int dayIndex, int exerciseIndex) {
     setState(() {
       final updated = List<Exercise>.from(_days[dayIndex].exercises);
@@ -450,6 +470,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                           onFocusChanged: (focus) => _updateDayFocus(index, focus),
                           onRemove: () => _removeDay(day),
                           onAddExercise: () => _openExerciseDialog(dayIndex: index),
+                          onQuickAdd: () => _openQuickAdd(index),
                           onEditExercise: (ex, exIndex) => _openExerciseDialog(
                             dayIndex: index,
                             exercise: ex,
@@ -616,6 +637,7 @@ class _DayCard extends StatelessWidget {
   final ValueChanged<String> onFocusChanged;
   final VoidCallback onRemove;
   final VoidCallback onAddExercise;
+  final VoidCallback onQuickAdd;
   final void Function(Exercise, int) onEditExercise;
   final void Function(int) onDeleteExercise;
 
@@ -627,6 +649,7 @@ class _DayCard extends StatelessWidget {
     required this.onFocusChanged,
     required this.onRemove,
     required this.onAddExercise,
+    required this.onQuickAdd,
     required this.onEditExercise,
     required this.onDeleteExercise,
   });
@@ -842,35 +865,68 @@ class _DayCard extends StatelessWidget {
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                  child: InkWell(
-                    onTap: onAddExercise,
-                    borderRadius: BorderRadius.circular(12),
-                    child: DottedBorder(
-                      borderType: BorderType.RRect,
-                      radius: const Radius.circular(12),
-                      color: mutedFg,
-                      dashPattern: const [6, 4],
-                      strokeWidth: 1.2,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(LucideIcons.plus,
-                                size: 18, color: mutedFg),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Añadir ejercicio',
-                              style: TextStyle(
-                                color: mutedFg,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  child: Column(
+                    children: [
+                      // Vía rápida (varios de golpe) como acción principal, y
+                      // el alta de uno en uno como secundaria: montar un día
+                      // entero es lo habitual, retocar un ejercicio suelto no.
+                      Material(
+                        color: DesignTokens.activity(activityType),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          onTap: onQuickAdd,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(LucideIcons.zap, size: 17, color: Colors.white),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Añadir ejercicios (rápido)',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: onAddExercise,
+                        borderRadius: BorderRadius.circular(12),
+                        child: DottedBorder(
+                          borderType: BorderType.RRect,
+                          radius: const Radius.circular(12),
+                          color: mutedFg,
+                          dashPattern: const [6, 4],
+                          strokeWidth: 1.2,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(LucideIcons.plus,
+                                    size: 17, color: mutedFg),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Añadir uno a uno',
+                                  style: TextStyle(
+                                    color: mutedFg,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

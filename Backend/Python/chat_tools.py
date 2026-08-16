@@ -1,5 +1,11 @@
 from google.genai import types
 import nest_client as nest
+import wger_client
+import openfoodfacts_client
+import usda_client
+import edamam_client
+import openfda_client
+from health_calculators import calcular_metricas_salud
 
 
 # ============================================================
@@ -18,7 +24,22 @@ crear_rutina_decl = types.FunctionDeclaration(
         type="OBJECT",
         properties={
             "nombre_rutina": types.Schema(type="STRING", description="Nombre corto, ej. 'Fuerza 6 días - Push Pull Legs'"),
-            "tipo_entrenamiento": types.Schema(type="STRING", description="Ej. 'Fuerza', 'Hipertrofia', 'Cardio', 'Full Body'"),
+            # OJO: esto viaja tal cual a `activity_type` en la BD (RoutineService
+            # .createFromAiPayload no lo traduce) y la app Flutter lo usa como CLAVE para
+            # buscar el tipo de actividad en una lista fija de 5. Un valor fuera de esa
+            # lista ("Fuerza", "Hipertrofia") rompe la pantalla de rutina con
+            # "Bad state: No element" y además esconde el campo de peso (solo se muestra
+            # si el tipo es 'gym'). Por eso está restringido por enum: no lo aflojes.
+            "tipo_entrenamiento": types.Schema(
+                type="STRING",
+                enum=["gym", "cardio", "calistenia", "yoga", "deportes"],
+                description=(
+                    "OBLIGATORIO uno exacto de: 'gym' (pesas/máquinas, incluye fuerza e "
+                    "hipertrofia), 'cardio', 'calistenia' (peso corporal), 'yoga' "
+                    "(yoga/pilates/flexibilidad), 'deportes'. En minúsculas y sin "
+                    "variantes: no uses 'Fuerza', 'Hipertrofia' ni 'Full Body'."
+                ),
+            ),
             "numero_dias": types.Schema(type="INTEGER", description="Entre 1 y 7"),
             "dias_entrenamiento": types.Schema(
                 type="ARRAY",
@@ -26,6 +47,21 @@ crear_rutina_decl = types.FunctionDeclaration(
                     type="OBJECT",
                     properties={
                         "numero_dia": types.Schema(type="INTEGER"),
+                        # La app Flutter renderiza el plan semanal cruzando este valor
+                        # contra su lista fija de días (Lunes..Domingo). Si no coincide,
+                        # la rutina se guarda pero la pantalla de edición sale VACÍA y
+                        # al guardar se pierden los días. Por eso es enum y obligatorio.
+                        "dia_semana": types.Schema(
+                            type="STRING",
+                            enum=["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+                            description=(
+                                "Día real de la semana en que toca esta sesión, exactamente como "
+                                "en la lista (con tilde y mayúscula inicial). Repartí los días de "
+                                "entrenamiento a lo largo de la semana dejando descanso entre "
+                                "sesiones del mismo grupo muscular (ej. para 3 días: Lunes, "
+                                "Miércoles, Viernes), no los pongas todos seguidos."
+                            ),
+                        ),
                         "nombre_dia": types.Schema(type="STRING", description="Ej. 'Empuje', 'Tirón', 'Pierna'"),
                         "grupo_muscular": types.Schema(type="STRING"),
                         "ejercicios": types.Schema(
@@ -40,19 +76,20 @@ crear_rutina_decl = types.FunctionDeclaration(
                                     "peso_sugerido_kg": types.Schema(
                                         type="NUMBER",
                                         description=(
-                                            "Carga sugerida en kg. Opcional: rellenar solo si hay base real "
-                                            "para estimarla (nivel del usuario, cargas que ya mueve). Omitir "
-                                            "en ejercicios de peso corporal o si no hay datos suficientes — "
-                                            "no inventar una cifra."
+                                            "Carga sugerida en kg. SIEMPRE hay que enviarlo: usa 0 cuando sea "
+                                            "peso corporal o cuando no tengas base real para estimar la carga "
+                                            "(nivel del usuario, cargas que ya mueve). El 0 deja el campo "
+                                            "editable en la app para que el usuario ponga su peso real; "
+                                            "omitirlo lo deja vacío. Nunca inventes una cifra: ante la duda, 0."
                                         ),
                                     ),
                                     "notas": types.Schema(type="STRING"),
                                 },
-                                required=["nombre", "series", "repeticiones", "descanso_segundos"],
+                                required=["nombre", "series", "repeticiones", "descanso_segundos", "peso_sugerido_kg"],
                             ),
                         ),
                     },
-                    required=["numero_dia", "nombre_dia", "grupo_muscular", "ejercicios"],
+                    required=["numero_dia", "dia_semana", "nombre_dia", "grupo_muscular", "ejercicios"],
                 ),
             ),
             "notas_adicionales": types.Schema(type="STRING"),
@@ -61,9 +98,34 @@ crear_rutina_decl = types.FunctionDeclaration(
     ),
 )
 
+def _resumir_rutina(rutina: dict) -> dict:
+    """Condensa la rutina completa que devuelve NestJS (cada ejercicio con series, reps,
+    peso y notas) a lo mínimo para confirmar el guardado. El plan detallado ya está en los
+    argumentos que el propio modelo generó para llamar a esta tool, así que reenviar la
+    rutina entera acá lo duplica dentro de la conversación — eso es lo que hace que la
+    llamada siguiente a Groq (redactar la respuesta) supere las 8000 TPM del tier gratuito
+    y devuelva 413, aun cuando el guardado en sí ya salió bien."""
+    dias = rutina.get("days") or []
+    return {
+        "guardado": True,
+        "id": rutina.get("id"),
+        "nombre": rutina.get("name"),
+        "tipo_entrenamiento": rutina.get("activity_type"),
+        "dias": [
+            {
+                "dia_semana": d.get("day_of_week"),
+                "enfoque": d.get("focus"),
+                "num_ejercicios": len(d.get("exercises") or []),
+            }
+            for d in dias
+        ],
+    }
+
+
 def crear_rutina_personalizada(user_id: str, **kwargs) -> dict:
     body = {"userId": user_id, "activa": True, **kwargs}
-    return nest.post("/api/routines/ai", body)
+    rutina = nest.post("/api/routines/ai", body)
+    return _resumir_rutina(rutina)
 
 
 buscar_ejercicios_decl = types.FunctionDeclaration(
@@ -112,7 +174,8 @@ aplicar_cambios_rutina_decl = types.FunctionDeclaration(
 )
 
 def aplicar_cambios_rutina(user_id: str, routine_id: str, dias_entrenamiento: list) -> dict:
-    return nest.put(f"/api/routines/{routine_id}/ai?userId={user_id}", {"dias_entrenamiento": dias_entrenamiento})
+    rutina = nest.put(f"/api/routines/{routine_id}/ai?userId={user_id}", {"dias_entrenamiento": dias_entrenamiento})
+    return _resumir_rutina(rutina)
 
 
 # ============================================================
@@ -175,6 +238,11 @@ registrar_comida_decl = types.FunctionDeclaration(
             "carbohidratos_g": types.Schema(type="NUMBER"),
             "grasas_g": types.Schema(type="NUMBER"),
             "notas": types.Schema(type="STRING"),
+            "tipo_comida": types.Schema(
+                type="STRING",
+                description="Uno de: desayuno, comida, snack, cena, otro. Inferilo del "
+                "mensaje del usuario o de la hora del día si no lo dice explícitamente.",
+            ),
         },
         required=["fecha_registro", "calorias_consumidas", "proteinas_g", "carbohidratos_g", "grasas_g"],
     ),
@@ -182,6 +250,37 @@ registrar_comida_decl = types.FunctionDeclaration(
 
 def registrar_comida(user_id: str, **kwargs) -> dict:
     return nest.post("/nutrition-logs", {"userId": user_id, **kwargs})
+
+
+estimar_comida_decl = types.FunctionDeclaration(
+    name="estimar_comida",
+    description=(
+        "Reporta una estimación de macros/calorías de una comida SIN guardarla todavía. "
+        "Úsala siempre que analices una foto o descripción de comida por primera vez: la "
+        "app le muestra esta estimación al usuario y es la app la que la guarda cuando él "
+        "la confirme con un botón, no esta llamada."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "nombre_alimento": types.Schema(type="STRING", description="Nombre corto y descriptivo del plato/alimento identificado"),
+            "calorias_consumidas": types.Schema(type="INTEGER"),
+            "proteinas_g": types.Schema(type="NUMBER"),
+            "carbohidratos_g": types.Schema(type="NUMBER"),
+            "grasas_g": types.Schema(type="NUMBER"),
+            "notas": types.Schema(type="STRING"),
+            "tipo_comida": types.Schema(
+                type="STRING",
+                description="Uno de: desayuno, comida, snack, cena, otro. Inferilo del "
+                "mensaje del usuario o de la hora del día si no lo dice explícitamente.",
+            ),
+        },
+        required=["nombre_alimento", "calorias_consumidas", "proteinas_g", "carbohidratos_g", "grasas_g"],
+    ),
+)
+
+def estimar_comida(user_id: str, **kwargs) -> dict:
+    return kwargs
 
 
 resumen_diario_decl = types.FunctionDeclaration(
@@ -254,14 +353,161 @@ def guardar_analisis_fisico(user_id: str, **kwargs) -> dict:
 
 
 # ============================================================
+# DIVISIÓN 7 — APIs externas (catálogos públicos, no datos del usuario)
+# ============================================================
+# Todas degradan a {"encontrado": False, ...} si la fuente externa no tiene
+# match o falla — nunca levantan, son enriquecimiento, no persistencia
+# crítica (ver backend_python_ai/SKILL.md).
+
+calcular_metricas_decl = types.FunctionDeclaration(
+    name="calcular_metricas_salud",
+    description=(
+        "Calcula IMC, TMB (metabolismo basal, fórmula Mifflin-St Jeor) y TDEE (gasto "
+        "calórico diario total) a partir de peso, altura, edad, sexo y nivel de "
+        "actividad. Fórmulas estándar, sin llamada externa. Úsala para fundamentar "
+        "volumen/calorías sugeridas en vez de estimarlas de memoria."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "peso_kg": types.Schema(type="NUMBER"),
+            "altura_cm": types.Schema(type="NUMBER"),
+            "edad": types.Schema(type="INTEGER"),
+            "sexo": types.Schema(type="STRING", description="'masculino' | 'femenino'"),
+            "nivel_actividad": types.Schema(
+                type="STRING",
+                description="'sedentario' | 'ligero' | 'moderado' | 'activo' | 'muy_activo' (default 'moderado')",
+            ),
+        },
+        required=["peso_kg", "altura_cm", "edad", "sexo"],
+    ),
+)
+# calcular_metricas_salud se importa directo de health_calculators — ya tiene
+# la firma (user_id, **kwargs) que espera _execute_tool, sin wrapper.
+
+
+buscar_ejercicios_wger_decl = types.FunctionDeclaration(
+    name="buscar_ejercicios_wger",
+    description=(
+        "Busca ejercicios en wger, un catálogo abierto más amplio que el propio, "
+        "filtrando por grupo muscular y/o equipamiento disponible. Complementa a "
+        "buscar_ejercicios_catalogo cuando este no alcanza — no lo reemplaza."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "grupo_muscular": types.Schema(
+                type="STRING",
+                description="Ej. 'pecho', 'espalda', 'piernas', 'hombros', 'brazos', 'abdomen', 'pantorrillas', 'cardio'",
+            ),
+            "equipamiento": types.Schema(
+                type="STRING",
+                description="Ej. 'mancuernas', 'barra', 'polea', 'peso corporal', 'banda elastica', 'kettlebell'",
+            ),
+        },
+    ),
+)
+
+def buscar_ejercicios_wger(user_id: str, grupo_muscular: str | None = None, equipamiento: str | None = None) -> dict:
+    return {"ejercicios": wger_client.buscar_ejercicios(grupo_muscular, equipamiento)}
+
+
+buscar_producto_off_decl = types.FunctionDeclaration(
+    name="buscar_producto_openfoodfacts",
+    description=(
+        "Busca un producto ENVASADO (nombre/marca leídos de la etiqueta en la foto, o "
+        "código de barras) en Open Food Facts para obtener sus macros reales por 100g "
+        "y su Nutri-Score/NOVA, en vez de estimarlos de memoria. Úsala solo cuando la "
+        "comida sea un producto con marca identificable — no para platos caseros."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={"consulta": types.Schema(type="STRING", description="Nombre+marca del producto, o código de barras")},
+        required=["consulta"],
+    ),
+)
+
+def buscar_producto_openfoodfacts(user_id: str, consulta: str) -> dict:
+    producto = openfoodfacts_client.buscar_producto(consulta)
+    return {"producto": producto} if producto else {"encontrado": False, "motivo": "sin match en Open Food Facts"}
+
+
+buscar_alimento_usda_decl = types.FunctionDeclaration(
+    name="buscar_alimento_usda",
+    description=(
+        "Busca el perfil nutricional preciso de un INGREDIENTE CRUDO/individual (ej. "
+        "'chicken breast raw', 'brown rice cooked' — en inglés da mejores resultados) "
+        "en USDA FoodData Central. Úsala cuando identifiques un ingrediente simple con "
+        "confianza, en vez de estimar sus macros de memoria."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={"nombre_alimento": types.Schema(type="STRING")},
+        required=["nombre_alimento"],
+    ),
+)
+
+def buscar_alimento_usda(user_id: str, nombre_alimento: str) -> dict:
+    alimento = usda_client.buscar_alimento(nombre_alimento)
+    return {"alimento": alimento} if alimento else {"encontrado": False, "motivo": "sin match en USDA FoodData Central"}
+
+
+estimar_macros_edamam_decl = types.FunctionDeclaration(
+    name="estimar_macros_ingredientes",
+    description=(
+        "Envía una lista de líneas de ingrediente en lenguaje natural (ej. ['2 huevos "
+        "revueltos', '2 rebanadas de pan integral']) y devuelve el macro combinado de "
+        "la comida completa. Úsala para PLATOS CASEROS con varios ingredientes mezclados, "
+        "en vez de sumar estimaciones a mano."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={"ingredientes": types.Schema(type="ARRAY", items=types.Schema(type="STRING"))},
+        required=["ingredientes"],
+    ),
+)
+
+def estimar_macros_ingredientes(user_id: str, ingredientes: list) -> dict:
+    macros = edamam_client.estimar_macros(ingredientes)
+    return {"macros": macros} if macros else {"encontrado": False, "motivo": "Edamam no disponible o sin match"}
+
+
+buscar_medicamento_decl = types.FunctionDeclaration(
+    name="buscar_medicamento_openfda",
+    description=(
+        "Busca información de la etiqueta OFICIAL de la FDA (indicaciones, "
+        "advertencias, interacciones) de un medicamento o suplemento que el usuario "
+        "haya mencionado. Es SOLO información de referencia — nunca un diagnóstico ni "
+        "una recomendación de dosis, y hay que decírselo siempre al usuario."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={"nombre": types.Schema(type="STRING", description="Nombre del medicamento/suplemento, en español o inglés")},
+        required=["nombre"],
+    ),
+)
+
+def buscar_medicamento_openfda(user_id: str, nombre: str) -> dict:
+    info = openfda_client.buscar_medicamento(nombre)
+    return {"medicamento": info} if info else {"encontrado": False, "motivo": "sin match en OpenFDA"}
+
+
+# ============================================================
 # Registro por división — qué tools se exponen en cada modo
 # ============================================================
 
 TOOLS_BY_MODE = {
-    "creador_rutina": [crear_rutina_decl, buscar_ejercicios_decl],
-    "revisor_rutina": [obtener_rutina_activa_decl, aplicar_cambios_rutina_decl, buscar_ejercicios_decl],
-    "sueno_recuperacion": [guardar_recuperacion_decl, historial_recuperacion_decl],
-    "nutricion": [registrar_comida_decl, resumen_diario_decl],
+    "creador_rutina": [
+        crear_rutina_decl, buscar_ejercicios_decl, buscar_ejercicios_wger_decl, calcular_metricas_decl,
+    ],
+    "revisor_rutina": [
+        obtener_rutina_activa_decl, aplicar_cambios_rutina_decl, buscar_ejercicios_decl, buscar_ejercicios_wger_decl,
+    ],
+    "sueno_recuperacion": [guardar_recuperacion_decl, historial_recuperacion_decl, buscar_medicamento_decl],
+    "nutricion": [
+        estimar_comida_decl, registrar_comida_decl, resumen_diario_decl,
+        buscar_producto_off_decl, buscar_alimento_usda_decl, estimar_macros_edamam_decl, calcular_metricas_decl,
+    ],
     "entrenamiento": [registrar_sesion_decl],
     "analisis_fisico": [guardar_analisis_fisico_decl],
 }
@@ -274,9 +520,17 @@ EXECUTORS = {
     "guardar_analisis_recuperacion": guardar_analisis_recuperacion,
     "obtener_historial_recuperacion": obtener_historial_recuperacion,
     "registrar_comida": registrar_comida,
+    "estimar_comida": estimar_comida,
     "obtener_resumen_diario": obtener_resumen_diario,
     "registrar_sesion_entrenamiento": registrar_sesion_entrenamiento,
     "guardar_analisis_fisico": guardar_analisis_fisico,
+    # APIs externas (División 7)
+    "calcular_metricas_salud": calcular_metricas_salud,
+    "buscar_ejercicios_wger": buscar_ejercicios_wger,
+    "buscar_producto_openfoodfacts": buscar_producto_openfoodfacts,
+    "buscar_alimento_usda": buscar_alimento_usda,
+    "estimar_macros_ingredientes": estimar_macros_ingredientes,
+    "buscar_medicamento_openfda": buscar_medicamento_openfda,
 }
 
 # Reglas transversales a los 6 modos. chat_engine.py las antepone al system prompt
@@ -317,7 +571,17 @@ SYSTEM_PROMPTS = {
         "Antes de llamar a esa función, asegurate de tener: número de días, objetivo "
         "(fuerza/hipertrofia/cardio/etc.) y, si es posible, nivel de experiencia — si falta "
         "algo, pregúntalo primero. Usa buscar_ejercicios_catalogo para fundamentar los "
-        "ejercicios en vez de inventar nombres poco comunes.\n"
+        "ejercicios en vez de inventar nombres poco comunes, y buscar_ejercicios_wger "
+        "cuando necesites variedad adicional por grupo muscular o equipamiento que el "
+        "catálogo propio no cubra. Si el usuario te da peso/altura/edad/sexo, usa "
+        "calcular_metricas_salud para fundamentar volumen y calorías sugeridas en su "
+        "TDEE real en vez de una estimación genérica.\n"
+        "PRESUPUESTO DE PASOS — importante: tenés un máximo de 8 llamadas a funciones por "
+        "turno, y si las gastás investigando NO se crea la rutina y el usuario se queda "
+        "sin nada. Haz como mucho 2 búsquedas en total (no una por cada grupo muscular: "
+        "ya conocés los ejercicios básicos de sobra) y dedicá el resto a llamar a "
+        "crear_rutina_personalizada, que es lo que el usuario realmente pidió. Ante la "
+        "duda entre buscar una vez más o crear la rutina, creá la rutina.\n"
         "Al diseñar, apoyate en los principios establecidos: sobrecarga progresiva, un "
         "volumen semanal por grupo muscular acorde al nivel, frecuencia repartida en la "
         "semana, selección equilibrada de patrones de movimiento (empuje/tirón/pierna/core) "
@@ -326,18 +590,28 @@ SYSTEM_PROMPTS = {
         "Sobre peso_sugerido_kg: rellenálo solo si el usuario te dio base real para "
         "estimarlo (su nivel, cargas que ya mueve, peso corporal en ejercicios relevantes). "
         "Si no tenés esa base, omitilo y decile que lo ajuste en sus primeras sesiones — "
-        "nunca inventes una carga. Al terminar, confirma en texto breve qué guardaste."
+        "nunca inventes una carga.\n"
+        "Al terminar de llamar a crear_rutina_personalizada, tu respuesta final tiene que "
+        "incluir el PLANTEAMIENTO (objetivo, estructura semanal y por qué la elegiste) y un "
+        "RESUMEN día por día (nombre del día, enfoque, cantidad de ejercicios) — no repitas "
+        "cada serie/repetición/peso de cada ejercicio, eso el usuario ya lo puede ver y "
+        "editar en la pantalla de la rutina."
     ),
     "revisor_rutina": (
         "Eres el Revisor de Rutinas. Primero llama a obtener_rutina_activa para ver qué "
         "tiene el usuario. Analiza volumen, balance de grupos musculares y progresión, y "
         "proponé cambios concretos en texto. NUNCA llames a aplicar_cambios_rutina sin que "
         "el usuario haya confirmado explícitamente en su mensaje que quiere aplicar esos "
-        "cambios.\n"
+        "cambios. Si proponés reemplazar o sumar un ejercicio, podés usar "
+        "buscar_ejercicios_wger para ofrecer alternativas reales en vez de inventar "
+        "nombres.\n"
         "Justificá cada cambio que propongas con el principio que lo respalda (desequilibrio "
         "empuje/tirón, volumen fuera del rango útil para su nivel, falta de progresión, "
         "frecuencia insuficiente), no con preferencias personales. Si la rutina ya está "
-        "bien, decilo en vez de inventar cambios para parecer útil."
+        "bien, decilo en vez de inventar cambios para parecer útil.\n"
+        "Al terminar de llamar a aplicar_cambios_rutina, confirma en un resumen breve día "
+        "por día (enfoque y cantidad de ejercicios) qué quedó, sin repetir cada serie/"
+        "repetición/peso — el usuario ya lo ve editable en la pantalla de la rutina."
     ),
     "sueno_recuperacion": (
         "Eres el analista de Sueño y Recuperación. Vas a recibir datos reales de Health "
@@ -349,14 +623,38 @@ SYSTEM_PROMPTS = {
         "Interpretá con la cautela que corresponde: el HRV y la FC en reposo solo son "
         "informativos comparados con la línea base de la propia persona, y una sola noche "
         "dice poco frente a una tendencia de varios días. No conviertas una métrica aislada "
-        "en un diagnóstico."
+        "en un diagnóstico.\n"
+        "Si el usuario menciona un medicamento o suplemento (ej. melatonina, ibuprofeno, "
+        "algo que esté tomando para dormir o para el dolor), podés consultar "
+        "buscar_medicamento_openfda para traer indicaciones/advertencias/interacciones "
+        "oficiales de la FDA como referencia. ES OBLIGATORIO: cada vez que uses o menciones "
+        "esa información, aclará explícitamente que es información de referencia de la "
+        "etiqueta oficial, NO un consejo médico ni una recomendación de dosis, y que no "
+        "sustituye a un profesional de la salud — nunca la presentes como una indicación "
+        "tuya. Si el resultado trae es_posible_combinacion en true, aclará que las "
+        "advertencias corresponden a un producto combinado, no necesariamente al "
+        "ingrediente puro que preguntó el usuario."
     ),
     "nutricion": (
         "Eres el Nutricionista de Personal TrAIner. Si el mensaje trae imágenes, debes "
-        "analizarlas visualmente (identificar alimentos y estimar porciones) antes de llamar a "
-        "registrar_comida. Si el usuario describe una comida o adjunta una foto, estima sus "
-        "macros y calorías y guárdala con registrar_comida. Si pregunta cómo va en el día, "
-        "usa obtener_resumen_diario. Sé breve y accionable.\n"
+        "analizarlas visualmente (identificar alimentos y estimar porciones) antes de reportar "
+        "nada. Si el usuario describe una comida o adjunta una foto, estima sus macros y "
+        "calorías y repórtalo con estimar_comida, incluyendo siempre nombre_alimento y "
+        "tipo_comida (desayuno/comida/snack/cena/otro, inferido del mensaje o de la hora "
+        "actual). NO uses registrar_comida en esta primera pasada — es la app la que "
+        "guarda de verdad la comida cuando el usuario confirma la estimación con un botón, "
+        "nunca la des por guardada en tu respuesta de texto. Usa registrar_comida "
+        "únicamente si el usuario ya confirmó por escrito en un mensaje posterior que "
+        "quiere guardar una estimación que le diste antes en la conversación. Si "
+        "pregunta cómo va en el día, usa obtener_resumen_diario. Sé breve y accionable.\n"
+        "Antes de estimar, contrastá tu lectura visual contra una base de datos real cuando "
+        "el alimento sea identificable, en vez de estimar todo de memoria: si es un producto "
+        "ENVASADO con marca/etiqueta legible, usa buscar_producto_openfoodfacts (nombre+marca "
+        "o código de barras); si es un INGREDIENTE CRUDO individual (ej. una pechuga de pollo "
+        "a la plancha), usa buscar_alimento_usda; si es un PLATO CASERO con varios "
+        "ingredientes mezclados, usa estimar_macros_ingredientes con una línea de texto por "
+        "ingrediente. Si ninguna de las tres encuentra un match confiable, seguí con tu "
+        "propia estimación, dejándola explícita como tal.\n"
         "Estimar porciones desde una foto es aproximado por naturaleza: no presentes las "
         "calorías como una medición exacta, y si la foto no permite juzgar la cantidad "
         "(sin referencia de tamaño, salsas o aceites no visibles), decilo y pedí el dato "

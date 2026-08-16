@@ -20,6 +20,7 @@ class HealthService {
           HealthDataType.SLEEP_DEEP,
           HealthDataType.SLEEP_REM,
           HealthDataType.SLEEP_LIGHT,
+          HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
         ]
       : [
           HealthDataType.WORKOUT,
@@ -34,6 +35,7 @@ class HealthService {
           HealthDataType.SLEEP_DEEP,
           HealthDataType.SLEEP_REM,
           HealthDataType.SLEEP_LIGHT,
+          HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
         ];
 
   static bool _isConfigured = false;
@@ -55,7 +57,8 @@ class HealthService {
       try {
         final status = await _health.getHealthConnectSdkStatus();
         print("[HC] SDK Status: $status");
-        if (status == HealthConnectSdkStatus.sdkUnavailableProviderUpdateRequired ||
+        if (status ==
+                HealthConnectSdkStatus.sdkUnavailableProviderUpdateRequired ||
             status == HealthConnectSdkStatus.sdkUnavailable) {
           await _health.installHealthConnect();
           return false;
@@ -113,7 +116,9 @@ class HealthService {
   static List<HealthDataPoint>? _cachedWorkouts;
   static DateTime? _lastFetchTime;
 
-  static Future<List<HealthDataPoint>> fetchWorkouts({bool forceRefresh = false}) async {
+  static Future<List<HealthDataPoint>> fetchWorkouts({
+    bool forceRefresh = false,
+  }) async {
     _ensureConfigured();
 
     if (!forceRefresh && _cachedWorkouts != null && _lastFetchTime != null) {
@@ -124,7 +129,7 @@ class HealthService {
 
     await requestPermissions();
 
-    final now   = DateTime.now();
+    final now = DateTime.now();
     final start = now.subtract(const Duration(days: 90));
 
     try {
@@ -138,7 +143,9 @@ class HealthService {
       print("[HC] hasPermissions(WORKOUT): $hasExercisePerm");
 
       if (hasExercisePerm == false) {
-        print("[HC] ⚠️  Sin permiso READ_EXERCISE — revisar AndroidManifest y permisos en Health Connect");
+        print(
+          "[HC] ⚠️  Sin permiso READ_EXERCISE — revisar AndroidManifest y permisos en Health Connect",
+        );
         return [];
       }
 
@@ -154,21 +161,29 @@ class HealthService {
       if (healthData.isEmpty) {
         print("[HC] ⚠️  0 entrenamientos. Posibles causas:");
         print("[HC]   1. Mi Fitness no está conectada a Health Connect");
-        print("[HC]      → Salud Conectada → Permisos → Mi Fitness → activar 'Actividad física'");
-        print("[HC]   2. No hay entrenamientos guardados en Health Connect de ninguna fuente");
-        print("[HC]      → Salud Conectada → Explorar datos → Ejercicio (¿hay algo?)");
+        print(
+          "[HC]      → Salud Conectada → Permisos → Mi Fitness → activar 'Actividad física'",
+        );
+        print(
+          "[HC]   2. No hay entrenamientos guardados en Health Connect de ninguna fuente",
+        );
+        print(
+          "[HC]      → Salud Conectada → Explorar datos → Ejercicio (¿hay algo?)",
+        );
       }
 
       for (final data in healthData.take(5)) {
         if (data.value is WorkoutHealthValue) {
           final w = data.value as WorkoutHealthValue;
-          print("[HC]  > ${w.workoutActivityType} | ${data.dateFrom} → ${data.dateTo} | ${data.sourceName}");
+          print(
+            "[HC]  > ${w.workoutActivityType} | ${data.dateFrom} → ${data.dateTo} | ${data.sourceName}",
+          );
         }
       }
       print("[HC] ===========================");
 
       _cachedWorkouts = _health.removeDuplicates(healthData);
-      _lastFetchTime  = DateTime.now();
+      _lastFetchTime = DateTime.now();
       return _cachedWorkouts!;
     } catch (e) {
       print("[HC] ERROR fetchWorkouts: $e");
@@ -202,7 +217,10 @@ class HealthService {
     // 3. Permisos por tipo
     for (final type in _types) {
       try {
-        final p = await _health.hasPermissions([type], permissions: [HealthDataAccess.READ]);
+        final p = await _health.hasPermissions(
+          [type],
+          permissions: [HealthDataAccess.READ],
+        );
         result['perm_${type.name}'] = p?.toString() ?? 'null';
       } catch (e) {
         result['perm_${type.name}'] = 'ERROR';
@@ -210,16 +228,22 @@ class HealthService {
     }
 
     // 4. Datos reales por rango
-    final now   = DateTime.now();
-    final start7  = now.subtract(const Duration(days: 7));
+    final now = DateTime.now();
+    final start7 = now.subtract(const Duration(days: 7));
     final start30 = now.subtract(const Duration(days: 30));
     final start90 = now.subtract(const Duration(days: 90));
 
     for (final type in _types) {
-      for (final entry in {'7d': start7, '30d': start30, '90d': start90}.entries) {
+      for (final entry in {
+        '7d': start7,
+        '30d': start30,
+        '90d': start90,
+      }.entries) {
         try {
           final data = await _health.getHealthDataFromTypes(
-            startTime: entry.value, endTime: now, types: [type],
+            startTime: entry.value,
+            endTime: now,
+            types: [type],
           );
           result['${type.name}_${entry.key}'] = '${data.length} reg.';
         } catch (e) {
@@ -238,17 +262,25 @@ class HealthService {
   // DETALLES DE ENTRENAMIENTO (FC + calorías)
   // ─────────────────────────────────────────────────────────────────────────
   static Future<Map<String, List<HealthDataPoint>>> fetchWorkoutDetails(
-      DateTime start, DateTime end) async {
+    DateTime start,
+    DateTime end,
+  ) async {
     _ensureConfigured();
     await requestPermissions();
     try {
-      final hrData  = await _health.getHealthDataFromTypes(
-          startTime: start, endTime: end, types: [HealthDataType.HEART_RATE]);
+      final hrData = await _health.getHealthDataFromTypes(
+        startTime: start,
+        endTime: end,
+        types: [HealthDataType.HEART_RATE],
+      );
       final calData = await _health.getHealthDataFromTypes(
-          startTime: start, endTime: end, types: [HealthDataType.ACTIVE_ENERGY_BURNED]);
+        startTime: start,
+        endTime: end,
+        types: [HealthDataType.ACTIVE_ENERGY_BURNED],
+      );
       return {
         'heart_rate': _health.removeDuplicates(hrData),
-        'calories':   _health.removeDuplicates(calData),
+        'calories': _health.removeDuplicates(calData),
       };
     } catch (e) {
       print("[HC] ERROR fetchWorkoutDetails: $e");
@@ -258,16 +290,27 @@ class HealthService {
 
   static String translateWorkoutActivityType(HealthWorkoutActivityType type) {
     switch (type) {
-      case HealthWorkoutActivityType.STRENGTH_TRAINING: return 'Entrenamiento de fuerza';
-      case HealthWorkoutActivityType.WALKING: return 'Caminar';
-      case HealthWorkoutActivityType.RUNNING: return 'Correr';
-      case HealthWorkoutActivityType.BIKING: return 'Ciclismo';
-      case HealthWorkoutActivityType.SWIMMING: return 'Natación';
-      case HealthWorkoutActivityType.YOGA: return 'Yoga';
-      case HealthWorkoutActivityType.PILATES: return 'Pilates';
-      case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING: return 'HIIT';
+      case HealthWorkoutActivityType.STRENGTH_TRAINING:
+        return 'Entrenamiento de fuerza';
+      case HealthWorkoutActivityType.WALKING:
+        return 'Caminar';
+      case HealthWorkoutActivityType.RUNNING:
+        return 'Correr';
+      case HealthWorkoutActivityType.BIKING:
+        return 'Ciclismo';
+      case HealthWorkoutActivityType.SWIMMING:
+        return 'Natación';
+      case HealthWorkoutActivityType.YOGA:
+        return 'Yoga';
+      case HealthWorkoutActivityType.PILATES:
+        return 'Pilates';
+      case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING:
+        return 'HIIT';
       default:
-        final title = type.name.replaceAll('HealthWorkoutActivityType.', '').replaceAll('_', ' ').toLowerCase();
+        final title = type.name
+            .replaceAll('HealthWorkoutActivityType.', '')
+            .replaceAll('_', ' ')
+            .toLowerCase();
         if (title.isEmpty) return 'Entrenamiento';
         return '${title[0].toUpperCase()}${title.substring(1)}';
     }
@@ -297,16 +340,18 @@ class HealthService {
       if (w.dateFrom.isBefore(start) || w.dateFrom.isAfter(end)) continue;
       final v = w.value as WorkoutHealthValue;
       final durationMin = w.dateTo.difference(w.dateFrom).inMinutes;
-      out.add(DayWorkoutSummary(
-        title: translateWorkoutActivityType(v.workoutActivityType),
-        sourceName: w.sourceName,
-        start: w.dateFrom,
-        end: w.dateTo,
-        durationMinutes: durationMin,
-        totalEnergyCalories: v.totalEnergyBurned?.toInt(),
-        totalDistanceMeters: v.totalDistance?.toInt(),
-        rawDataPoint: w,
-      ));
+      out.add(
+        DayWorkoutSummary(
+          title: translateWorkoutActivityType(v.workoutActivityType),
+          sourceName: w.sourceName,
+          start: w.dateFrom,
+          end: w.dateTo,
+          durationMinutes: durationMin,
+          totalEnergyCalories: v.totalEnergyBurned?.toInt(),
+          totalDistanceMeters: v.totalDistance?.toInt(),
+          rawDataPoint: w,
+        ),
+      );
     }
     out.sort((a, b) => a.start.compareTo(b.start));
     return out;
@@ -319,25 +364,28 @@ class HealthService {
   /// de entrenamientos de ProgressPage. Marca como `done` los días con al
   /// menos una sesión, `rest` los días pasados sin sesiones, y `future` los
   /// días posteriores a hoy.
-  static Future<List<WorkoutCalendarDay>> fetchMonthlyWorkoutCalendar() async {
+  static Future<List<WorkoutCalendarDay>> fetchMonthlyWorkoutCalendar({
+    int? year,
+    int? month,
+  }) async {
     final workouts = await fetchWorkouts(forceRefresh: true);
     final now = DateTime.now();
-    final year = now.year;
-    final month = now.month;
-    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final targetYear = year ?? now.year;
+    final targetMonth = month ?? now.month;
+    final daysInMonth = DateTime(targetYear, targetMonth + 1, 0).day;
 
     final sessionsByDay = <int, int>{};
     for (final w in workouts) {
       if (w.value is! WorkoutHealthValue) continue;
       final d = w.dateFrom;
-      if (d.year != year || d.month != month) continue;
+      if (d.year != targetYear || d.month != targetMonth) continue;
       sessionsByDay[d.day] = (sessionsByDay[d.day] ?? 0) + 1;
     }
 
     final List<WorkoutCalendarDay> result = [];
     for (var day = 1; day <= daysInMonth; day++) {
       final sessions = sessionsByDay[day] ?? 0;
-      final dateObj = DateTime(year, month, day);
+      final dateObj = DateTime(targetYear, targetMonth, day);
       final isFuture = dateObj.isAfter(now) && !dateObj.isSameDay(now);
       WorkoutDayStatus status;
       if (isFuture) {
@@ -347,7 +395,9 @@ class HealthService {
       } else {
         status = WorkoutDayStatus.rest;
       }
-      result.add(WorkoutCalendarDay(day: day, sessions: sessions, status: status));
+      result.add(
+        WorkoutCalendarDay(day: day, sessions: sessions, status: status),
+      );
     }
     return result;
   }
@@ -367,6 +417,39 @@ class HealthService {
       print('[HC] fetchTodaySteps error: $e');
       return 0;
     }
+  }
+
+  /// Momento del dato más reciente que el reloj ha escrito a Health Connect.
+  ///
+  /// Es lo más cercano a un "última sincronización" real que se puede saber sin
+  /// hablar directamente con Mi Fitness: si el último latido/paso registrado es
+  /// de hace 3 horas, es que el reloj lleva 3 horas sin volcar datos.
+  static Future<DateTime?> fetchLastSyncTime() async {
+    _ensureConfigured();
+    try {
+      final now = DateTime.now();
+      final data = await _health.getHealthDataFromTypes(
+        startTime: now.subtract(const Duration(days: 2)),
+        endTime: now,
+        types: [HealthDataType.HEART_RATE, HealthDataType.STEPS],
+      );
+      if (data.isEmpty) return null;
+      data.sort((a, b) => b.dateTo.compareTo(a.dateTo));
+      return data.first.dateTo;
+    } catch (e) {
+      print('[HC] fetchLastSyncTime error: $e');
+      return null;
+    }
+  }
+
+  /// 'hace 12 s' / 'hace 3 min' / 'hace 2 h' / '—'.
+  static String formatRelative(DateTime? when) {
+    if (when == null) return '—';
+    final diff = DateTime.now().difference(when);
+    if (diff.inSeconds < 60) return 'hace ${diff.inSeconds}s';
+    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes}min';
+    if (diff.inHours < 24) return 'hace ${diff.inHours}h';
+    return 'hace ${diff.inDays}d';
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -415,8 +498,11 @@ class HealthService {
     await requestPermissions();
     try {
       final now = DateTime.now();
-      final start28 = DateTime(now.year, now.month, now.day)
-          .subtract(const Duration(days: 28));
+      final start28 = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 28));
       final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
       final raw = await _health.getHealthDataFromTypes(
@@ -434,8 +520,7 @@ class HealthService {
       for (final p in clean) {
         if (p.value is! NumericHealthValue) continue;
         final dayKey = p.dateFrom.difference(start28).inDays;
-        final val =
-            (p.value as NumericHealthValue).numericValue.toDouble();
+        final val = (p.value as NumericHealthValue).numericValue.toDouble();
         calsByDay[dayKey] = (calsByDay[dayKey] ?? 0) + val;
       }
 
@@ -445,9 +530,11 @@ class HealthService {
       }
 
       // Carga aguda = suma últimos 7 días
-      final day28 = DateTime(now.year, now.month, now.day)
-          .difference(start28)
-          .inDays;
+      final day28 = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).difference(start28).inDays;
       double acute = 0;
       for (int d = day28 - 6; d <= day28; d++) {
         acute += calsByDay[d] ?? 0;
@@ -466,7 +553,9 @@ class HealthService {
       }
 
       final ratio = acute / weeklyAvg;
-      print('[HC] PhysicalLoad: acute=$acute, chronic_wk=$weeklyAvg, ratio=$ratio');
+      print(
+        '[HC] PhysicalLoad: acute=$acute, chronic_wk=$weeklyAvg, ratio=$ratio',
+      );
 
       // Normalizar ratio → 0-100
       // ratio 1.0 → 72, ratio 1.3+ → 100, ratio 0.5- → 20
@@ -496,6 +585,18 @@ class HealthService {
     }
   }
 
+  /// Se queda solo con el registro más reciente (mayor dateTo) de un tipo de dato de
+  /// sueño. Xiaomi/Mi Fitness re-sincroniza la noche completa cada vez que el reloj
+  /// sincroniza, y Health Connect no reemplaza el registro anterior: quedan varios
+  /// registros que solapan o duplican el mismo período. Sumar la duración de todos
+  /// infla el total (ej. 20h de sueño en una noche real de 8h) — solo el último
+  /// registro que llegó es válido, los anteriores se descartan.
+  static List<HealthDataPoint> _latestRecordOnly(List<HealthDataPoint> points) {
+    if (points.length <= 1) return points;
+    final sorted = [...points]..sort((a, b) => a.dateTo.compareTo(b.dateTo));
+    return [sorted.last];
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // DESGLOSE DE SUEÑO (última noche) — fases si están disponibles
   // ─────────────────────────────────────────────────────────────────────────
@@ -504,7 +605,13 @@ class HealthService {
     await requestPermissions();
     final now = DateTime.now();
     final yesterday = now.subtract(const Duration(days: 1));
-    final sleepStart = DateTime(yesterday.year, yesterday.month, yesterday.day, 18, 0);
+    final sleepStart = DateTime(
+      yesterday.year,
+      yesterday.month,
+      yesterday.day,
+      18,
+      0,
+    );
     final sleepEnd = DateTime(now.year, now.month, now.day, 15, 0);
 
     print('[HC] fetchSleepBreakdown: ventana $sleepStart → $sleepEnd');
@@ -516,7 +623,7 @@ class HealthService {
           endTime: sleepEnd,
           types: [t],
         );
-        final clean = _health.removeDuplicates(d);
+        final clean = _latestRecordOnly(_health.removeDuplicates(d));
         print('[HC]   ${t.name}: ${clean.length} registros');
         for (final p in clean.take(3)) {
           print('[HC]     ${p.dateFrom} → ${p.dateTo} (${p.sourceName})');
@@ -526,7 +633,9 @@ class HealthService {
         print('[HC]   ${t.name} ERROR: $e');
         return [];
       }
-    };
+    }
+
+    ;
 
     int minutesOf(List<HealthDataPoint> list) {
       var m = 0;
@@ -536,7 +645,11 @@ class HealthService {
       return m < 0 ? 0 : m;
     }
 
-    final inBed = await _get(Platform.isAndroid ? HealthDataType.SLEEP_SESSION : HealthDataType.SLEEP_IN_BED);
+    final inBed = await _get(
+      Platform.isAndroid
+          ? HealthDataType.SLEEP_SESSION
+          : HealthDataType.SLEEP_IN_BED,
+    );
     final asleep = await _get(HealthDataType.SLEEP_ASLEEP);
     final awake = await _get(HealthDataType.SLEEP_AWAKE);
     final light = await _get(HealthDataType.SLEEP_LIGHT);
@@ -550,7 +663,9 @@ class HealthService {
     final deepMin = minutesOf(deep);
     final remMin = minutesOf(rem);
 
-    print('[HC] Sueño: bed=$totalBed min, asleep=$asleepMinutes min, deep=$deepMin, rem=$remMin, light=$lightMin, awake=$awakeMin');
+    print(
+      '[HC] Sueño: bed=$totalBed min, asleep=$asleepMinutes min, deep=$deepMin, rem=$remMin, light=$lightMin, awake=$awakeMin',
+    );
 
     final hasStages = deepMin > 0 || remMin > 0 || lightMin > 0;
 
@@ -569,7 +684,9 @@ class HealthService {
       stagesInput.add(SleepStageInput('Ligero', lightMin));
       stagesInput.add(SleepStageInput('Despierto', awakeMin));
     } else {
-      final computedAwake = computedBed > computedAsleep ? computedBed - computedAsleep : awakeMin;
+      final computedAwake = computedBed > computedAsleep
+          ? computedBed - computedAsleep
+          : awakeMin;
       stagesInput.add(SleepStageInput('Dormido', computedAsleep));
       stagesInput.add(SleepStageInput('Despierto', computedAwake));
     }
@@ -582,9 +699,61 @@ class HealthService {
     );
   }
 
+  /// RMSSD medio de la ventana de sueño dada, y su variación (%) frente a la
+  /// media de las 7 noches anteriores.
+  ///
+  /// Devuelve `(null, null)` si el dispositivo no escribe HRV a Health Connect,
+  /// y `(valor, null)` si hay lectura de anoche pero aún no hay línea base:
+  /// comparar una noche contra nada no es un dato, es ruido, y la pantalla
+  /// prefiere ocultar la fila antes que mostrar un 0% inventado.
+  static Future<(double?, double?)> _fetchHrvWithBaseline(
+    DateTime sleepStart,
+    DateTime sleepEnd,
+  ) async {
+    Future<List<double>> read(DateTime from, DateTime to) async {
+      final d = await _health.getHealthDataFromTypes(
+        startTime: from,
+        endTime: to,
+        types: [HealthDataType.HEART_RATE_VARIABILITY_RMSSD],
+      );
+      return _health
+          .removeDuplicates(d)
+          .map((p) => (p.value as NumericHealthValue).numericValue.toDouble())
+          .where((v) => v > 0)
+          .toList();
+    }
 
+    double? mean(List<double> v) =>
+        v.isEmpty ? null : v.reduce((a, b) => a + b) / v.length;
 
+    try {
+      final tonight = mean(await read(sleepStart, sleepEnd));
+      if (tonight == null) {
+        print('[HC]   HRV RMSSD: sin datos de anoche');
+        return (null, null);
+      }
 
+      final baseline = mean(
+        await read(sleepStart.subtract(const Duration(days: 7)), sleepStart),
+      );
+      if (baseline == null || baseline <= 0) {
+        print(
+          '[HC]   HRV RMSSD: ${tonight.toStringAsFixed(1)} ms (sin línea base)',
+        );
+        return (tonight, null);
+      }
+
+      final delta = ((tonight - baseline) / baseline) * 100;
+      print(
+        '[HC]   HRV RMSSD: ${tonight.toStringAsFixed(1)} ms vs base '
+        '${baseline.toStringAsFixed(1)} ms → ${delta.toStringAsFixed(1)}%',
+      );
+      return (tonight, delta);
+    } catch (e) {
+      print('[HC]   HRV RMSSD ERROR: $e');
+      return (null, null);
+    }
+  }
 
   /// Resumen de sueño + readiness para el dashboard y RecoveryPage.
   /// Ventana unificada con fetchSleepBreakdown: 18:00 de ayer → 15:00 de hoy.
@@ -595,8 +764,14 @@ class HealthService {
       final now = DateTime.now();
       final yesterday = now.subtract(const Duration(days: 1));
       // Ventana unificada con fetchSleepBreakdown (antes era 20:00→12:00)
-      final sleepStart = DateTime(yesterday.year, yesterday.month, yesterday.day, 18, 0);
-      final sleepEnd   = DateTime(now.year, now.month, now.day, 15, 0);
+      final sleepStart = DateTime(
+        yesterday.year,
+        yesterday.month,
+        yesterday.day,
+        18,
+        0,
+      );
+      final sleepEnd = DateTime(now.year, now.month, now.day, 15, 0);
 
       print('[HC] fetchSleepAndReadiness: ventana $sleepStart → $sleepEnd');
 
@@ -639,14 +814,19 @@ class HealthService {
       for (final type in sleepDataTypesToTry) {
         try {
           final d = await _health.getHealthDataFromTypes(
-            startTime: sleepStart, endTime: sleepEnd, types: [type],
+            startTime: sleepStart,
+            endTime: sleepEnd,
+            types: [type],
           );
-          final clean = _health.removeDuplicates(d);
+          final clean = _latestRecordOnly(_health.removeDuplicates(d));
           print('[HC]   ${type.name}: ${clean.length} registros');
           for (final p in clean.take(3)) {
             print('[HC]     ${p.dateFrom} → ${p.dateTo} (${p.sourceName})');
           }
-          if (clean.isNotEmpty) { sleepData = clean; break; }
+          if (clean.isNotEmpty) {
+            sleepData = clean;
+            break;
+          }
         } catch (e) {
           print('[HC]   ${type.name} ERROR: $e');
         }
@@ -655,18 +835,22 @@ class HealthService {
       // 2. Fases de sueño detalladas (para RecoveryPage)
       final Map<String, int> stageMinutes = {};
       for (final entry in {
-        'deep':  HealthDataType.SLEEP_DEEP,
-        'rem':   HealthDataType.SLEEP_REM,
+        'deep': HealthDataType.SLEEP_DEEP,
+        'rem': HealthDataType.SLEEP_REM,
         'light': HealthDataType.SLEEP_LIGHT,
         'awake': HealthDataType.SLEEP_AWAKE,
       }.entries) {
         try {
           final d = await _health.getHealthDataFromTypes(
-            startTime: sleepStart, endTime: sleepEnd, types: [entry.value],
+            startTime: sleepStart,
+            endTime: sleepEnd,
+            types: [entry.value],
           );
-          final clean = _health.removeDuplicates(d);
+          final clean = _latestRecordOnly(_health.removeDuplicates(d));
           final mins = clean.fold(
-              0, (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes);
+            0,
+            (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes,
+          );
           stageMinutes[entry.key] = mins;
           print('[HC]   ${entry.key}: $mins min (${clean.length} registros)');
         } catch (e) {
@@ -679,7 +863,8 @@ class HealthService {
       List<HealthDataPoint> hrData = [];
       try {
         hrData = await _health.getHealthDataFromTypes(
-          startTime: sleepStart, endTime: sleepEnd,
+          startTime: sleepStart,
+          endTime: sleepEnd,
           types: [HealthDataType.HEART_RATE],
         );
         hrData = _health.removeDuplicates(hrData);
@@ -703,7 +888,9 @@ class HealthService {
       }
 
       int sleepMinutes = sleepData.fold(
-          0, (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes);
+        0,
+        (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes,
+      );
 
       if (sleepMinutes == 0) {
         final deep = stageMinutes['deep'] ?? 0;
@@ -720,18 +907,26 @@ class HealthService {
         avgHr = vals.reduce((a, b) => a + b) / vals.length;
       }
 
-      final activeKcal = kcalData.fold(
-          0.0,
-          (acc, p) =>
-              acc + (p.value as NumericHealthValue).numericValue.toDouble());
+      // 5. HRV (RMSSD) de anoche + línea base de los 7 días previos.
+      final hrv = await _fetchHrvWithBaseline(sleepStart, sleepEnd);
 
-      print('[HC] Sleep: ${sleepMinutes}min | HR: $avgHr | Stages: $stageMinutes | Kcal: $activeKcal');
+      final activeKcal = kcalData.fold(
+        0.0,
+        (acc, p) =>
+            acc + (p.value as NumericHealthValue).numericValue.toDouble(),
+      );
+
+      print(
+        '[HC] Sleep: ${sleepMinutes}min | HR: $avgHr | Stages: $stageMinutes | Kcal: $activeKcal',
+      );
 
       return ReadinessSummary(
         sleepMinutes: sleepMinutes,
         avgNightHr: avgHr,
         activeKcalYesterday: activeKcal,
         stageMinutes: stageMinutes,
+        hrvRmssd: hrv.$1,
+        hrvDeltaPercent: hrv.$2,
       );
     } catch (e) {
       print('[HC] fetchSleepAndReadiness error: $e');
@@ -747,17 +942,31 @@ class ReadinessSummary {
     this.avgNightHr,
     required this.activeKcalYesterday,
     this.stageMinutes = const {},
+    this.hrvRmssd,
+    this.hrvDeltaPercent,
   });
   final int sleepMinutes;
   final double? avgNightHr;
   final double activeKcalYesterday;
+
   /// Claves: 'deep', 'rem', 'light', 'awake' → minutos de cada fase.
   final Map<String, int> stageMinutes;
 
+  /// RMSSD medio de la última noche, en ms. null si el dispositivo no escribe
+  /// HRV a Health Connect (muchas bandas baratas no lo hacen).
+  final double? hrvRmssd;
+
+  /// Variación de [hrvRmssd] frente a la media de los 7 días previos, en %.
+  /// null cuando no hay línea base suficiente: una sola noche no dice nada
+  /// sin referencia propia, así que la UI oculta la fila en vez de inventar 0.
+  final double? hrvDeltaPercent;
+
   ReadinessLevel get level {
     int score = 0;
-    if (sleepMinutes > 0 && sleepMinutes < 300) score += 3;
-    else if (sleepMinutes >= 300 && sleepMinutes < 420) score += 1;
+    if (sleepMinutes > 0 && sleepMinutes < 300)
+      score += 3;
+    else if (sleepMinutes >= 300 && sleepMinutes < 420)
+      score += 1;
     if (avgNightHr != null && avgNightHr! > 75) score += 2;
     if (activeKcalYesterday > 800) score += 1;
     if (score >= 3) return ReadinessLevel.fatigue;
@@ -767,17 +976,24 @@ class ReadinessSummary {
 
   String get alertTitle {
     switch (level) {
-      case ReadinessLevel.fatigue: return 'ALERTA · CARGA ELEVADA';
-      case ReadinessLevel.warning: return 'AVISO · RECUPERACIÓN';
-      case ReadinessLevel.ok:      return 'ESTADO · ÓPTIMO';
+      case ReadinessLevel.fatigue:
+        return 'ALERTA · CARGA ELEVADA';
+      case ReadinessLevel.warning:
+        return 'AVISO · RECUPERACIÓN';
+      case ReadinessLevel.ok:
+        return 'ESTADO · ÓPTIMO';
     }
   }
 
   String get alertBody {
     final h = sleepMinutes ~/ 60;
     final m = sleepMinutes % 60;
-    final sleepStr = sleepMinutes > 0 ? '${h}h ${m}min de sueño' : 'sin datos de sueño';
-    final hrStr = avgNightHr != null ? ' · FC nocturna ${avgNightHr!.round()} bpm' : '';
+    final sleepStr = sleepMinutes > 0
+        ? '${h}h ${m}min de sueño'
+        : 'sin datos de sueño';
+    final hrStr = avgNightHr != null
+        ? ' · FC nocturna ${avgNightHr!.round()} bpm'
+        : '';
     switch (level) {
       case ReadinessLevel.fatigue:
         return '$sleepStr$hrStr · He reducido la carga de hoy un 20%.';
@@ -793,16 +1009,28 @@ class ReadinessSummary {
     if (sleepMinutes == 0) return '—';
     return '${sleepMinutes ~/ 60}h ${sleepMinutes % 60}min';
   }
+
   String get deepSleepLabel {
     final d = stageMinutes['deep'] ?? 0;
     return d > 0 ? '${d ~/ 60}h ${d % 60}min' : '—';
   }
+
   String get remSleepLabel {
     final r = stageMinutes['rem'] ?? 0;
     return r > 0 ? '${r ~/ 60}h ${r % 60}min' : '—';
   }
+
   String get restingHrLabel =>
       avgNightHr != null ? '${avgNightHr!.round()} bpm' : '— bpm';
+
+  /// '+8%' / '−3%'. null si no hay línea base con la que comparar.
+  String? get hrvDeltaLabel {
+    final d = hrvDeltaPercent;
+    if (d == null) return null;
+    final rounded = d.round();
+    if (rounded == 0) return '0%';
+    return rounded > 0 ? '+$rounded%' : '−${rounded.abs()}%';
+  }
 }
 
 enum ReadinessLevel { fatigue, warning, ok }
@@ -870,6 +1098,7 @@ class DayWorkoutSummary {
   final int durationMinutes;
   final int? totalEnergyCalories;
   final int? totalDistanceMeters;
+
   /// Punto de datos original de Health Connect, para navegar a WorkoutDetailPage.
   final HealthDataPoint? rawDataPoint;
 

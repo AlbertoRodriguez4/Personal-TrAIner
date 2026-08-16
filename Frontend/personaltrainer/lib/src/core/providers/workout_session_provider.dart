@@ -7,8 +7,18 @@ import '../../features/routine/models/routine_day.dart';
 import '../../features/routine/models/exercise.dart';
 import '../../services/api_service.dart';
 import '../../services/ble_service.dart';
+import '../theme/design_tokens.dart';
 
 enum Phase { idle, inSet, rest, analyzing, finished }
+
+/// Banda de intensidad para la FC en vivo (equivalente a `bandFor` en
+/// `session.tsx`): etiqueta corta, hint explicativo y color asociado.
+class IntensityBand {
+  final String label;
+  final String hint;
+  final Color color;
+  const IntensityBand(this.label, this.hint, this.color);
+}
 
 class SetResult {
   final String exerciseName;
@@ -90,17 +100,32 @@ class WorkoutSessionProvider extends ChangeNotifier {
   int get userAge => _userAge;
   int get fcm => 220 - _userAge;
   int get highIntensityThreshold => (fcm * 0.85).round();
-  String get currentZone => _zoneFor(_currentBpm);
 
-  String _zoneFor(int bpm) {
-    if (fcm <= 0) return '—';
-    final pct = bpm / fcm;
-    if (pct < 0.60) return 'Reposo';
-    if (pct < 0.70) return 'Z1 Recuperación';
-    if (pct < 0.80) return 'Z2 Aeróbica';
-    if (pct < 0.88) return 'Z3 Tempo';
-    if (pct < 0.95) return 'Z4 Umbral';
-    return 'Z5 Máxima';
+  /// % de la FC máx. personalizada (fcm = 220-edad), no el HR_MAX=190 fijo
+  /// que usa el mockup — la fórmula por edad ya existente es más precisa.
+  int get pctOfMax => fcm <= 0 ? 0 : ((_currentBpm / fcm) * 100).round();
+
+  IntensityBand get currentIntensityBand => _bandFor(pctOfMax);
+
+  IntensityBand _bandFor(int pct) {
+    if (pct < 60) {
+      return const IntensityBand('Ligero',
+          'Muy lejos del fallo · puedes subir carga', DesignTokens.effortLow);
+    }
+    if (pct < 72) {
+      return const IntensityBand('Moderado',
+          'Trabajo cómodo · 4+ reps en reserva', DesignTokens.effortModerate);
+    }
+    if (pct < 82) {
+      return const IntensityBand('Intenso',
+          'Estímulo óptimo · 2-3 reps en reserva', DesignTokens.effortHigh);
+    }
+    if (pct < 91) {
+      return const IntensityBand('Cerca del fallo',
+          '1-2 reps en reserva · mantén la técnica', DesignTokens.effortVeryHigh);
+    }
+    return const IntensityBand(
+        'Fallo muscular', 'Sin reps en reserva · descansa más', DesignTokens.effortMax);
   }
 
   void setUserAge(int age) {
@@ -135,6 +160,24 @@ class WorkoutSessionProvider extends ChangeNotifier {
   int get setIndex => _setIndex;
   int get totalSetsForExercise => currentExercise?.sets ?? 0;
 
+  // ── Checklist de ejercicios (overview sobre el flujo de sets existente) ──
+  final Set<int> _completedExerciseIndices = {};
+  bool isExerciseDone(int index) => _completedExerciseIndices.contains(index);
+  int get completedExercisesCount => _completedExerciseIndices.length;
+  int get totalExercisesInDay => currentDay?.exercises.length ?? 0;
+
+  /// Marca/desmarca un ejercicio manualmente desde el checklist, independiente
+  /// del avance automático por sets analizados (ver `_advanceAfterSet`).
+  void toggleExerciseDone(int index) {
+    if (currentDay == null || index < 0 || index >= currentDay!.exercises.length) {
+      return;
+    }
+    if (!_completedExerciseIndices.remove(index)) {
+      _completedExerciseIndices.add(index);
+    }
+    notifyListeners();
+  }
+
   final List<int> _setHrBuffer = [];
   final List<SetResult> _results = [];
   List<SetResult> get results => List.unmodifiable(_results);
@@ -148,6 +191,47 @@ class WorkoutSessionProvider extends ChangeNotifier {
   int _restRemaining = 0;
   int get restRemaining => _restRemaining;
   static const int _defaultRestSec = 90;
+
+  // ── Timer de sesión + pausa (independiente del timer por set/descanso, que
+  // sigue su propio flujo de análisis de IA sin interrupciones) ──
+  Timer? _sessionTimer;
+  int _sessionElapsedSeconds = 0;
+  int get sessionElapsedSeconds => _sessionElapsedSeconds;
+  String get sessionElapsedFormatted {
+    final m = (_sessionElapsedSeconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_sessionElapsedSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  bool _paused = false;
+  bool get paused => _paused;
+
+  void pauseSession() {
+    if (_paused) return;
+    _paused = true;
+    _sessionTimer?.cancel();
+    notifyListeners();
+  }
+
+  void resumeSession() {
+    if (!_paused) return;
+    _paused = false;
+    _startSessionTimer();
+    notifyListeners();
+  }
+
+  void _startSessionTimer() {
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _sessionElapsedSeconds += 1;
+      notifyListeners();
+    });
+  }
+
+  /// Estimación gruesa (misma fórmula que el mockup) — no es una medición
+  /// científica, solo un valor orientativo para el mini-stat de la sesión.
+  int get estimatedKcal =>
+      (_sessionElapsedSeconds * 0.13 + completedExercisesCount * 22).round();
 
   bool _autoDetectEnabled = false;
   bool get autoDetectEnabled => _autoDetectEnabled;
@@ -168,6 +252,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
   void dispose() {
     _setTimer?.cancel();
     _restTimer?.cancel();
+    _sessionTimer?.cancel();
     _detectionTimer?.cancel();
     _hrSub?.cancel();
     _ble.disconnect();
@@ -248,9 +333,19 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _exerciseIndex = 0;
     _setIndex = 0;
     _results.clear();
+    _completedExerciseIndices.clear();
     _phase = Phase.idle;
     _workoutDetected = false;
+    _paused = false;
+    _sessionElapsedSeconds = 0;
+    _startSessionTimer();
     notifyListeners();
+  }
+
+  /// Reinicia la sesión actual desde cero (mismo día, misma rutina).
+  void restartSession() {
+    if (_routine == null) return;
+    startSession(_routine!, dayIndex: _dayIndex);
   }
 
   void startSet() {
@@ -302,7 +397,8 @@ class WorkoutSessionProvider extends ChangeNotifier {
       final plateauIndex = (res['plateau_index'] is num)
           ? (res['plateau_index'] as num).toDouble()
           : 0.0;
-      final zona = res['zona']?.toString() ?? _zoneFor(maxBpm);
+      final zona = res['zona']?.toString() ??
+          _bandFor(fcm <= 0 ? 0 : ((maxBpm / fcm) * 100).round()).label;
       final result = SetResult(
         exerciseName: currentExercise?.name ?? '',
         setNumber: _setIndex + 1,
@@ -348,11 +444,16 @@ class WorkoutSessionProvider extends ChangeNotifier {
 
   void _advanceAfterSet(SetResult? _) {
     _setIndex += 1;
-    if (currentExercise == null || _setIndex >= totalSetsForExercise) {
+    final finishedExercise = currentExercise;
+    if (finishedExercise == null || _setIndex >= totalSetsForExercise) {
+      if (finishedExercise != null) {
+        _completedExerciseIndices.add(_exerciseIndex);
+      }
       _exerciseIndex += 1;
       _setIndex = 0;
       if (currentDay == null || _exerciseIndex >= currentDay!.exercises.length) {
         _phase = Phase.finished;
+        _sessionTimer?.cancel();
         notifyListeners();
         return;
       }
@@ -384,6 +485,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
   void endSession() {
     _setTimer?.cancel();
     _restTimer?.cancel();
+    _sessionTimer?.cancel();
     _phase = Phase.finished;
     notifyListeners();
   }

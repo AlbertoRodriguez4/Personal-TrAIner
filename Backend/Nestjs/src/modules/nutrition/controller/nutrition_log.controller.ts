@@ -23,6 +23,20 @@ export class NutritionLogController {
     return this.nutritionLogService.findTodayByUser(userId);
   }
 
+  @Get('user/:userId/calendar')
+  findCalendar(
+    @Param('userId') userId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.nutritionLogService.findCalendarSummary(userId, from, to);
+  }
+
+  @Get('user/:userId/day/:date')
+  findDay(@Param('userId') userId: string, @Param('date') date: string) {
+    return this.nutritionLogService.findDayDetail(userId, date);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.nutritionLogService.findOne(id);

@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+
+import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/chip_selector.dart';
+import '../../../../core/ui/step_progress_bar.dart';
 import '../../../../services/api_service.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -12,11 +17,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _isSaving = false;
+  bool _completed = false;
 
   // Step 1 data
-  int? _diasEntrenamiento;
+  int _diasEntrenamiento = 4;
+  bool _diasEntrenamientoSet = false;
   String? _intensidad;
   String? _nivelExperiencia;
+  final List<String> _actividades = [];
 
   // Step 2 data
   final List<String> _objetivos = [];
@@ -26,11 +34,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final TextEditingController _bmiController = TextEditingController();
   final TextEditingController _grasaController = TextEditingController();
   final TextEditingController _musculoController = TextEditingController();
+  final TextEditingController _fcReposoController = TextEditingController();
+  final TextEditingController _horasSuenoController = TextEditingController();
   final TextEditingController _condicionesController = TextEditingController();
   final TextEditingController _notasController = TextEditingController();
 
   final List<String> _intensidades = ['Baja', 'Media', 'Alta', 'Muy alta'];
   final List<String> _niveles = ['Principiante', 'Intermedio', 'Avanzado', 'Elite'];
+  final List<String> _actividadesOptions = [
+    'Gym',
+    'Cardio',
+    'Calistenia',
+    'Yoga',
+    'Deportes',
+  ];
   final List<String> _objetivosOptions = [
     'Perder grasa',
     'Ganar músculo',
@@ -48,12 +65,27 @@ class _OnboardingPageState extends State<OnboardingPage> {
     'No estoy seguro',
   ];
 
+  static const _stepTitles = [
+    'Bienvenida',
+    'Tu entrenamiento',
+    'Tus objetivos',
+    'Datos adicionales',
+  ];
+  static const _stepIcons = [
+    LucideIcons.sparkles,
+    LucideIcons.dumbbell,
+    LucideIcons.target,
+    LucideIcons.heartPulse,
+  ];
+
   @override
   void dispose() {
     _pageController.dispose();
     _bmiController.dispose();
     _grasaController.dispose();
     _musculoController.dispose();
+    _fcReposoController.dispose();
+    _horasSuenoController.dispose();
     _condicionesController.dispose();
     _notasController.dispose();
     super.dispose();
@@ -77,6 +109,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
+  /// Igual semántica que el back button de `register.tsx`: en el primer paso
+  /// sale de la pantalla, en cualquier otro retrocede un paso.
+  void _handleHeaderBack() {
+    if (_currentPage == 0) {
+      Navigator.of(context).maybePop();
+    } else {
+      _prevPage();
+    }
+  }
+
   Future<void> _finish() async {
     setState(() => _isSaving = true);
     final userId = ApiService.getCurrentUserId();
@@ -89,10 +131,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
     try {
       await ApiService.createUserProfile(
         userId: userId,
-        diasEntrenamientoSemana: _diasEntrenamiento,
+        diasEntrenamientoSemana:
+            _diasEntrenamientoSet ? _diasEntrenamiento : null,
         intensidad: _intensidad,
         nivelExperiencia: _nivelExperiencia,
         objetivos: _objetivos.isEmpty ? null : _objetivos,
+        actividades: _actividades.isEmpty ? null : _actividades,
+        fcReposo: int.tryParse(_fcReposoController.text),
+        horasSuenoHabitual: double.tryParse(_horasSuenoController.text),
         tipoCuerpo: _tipoCuerpo,
         condicionesMedicas: _condicionesController.text.trim().isEmpty
             ? null
@@ -105,14 +151,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
             : _notasController.text.trim(),
       );
       if (!mounted) return;
-      _showMessage('Perfil guardado correctamente.');
-      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      setState(() => _completed = true);
     } catch (e) {
       if (!mounted) return;
       _showMessage('Error al guardar: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _goHome() {
+    Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
   }
 
   void _showMessage(String text) {
@@ -124,7 +173,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       case 0:
         return true; // Bienvenida
       case 1:
-        return _diasEntrenamiento != null &&
+        return _diasEntrenamientoSet &&
             _intensidad != null &&
             _nivelExperiencia != null;
       case 2:
@@ -138,22 +187,32 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    if (_completed) return _buildCompletionScreen(b);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
+      backgroundColor: DesignTokens.background(b),
       body: SafeArea(
         child: Column(
           children: [
-            _buildProgressIndicator(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: _buildHeaderRow(b),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: StepProgressBar(steps: 4, current: _currentPage),
+            ),
             Expanded(
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (index) => setState(() => _currentPage = index),
                 children: [
-                  _buildWelcomeStep(),
-                  _buildTrainingStep(),
-                  _buildGoalsStep(),
-                  _buildOptionalDataStep(),
+                  _buildWelcomeStep(b),
+                  _buildTrainingStep(b),
+                  _buildGoalsStep(b),
+                  _buildOptionalDataStep(b),
                 ],
               ),
             ),
@@ -164,25 +223,49 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildProgressIndicator() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        children: List.generate(4, (index) {
-          return Expanded(
-            child: Container(
-              height: 4,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                color: index <= _currentPage
-                    ? const Color(0xFF00C897)
-                    : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(4),
-              ),
+  Widget _buildHeaderRow(Brightness b) {
+    return Row(
+      children: [
+        Material(
+          color: DesignTokens.surface1(b),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: _handleHeaderBack,
+            child: Padding(
+              padding: const EdgeInsets.all(9),
+              child: Icon(LucideIcons.arrowLeft,
+                  size: 18, color: DesignTokens.foreground(b)),
             ),
-          );
-        }),
-      ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Registro · paso ${_currentPage + 1} de 4',
+                style: DesignTokens.labelSmall(
+                    color: DesignTokens.mutedForeground(b)),
+              ),
+              Text(_stepTitles[_currentPage],
+                  style: Theme.of(context).textTheme.headlineSmall),
+            ],
+          ),
+        ),
+        Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: DesignTokens.surface1(b),
+            borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+          ),
+          child: Icon(_stepIcons[_currentPage],
+              size: 17, color: DesignTokens.foreground(b)),
+        ),
+      ],
     );
   }
 
@@ -216,7 +299,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(_currentPage == 3 ? 'Finalizar' : 'Siguiente'),
+                  : Text(_currentPage == 3 ? 'Completar registro' : 'Continuar'),
             ),
           ),
         ],
@@ -224,7 +307,60 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildWelcomeStep() {
+  Widget _buildCompletionScreen(Brightness b) {
+    final name = (ApiService.getCurrentUserName() ?? '').trim();
+    final firstName = name.isEmpty ? null : name.split(' ').first;
+    return Scaffold(
+      backgroundColor: DesignTokens.background(b),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: DesignTokens.aiGradient,
+                  borderRadius: BorderRadius.circular(DesignTokens.radius3xl),
+                  boxShadow: DesignTokens.shadowCard(b),
+                ),
+                child: const Icon(LucideIcons.sparkles,
+                    color: Colors.white, size: 28),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                firstName == null ? 'Perfil completo' : 'Perfil completo, $firstName',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Ya tenemos todo lo necesario para que tu Coach IA adapte tus '
+                'rutinas, tu recuperación y tu nutrición.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: DesignTokens.mutedForeground(b),
+                      height: 1.5,
+                    ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _goHome,
+                  child: const Text('Entrar a Personal TrAIner'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWelcomeStep(Brightness b) {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -234,12 +370,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF06B6D4), Color(0xFF00C897)],
-              ),
+              gradient: DesignTokens.aiGradient,
               borderRadius: BorderRadius.circular(24),
+              boxShadow: DesignTokens.shadowCard(b),
             ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+            child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 36),
           ),
           const SizedBox(height: 28),
           Text(
@@ -249,10 +384,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Para que tu Coach IA pueda darte recomendaciones realmente personalizadas, necesitamos conocerte un poco mejor. Solo te llevará 2 minutos.',
+            'Para que tu Coach IA pueda darte recomendaciones realmente '
+            'personalizadas, necesitamos conocerte un poco mejor. Solo te '
+            'llevará 2 minutos.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
+                  color: DesignTokens.mutedForeground(b),
                   height: 1.5,
                 ),
           ),
@@ -261,236 +398,153 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildTrainingStep() {
+  Widget _buildTrainingStep(Brightness b) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tu entrenamiento',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
             'Cuéntanos sobre tu rutina actual para ajustar las recomendaciones.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
+                  color: DesignTokens.mutedForeground(b),
                 ),
           ),
           const SizedBox(height: 24),
-          _buildSectionTitle('Días de entrenamiento por semana'),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(8, (i) {
-              final selected = _diasEntrenamiento == i;
-              return ChoiceChip(
-                label: Text(i == 0 ? 'Ninguno' : '$i días'),
-                selected: selected,
-                onSelected: (_) => setState(() => _diasEntrenamiento = i),
-                selectedColor: const Color(0xFF00C897),
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF0B1220),
-                  fontWeight: FontWeight.w600,
-                ),
-              );
+          _buildSectionTitle(
+            'Días de entrenamiento por semana · '
+            '${_diasEntrenamiento == 0 ? "Ninguno" : _diasEntrenamiento}',
+          ),
+          Slider(
+            value: _diasEntrenamiento.toDouble(),
+            min: 0,
+            max: 7,
+            divisions: 7,
+            label: _diasEntrenamiento == 0
+                ? 'Ninguno'
+                : '$_diasEntrenamiento días',
+            onChanged: (v) => setState(() {
+              _diasEntrenamiento = v.round();
+              _diasEntrenamientoSet = true;
             }),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           _buildSectionTitle('Intensidad habitual'),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _intensidades.map((label) {
-              final selected = _intensidad == label;
-              return ChoiceChip(
-                label: Text(label),
-                selected: selected,
-                onSelected: (_) => setState(() => _intensidad = label),
-                selectedColor: const Color(0xFF06B6D4),
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF0B1220),
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
+          SingleChoiceChips(
+            options: _intensidades,
+            value: _intensidad,
+            onChanged: (v) => setState(() => _intensidad = v),
           ),
           const SizedBox(height: 24),
           _buildSectionTitle('Nivel de experiencia'),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _niveles.map((label) {
-              final selected = _nivelExperiencia == label;
-              return ChoiceChip(
-                label: Text(label),
-                selected: selected,
-                onSelected: (_) => setState(() => _nivelExperiencia = label),
-                selectedColor: const Color(0xFF0B1220),
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF0B1220),
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
+          SingleChoiceChips(
+            options: _niveles,
+            value: _nivelExperiencia,
+            onChanged: (v) => setState(() => _nivelExperiencia = v),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Actividades'),
+          const SizedBox(height: 10),
+          MultiChoiceChips(
+            options: _actividadesOptions,
+            values: _actividades,
+            onChanged: (v) => setState(() {
+              _actividades
+                ..clear()
+                ..addAll(v);
+            }),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGoalsStep() {
+  Widget _buildGoalsStep(Brightness b) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tus objetivos',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Selecciona uno o varios. Tu Coach IA priorizará estos objetivos en sus respuestas.',
+            'Selecciona uno o varios. Tu Coach IA priorizará estos objetivos '
+            'en sus respuestas.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
+                  color: DesignTokens.mutedForeground(b),
                 ),
           ),
           const SizedBox(height: 20),
-          ..._objetivosOptions.map((goal) {
-            final selected = _objetivos.contains(goal);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    if (selected) {
-                      _objetivos.remove(goal);
-                    } else {
-                      _objetivos.add(goal);
-                    }
-                  });
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: selected ? const Color(0xFFD1FAE5) : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: selected
-                          ? const Color(0xFF00C897)
-                          : const Color(0xFFE5E7EB),
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        selected
-                            ? Icons.check_circle_rounded
-                            : Icons.circle_outlined,
-                        color: selected
-                            ? const Color(0xFF00C897)
-                            : const Color(0xFFD1D5DB),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          goal,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: selected
-                                        ? const Color(0xFF0B1220)
-                                        : null,
-                                  ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
+          MultiChoiceChips(
+            options: _objetivosOptions,
+            values: _objetivos,
+            stacked: true,
+            onChanged: (v) => setState(() {
+              _objetivos
+                ..clear()
+                ..addAll(v);
+            }),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildOptionalDataStep() {
+  Widget _buildOptionalDataStep(Brightness b) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Datos adicionales',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Estos datos son opcionales, pero mejoran mucho la precisión de tu Coach IA.',
+            'Estos datos son opcionales, pero mejoran mucho la precisión de '
+            'tu Coach IA.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
+                  color: DesignTokens.mutedForeground(b),
                 ),
           ),
           const SizedBox(height: 20),
           _buildSectionTitle('Tipo de cuerpo'),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _tiposCuerpo.map((label) {
-              final selected = _tipoCuerpo == label;
-              return ChoiceChip(
-                label: Text(label),
-                selected: selected,
-                onSelected: (_) => setState(() => _tipoCuerpo = label),
-                selectedColor: const Color(0xFF0B1220),
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF0B1220),
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
+          SingleChoiceChips(
+            options: _tiposCuerpo,
+            value: _tipoCuerpo,
+            onChanged: (v) => setState(() => _tipoCuerpo = v),
           ),
           const SizedBox(height: 20),
-          _buildSectionTitle('BMI (Índice de Masa Corporal)'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _bmiController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: 'Ej: 24.5',
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildNumberField(
+                    'FC en reposo', _fcReposoController, hint: 'Ej: 58'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildNumberField(
+                    'Horas de sueño habituales', _horasSuenoController,
+                    hint: 'Ej: 7'),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
-          _buildSectionTitle('DEXA - % Grasa corporal'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _grasaController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: 'Ej: 18.5',
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildNumberField('BMI', _bmiController, hint: 'Ej: 24.5'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildNumberField(
+                    'DEXA · % grasa corporal', _grasaController,
+                    hint: 'Ej: 18.5'),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
-          _buildSectionTitle('DEXA - Masa muscular (kg)'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _musculoController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              hintText: 'Ej: 65.0',
-            ),
-          ),
+          _buildNumberField('DEXA · masa muscular (kg)', _musculoController,
+              hint: 'Ej: 65.0'),
           const SizedBox(height: 20),
           _buildSectionTitle('Condiciones médicas o restricciones'),
           const SizedBox(height: 8),
@@ -520,12 +574,31 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
+  Widget _buildNumberField(
+    String label,
+    TextEditingController controller, {
+    required String hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(label),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(hintText: hint),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String text) {
     return Text(
-      text,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+      text.toUpperCase(),
+      style: DesignTokens.labelSmall(
+        color: DesignTokens.mutedForeground(Theme.of(context).brightness),
+      ),
     );
   }
 }

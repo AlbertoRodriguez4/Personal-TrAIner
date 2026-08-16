@@ -14,6 +14,8 @@ import { RoutineDay } from "../../modules/routine/entities/routine_day.entity";
 import { Exercise } from "../../modules/routine/entities/exercise.entity";
 import { ExerciseCatalog } from "../../modules/exercises_catalog/entities/exercise_catalog.entity";
 import { RecoveryLog } from "../../modules/recovery/entities/recovery_log.entity";
+import { Supplement } from "../../modules/supplements/entities/supplement.entity";
+import { SupplementLog } from "../../modules/supplements/entities/supplement_log.entity";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -38,6 +40,8 @@ export const AppDataSource = new DataSource({
         Exercise,
         ExerciseCatalog,
         RecoveryLog,
+        Supplement,
+        SupplementLog,
     ],
     migrations: ["src/infrastructure/postgres/migrations/*.ts"],
     subscribers: [],

@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../services/api_service.dart';
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/chip_selector.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_text_field.dart'; // Mantengo la importación aunque no lo usemos, por si acaso
 
@@ -20,6 +22,9 @@ class _AuthCardState extends State<AuthCard> {
   bool _isLogin = true;
   bool _isLoading = false;
   DateTime? _birthDate;
+  String? _sexo;
+
+  static const _sexoOptions = ['Hombre', 'Mujer', 'Prefiero no decirlo'];
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -67,6 +72,17 @@ class _AuthCardState extends State<AuthCard> {
           );
           if (!mounted) return;
           if (loginData != null) {
+            if (_sexo != null) {
+              final uid = ApiService.getCurrentUserId();
+              if (uid != null) {
+                try {
+                  await ApiService.createUserProfile(userId: uid, sexo: _sexo);
+                } catch (_) {
+                  // No bloquea el registro: el resto del perfil se completa
+                  // en onboarding igual, y ese mismo endpoint hace upsert.
+                }
+              }
+            }
             await _checkProfileAndProceed();
           } else {
             _clearFields();
@@ -108,8 +124,7 @@ class _AuthCardState extends State<AuthCard> {
         rethrow;
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
 
       if (idToken != null) {
@@ -206,6 +221,7 @@ class _AuthCardState extends State<AuthCard> {
     _heightController.clear();
     _weightController.clear();
     _birthDate = null;
+    _sexo = null;
   }
 
   @override
@@ -384,6 +400,17 @@ class _AuthCardState extends State<AuthCard> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                Text(
+                  'SEXO',
+                  style: DesignTokens.labelSmall(color: mutedFg),
+                ),
+                const SizedBox(height: 8),
+                SingleChoiceChips(
+                  options: _sexoOptions,
+                  value: _sexo,
+                  onChanged: (v) => setState(() => _sexo = v),
+                ),
+                const SizedBox(height: 12),
               ],
 
               _Field(
@@ -504,11 +531,11 @@ class _AuthCardState extends State<AuthCard> {
                   Expanded(
                     child: _SocialBtn(
                       label: 'Google',
-                      icon: const Icon(
-                        LucideIcons.chrome,
-                        size: 16,
-                        color: Color(0xFFEA4335),
-                      ), // Usamos chrome aprox o asset
+                      icon: SvgPicture.asset(
+                        'assets/icons/google_logo.svg',
+                        width: 16,
+                        height: 16,
+                      ),
                       cardColor: card,
                       border: border,
                       fg: fg,
@@ -548,19 +575,40 @@ class _AuthCardState extends State<AuthCard> {
 
               const SizedBox(height: 12),
 
-              InkWell(
-                onTap: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed('/home'), // TODO back logic
-                child: Text(
-                  'VOLVER',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.4,
-                    color: mutedFg,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pushReplacementNamed('/home'), // TODO back logic
+                    child: Text(
+                      'VOLVER',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: mutedFg,
+                      ),
+                    ),
                   ),
-                ),
+                  Text(
+                    '  ·  ',
+                    style: TextStyle(fontSize: 11, color: mutedFg),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pushNamed('/tour'),
+                    child: Text(
+                      'VER TOUR',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: fg,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

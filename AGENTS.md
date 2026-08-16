@@ -13,18 +13,21 @@ Identifica primero en qué componente cae la tarea y limita la lectura a esa car
   - `lib/src/features/` → `ai_coach/`, `auth/`, `routine/`, `home/`, `health/`, `onboarding/`
   - `lib/src/models/`, `lib/src/core/`
 - **NestJS (backend principal)** — `Backend/Nestjs/src/modules/`
-  - Módulos: `ai`, `billing`, `body_analysis`, `clinical_data`, `custom_routine`,
-    `daily_summary`, `exercises_catalog`, `identity`, `nutrition`,
-    `physical_analysis`, `routine`, `telemetry`, `training_sessions`, `user_profile`
+  - Módulos: `ai`, `billing`, `body_analysis`, `clinical_data`, `daily_summary`,
+    `exercises_catalog`, `identity`, `nutrition`, `physical_analysis`, `recovery`,
+    `routine`, `supplements`, `telemetry`, `training_sessions`, `user_profile`
   - `Backend/Nestjs/src/infrastructure/` → config técnica transversal (DB, etc.)
   - **NO leas `Backend/Nestjs/dist/`** — es el build compilado, duplica `src/` en JS.
 - **FastAPI (backend de IA)** — `Backend/Python/` (carpeta plana, no hay subcarpetas)
   - `main.py` — entrypoint / endpoints
   - `schemas.py` — modelos pydantic
   - `skills.py` — funciones de IA (nutrition/body/routine analyzers, skills agénticas)
-  - Usa Gemini 3.5 Flash vía `google-genai` (`chat_engine.py`/`chat_tools.py`,
-    modo `nutricion` incluye el análisis de comida por foto). No hay Ollama en
-    este servicio.
+  - `chat_engine.py`/`chat_tools.py`: dos proveedores LLM, separados estrictamente
+    por modo, nunca mezclados en el mismo turno. Modos con imagen (`nutricion`,
+    `analisis_fisico`) → Gemini (`gemini-3.5-flash-lite` por defecto). Los otros
+    cuatro modos de texto → Groq (`openai/gpt-oss-120b`). No uses
+    `llama-3.3-70b-versatile` ni `qwen/qwen3-32b` como default de Groq — ambos
+    deprecados. No hay Ollama en este servicio.
 
 Nota: no encontré `prompt_antigravity.md` ni `design_context.md` /
 `flutter_design_context.md` en este clon de `healthconnect` — puede que vivan en
@@ -79,11 +82,15 @@ módulos no relacionados (`billing/`, `identity/`, etc.) salvo que la tarea los 
    relevante y `sed -n '<start>,<end>p'` para leer solo ese rango. No uses `cat`
    sobre archivos grandes completos. Archivos que YA superan ~250 líneas en este
    repo (léelos siempre por rango, no completos):
-   - `Frontend/personaltrainer/lib/src/services/api_service.dart` (~700 líneas)
-   - `Frontend/personaltrainer/lib/src/services/ble_service.dart` (~455 líneas)
-   - `Backend/Python/main.py` (~400 líneas)
+   - `Frontend/personaltrainer/lib/src/services/health_service.dart` (~1130 líneas)
+   - `Frontend/personaltrainer/lib/src/services/api_service.dart` (~815 líneas)
+   - `Backend/Python/chat_tools.py` (~650 líneas)
+   - `Frontend/personaltrainer/lib/src/services/ble_service.dart` (~575 líneas)
+   - `Backend/Python/chat_engine.py` (~450 líneas)
    - `Backend/Python/skills.py` (~375 líneas)
-   - `Backend/Python/schemas.py` (~230 líneas)
+   - `Backend/Python/schemas.py` (~260 líneas)
+
+   (`main.py` bajó a ~75 líneas — ya no aplica, léelo entero.)
 2. Si una tarea requiere tocar 2+ archivos, decláralos todos al inicio en vez
    de leerlos uno a uno en turnos separados (reduce idas y vueltas).
 3. Al depurar el bug de Health Connect (workout records en 0), revisa primero

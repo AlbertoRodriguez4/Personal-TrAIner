@@ -439,6 +439,7 @@ class ApiService {
     required double carbohidratosG,
     required double grasasG,
     String? notas,
+    String? tipoComida,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -451,6 +452,7 @@ class ApiService {
         'carbohidratos_g': carbohidratosG,
         'grasas_g': grasasG,
         'notas': notas,
+        if (tipoComida != null) 'tipo_comida': tipoComida,
       },
     );
     return _toMap(decoded) ?? {};
@@ -470,6 +472,72 @@ class ApiService {
 
   static Future<void> deleteNutritionLog(String id) async {
     await _request(method: 'DELETE', path: '/nutrition-logs/$id');
+  }
+
+  static Future<List<Map<String, dynamic>>> getNutritionCalendar(
+    String userId, {
+    required String from,
+    required String to,
+  }) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/nutrition-logs/user/$userId/calendar',
+      queryParams: {'from': from, 'to': to},
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<Map<String, dynamic>> getNutritionDayDetail(
+    String userId,
+    String date,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/nutrition-logs/user/$userId/day/$date',
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  // ── Suplementos ───────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getSupplementsToday(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/supplements/user/$userId/today',
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<Map<String, dynamic>> createSupplement({
+    required String userId,
+    required String nombre,
+    String? dosis,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/supplements',
+      body: {'userId': userId, 'nombre': nombre, 'dosis': dosis},
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<void> deleteSupplement(String id, String userId) async {
+    await _request(
+      method: 'DELETE',
+      path: '/supplements/$id',
+      queryParams: {'userId': userId},
+    );
+  }
+
+  static Future<bool> toggleSupplementToday(String id, String userId) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/supplements/$id/toggle',
+      body: {'userId': userId},
+    );
+    return _toMap(decoded)?['tomado'] == true;
   }
 
   static Future<List<Map<String, dynamic>>> getTrainingSessionsByUser(
@@ -590,6 +658,10 @@ class ApiService {
     String? intensidad,
     String? nivelExperiencia,
     List<String>? objetivos,
+    List<String>? actividades,
+    String? sexo,
+    int? fcReposo,
+    double? horasSuenoHabitual,
     String? tipoCuerpo,
     String? condicionesMedicas,
     double? bmi,
@@ -606,6 +678,10 @@ class ApiService {
         'intensidad': intensidad,
         'nivel_experiencia': nivelExperiencia,
         'objetivos': objetivos,
+        'actividades': actividades,
+        'sexo': sexo,
+        'fc_reposo': fcReposo,
+        'horas_sueno_habitual': horasSuenoHabitual,
         'tipo_cuerpo': tipoCuerpo,
         'condiciones_medicas': condicionesMedicas,
         'bmi': bmi,

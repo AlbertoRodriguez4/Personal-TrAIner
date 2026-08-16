@@ -41,6 +41,15 @@ export class AiRoutineDayDto {
   @IsNotEmpty()
   numero_dia: number;
 
+  // Día real de la semana ('Lunes'..'Domingo'). Es lo que se guarda en day_of_week, y
+  // la app Flutter cruza ese valor contra su lista fija de días para pintar el plan
+  // semanal: un valor fuera de esa lista (el viejo `Día ${numero_dia}`) hacía que la
+  // pantalla de edición saliera vacía y que al guardar se perdieran los días.
+  // Opcional en el DTO por compatibilidad con rutinas creadas antes de este campo.
+  @IsString()
+  @IsOptional()
+  dia_semana?: string;
+
   @IsString()
   @IsNotEmpty()
   nombre_dia: string;
