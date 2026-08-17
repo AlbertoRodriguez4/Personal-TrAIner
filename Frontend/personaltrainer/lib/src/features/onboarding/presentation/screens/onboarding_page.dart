@@ -150,6 +150,28 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ? null
             : _notasController.text.trim(),
       );
+
+      // La grasa y el músculo del onboarding también se registran como una
+      // medición de composición corporal. Guardarlos solo en el perfil los
+      // dejaba fuera del histórico y, sobre todo, fuera de lo que Pulso lee en
+      // cada turno: el usuario los había escrito y la IA seguía diciendo que no
+      // sabía su porcentaje de grasa.
+      final grasa = double.tryParse(_grasaController.text);
+      final musculo = double.tryParse(_musculoController.text);
+      if (grasa != null || musculo != null) {
+        await ApiService.registerBodyComposition(
+          userId: userId,
+          metodo: 'otro',
+          // El peso del registro es el peso de hoy, así que la medición sale
+          // completa: con él el backend deriva IMC, masa grasa, masa magra y
+          // FFMI en vez de guardar un porcentaje suelto sin contexto.
+          pesoKg: ApiService.getCurrentUserWeight(),
+          porcentajeGrasa: grasa,
+          masaMuscularKg: musculo,
+          notas: 'Introducido al crear el perfil.',
+        );
+      }
+
       if (!mounted) return;
       setState(() => _completed = true);
     } catch (e) {

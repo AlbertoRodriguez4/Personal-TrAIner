@@ -1,10 +1,7 @@
 import base64
 import json
-import os
 import time
 
-from google import genai
-from google.genai import errors as genai_errors
 from google.genai import types
 from groq import (
     Groq,
@@ -14,18 +11,18 @@ from groq import (
 )
 
 from chat_tools import TOOLS_BY_MODE, EXECUTORS, SYSTEM_PROMPTS, BASE_GUIDELINES
+from gemini_client import (
+    _env,
+    # GeminiQuotaExhaustedError se reexporta a propósito: main.py la importa
+    # desde aquí desde antes de que existiera gemini_client.
+    GeminiQuotaExhaustedError,
+    LLMProviderExhaustedError,
+    RETRY_ATTEMPTS,
+    RETRY_BACKOFF_SECONDS,
+    generate as _generate_with_model_fallback,
+)
+import ai_profile
 import pose_analysis
-
-def _env(nombre: str, default: str = "") -> str:
-    """os.environ.get(nombre, default) NO aplica el default cuando la variable existe
-    pero está vacía (`GEMINI_MODEL=` en el .env devuelve "", no el default) — y un
-    model="" llega a la API de Gemini como un 400 "falta especificar el modelo".
-    Este helper trata vacío y ausente por igual."""
-    return (os.environ.get(nombre) or default).strip()
-
-
-GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.5-flash-lite")
-GEMINI_MODEL_FALLBACK = _env("GEMINI_MODEL_FALLBACK")
 
 # Presupuesto de pasos de function calling por turno. No es solo una guarda contra
 # loops infinitos: es el techo real de trabajo del modelo. Con 5, creador_rutina se
@@ -37,10 +34,6 @@ GEMINI_MODEL_FALLBACK = _env("GEMINI_MODEL_FALLBACK")
 MAX_TOOL_ITERATIONS = 8
 
 LIMITE_PASOS_MSG = "Se alcanzó el límite de pasos permitidos para esta consulta. ¿Podés reformularla?"
-
-RETRY_ATTEMPTS = 3
-RETRY_BACKOFF_SECONDS = (1, 2)  # pausas entre los intentos 1→2 y 2→3; nada de esperas largas
-                                 # que bloqueen el request HTTP por mucho tiempo
 
 # Groq no procesa imágenes: estos modos se quedan exclusivamente en Gemini y nunca caen a
 # Groq, aunque agoten los reintentos.
@@ -69,16 +62,7 @@ GROQ_MIN_COMPLETION_TOKENS = 1200   # por debajo de esto la respuesta sale trunc
 # GEMINI_ENABLE_SEARCH_GROUNDING=1 en el .env y esto se activa sin tocar código.
 ENABLE_SEARCH_GROUNDING = _env("GEMINI_ENABLE_SEARCH_GROUNDING").lower() in ("1", "true", "yes")
 
-_client = genai.Client(api_key=_env("GEMINI_API_KEY"))
 _groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
-
-class LLMProviderExhaustedError(Exception):
-    """Base: un proveedor de LLM agotó los reintentos ante 429/rate-limit sostenido."""
-
-
-class GeminiQuotaExhaustedError(LLMProviderExhaustedError):
-    """Gemini agotó los reintentos: 429/RESOURCE_EXHAUSTED sostenido (cuota de la API)."""
 
 
 class GroqQuotaExhaustedError(LLMProviderExhaustedError):
@@ -90,42 +74,6 @@ class RespuestaDemasiadoGrandeError(Exception):
     modelo truncó su propia respuesta a medio generar el JSON de una tool (Groq lo
     rechaza con 400 `tool_use_failed`). Ninguno de los dos se arregla reintentando lo
     mismo: hay que pedirle al usuario algo más corto."""
-
-
-def _is_quota_error(exc: genai_errors.ClientError) -> bool:
-    return exc.code == 429 or exc.status == "RESOURCE_EXHAUSTED"
-
-
-def _generate_with_retry(contents, config, model: str):
-    """generate_content con hasta RETRY_ATTEMPTS intentos cuando Gemini devuelve 429.
-    Cualquier otro error (4xx distinto, red) no reintenta y sube tal cual, igual que antes."""
-    last_exc = None
-    for attempt in range(RETRY_ATTEMPTS):
-        try:
-            return _client.models.generate_content(model=model, contents=contents, config=config)
-        except genai_errors.ClientError as exc:
-            if not _is_quota_error(exc):
-                raise
-            last_exc = exc
-            if attempt < RETRY_ATTEMPTS - 1:
-                time.sleep(RETRY_BACKOFF_SECONDS[attempt])
-    raise GeminiQuotaExhaustedError(str(last_exc)) from last_exc
-
-
-def _generate_with_model_fallback(contents, config):
-    """Reintenta contra GEMINI_MODEL; si agota cuota y hay GEMINI_MODEL_FALLBACK configurado,
-    hace un único intento adicional contra ese modelo antes de rendirse."""
-    try:
-        return _generate_with_retry(contents, config, GEMINI_MODEL)
-    except GeminiQuotaExhaustedError:
-        if not GEMINI_MODEL_FALLBACK:
-            raise
-        try:
-            return _client.models.generate_content(model=GEMINI_MODEL_FALLBACK, contents=contents, config=config)
-        except genai_errors.ClientError as exc:
-            if not _is_quota_error(exc):
-                raise
-            raise GeminiQuotaExhaustedError(str(exc)) from exc
 
 
 def _lowercase_schema_types(node):
@@ -189,14 +137,18 @@ def run_chat(
     if mode not in TOOLS_BY_MODE:
         raise ValueError(f"Modo desconocido: {mode}")
 
+    # El perfil clínico/físico se lee una vez por turno y se antepone al system
+    # prompt de cualquier modo: ver ai_profile para por qué no es una tool.
+    perfil_prompt, _ = ai_profile.contexto_para_prompt(user_id)
+
     if mode in IMAGE_MODES:
-        return _run_chat_gemini(user_id, mode, message, history, health_context, images)
+        return _run_chat_gemini(user_id, mode, message, history, health_context, images, perfil_prompt)
 
     if _groq_client is None:
         raise RuntimeError(
             "GROQ_API_KEY no configurada: los modos de texto requieren Groq (openai/gpt-oss-120b)."
         )
-    return _run_chat_groq(user_id, mode, message, history, health_context)
+    return _run_chat_groq(user_id, mode, message, history, health_context, perfil_prompt)
 
 
 def _run_chat_gemini(
@@ -206,14 +158,17 @@ def _run_chat_gemini(
     history: list[dict],
     health_context: dict | None,
     images: list[dict] | None,
+    perfil_prompt: str = "",
 ) -> dict:
     tools = [types.Tool(function_declarations=TOOLS_BY_MODE[mode])]
     if ENABLE_SEARCH_GROUNDING:
         tools.append(types.Tool(google_search=types.GoogleSearch()))
 
     # Las reglas de formato y rigor son las mismas para los 6 modos; el prompt del modo
-    # solo aporta lo suyo encima.
+    # solo aporta lo suyo encima, y el perfil real del usuario cierra el bloque.
     system_instruction = f"{SYSTEM_PROMPTS[mode]}\n\n{BASE_GUIDELINES}"
+    if perfil_prompt:
+        system_instruction += f"\n\n{perfil_prompt}"
 
     contents = [
         types.Content(role=turn["role"], parts=[types.Part.from_text(text=turn["text"])])
@@ -385,6 +340,7 @@ def _run_chat_groq(
     message: str,
     history: list[dict],
     health_context: dict | None,
+    perfil_prompt: str = "",
 ) -> dict:
     """Replica el loop de _run_chat_gemini contra la API de Groq (formato OpenAI-style:
     role/content, tool_calls, respuestas con tool_call_id). Devuelve el mismo shape que
@@ -392,6 +348,8 @@ def _run_chat_groq(
     respondió."""
     tools_groq = [_function_decl_to_groq_tool(decl) for decl in TOOLS_BY_MODE[mode]]
     system_instruction = f"{SYSTEM_PROMPTS[mode]}\n\n{BASE_GUIDELINES}"
+    if perfil_prompt:
+        system_instruction += f"\n\n{perfil_prompt}"
 
     user_text = message
     if health_context:

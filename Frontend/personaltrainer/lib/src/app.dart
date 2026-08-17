@@ -16,6 +16,7 @@ import 'features/auth/presentation/screens/auth_page.dart';
 import 'features/clinic/presentation/screens/clinic_import_page.dart';
 import 'features/home/presentation/screens/home_page.dart';
 import 'features/onboarding/presentation/screens/onboarding_page.dart';
+import 'features/physique/presentation/screens/physique_page.dart';
 import 'features/onboarding/presentation/screens/tour_page.dart';
 import 'features/permissions/presentation/permissions_gate_page.dart';
 import 'services/api_service.dart';
@@ -86,6 +87,7 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
                     onBack: () => Navigator.pop(context),
                   ),
               '/clinic/import': (context) => const ClinicImportPage(),
+              '/physique': (context) => const PhysiquePage(),
             },
             onGenerateRoute: (settings) {
               if (settings.name == '/') {

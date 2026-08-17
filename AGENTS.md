@@ -22,6 +22,13 @@ Identifica primero en qué componente cae la tarea y limita la lectura a esa car
   - `main.py` — entrypoint / endpoints
   - `schemas.py` — modelos pydantic
   - `skills.py` — funciones de IA (nutrition/body/routine analyzers, skills agénticas)
+  - `gemini_client.py` — cliente Gemini compartido (reintentos + salida JSON con
+    `response_schema`). Lo usan `chat_engine` y los dos pipelines de análisis.
+  - `ai_profile.py` — perfil clínico/físico que se inyecta en TODOS los modos de chat
+  - `body_composition.py` — peso/IMC/grasa/masa magra. **Sin LLM**: son cifras
+    medidas y la clasificación sale de tablas citadas
+  - `clinical_analysis.py` / `physique_analysis.py` — análisis de una pasada (no chat)
+  - `clinical_reference.py` / `medlineplus_client.py` — datos contrastados
   - `chat_engine.py`/`chat_tools.py`: dos proveedores LLM, separados estrictamente
     por modo, nunca mezclados en el mismo turno. Modos con imagen (`nutricion`,
     `analisis_fisico`) → Gemini (`gemini-3.5-flash-lite` por defecto). Los otros
@@ -53,6 +60,17 @@ Lee SOLO:
 - `Backend/Python/skills.py` (solo las funciones relevantes, no el archivo completo)
 - `Backend/Python/schemas.py` (solo los modelos pydantic que use ese endpoint)
 - NO cargues los tres analizadores (nutrition+body+routine) si la tarea es solo uno.
+
+### Si la tarea es sobre clínica o análisis del físico
+Lee SOLO lo del componente que toques:
+- Contexto/prompt de la IA → `Backend/Python/ai_profile.py` (+ `chat_engine.run_chat`)
+- Composición corporal → `Backend/Python/body_composition.py` y `clinical_reference.py`
+- Pipeline clínico → `Backend/Python/clinical_analysis.py` y `clinical_reference.py`
+- Pipeline de físico → `Backend/Python/physique_analysis.py`
+- Persistencia → `Backend/Nestjs/src/modules/clinical_data/` y `body_analysis/`
+- Perfil consolidado → `Backend/Nestjs/src/modules/ai_context/`
+- UI → `Frontend/personaltrainer/lib/src/features/{clinic,physique}/` y
+  `lib/src/core/ui/analysis_report.dart` (widgets compartidos por las dos pantallas)
 
 ### Si la tarea es sobre NestJS
 Lee SOLO el módulo específico dentro de `Backend/Nestjs/src/modules/<modulo>/`

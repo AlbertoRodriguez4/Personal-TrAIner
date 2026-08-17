@@ -258,3 +258,67 @@ class ChatResponse(BaseModel):
     reply: str
     actions_taken: List[ChatAction]
 
+
+# ============================================================
+# MÓDULO 5: Análisis clínico y de físico (una sola pasada, no chat)
+# ============================================================
+
+class ClinicalReportRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    data: str = Field(..., description="PDF o imagen del informe en base64, sin el prefijo 'data:'")
+    mime_type: str = Field(..., description="application/pdf | image/jpeg | image/png | image/webp")
+    file_name: Optional[str] = Field(None, description="Nombre original del archivo, solo para mostrarlo en el historial")
+
+
+class ClinicalManualValue(BaseModel):
+    codigo: str = Field(..., description="Nombre o código del biomarcador (se normaliza en el servidor)")
+    valor: float
+    unidad: Optional[str] = None
+    rango_min: Optional[float] = None
+    rango_max: Optional[float] = None
+
+
+class ClinicalManualRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    valores: conlist(ClinicalManualValue, min_length=1)
+    fecha: Optional[str] = Field(None, description="Fecha de la analítica en AAAA-MM-DD; hoy si falta")
+
+
+class BodyCompositionRequest(BaseModel):
+    """Una medición de composición corporal tecleada a mano.
+
+    Todos los valores son opcionales por diseño: una báscula de casa da peso y
+    porcentaje de grasa y nada más, y obligar a rellenar el resto solo
+    conseguiría que el usuario se inventase los huecos. El servidor comprueba
+    que llegue al menos uno y deriva los que se puedan deducir."""
+    user_id: str = Field(..., description="UUID del usuario")
+    fecha: Optional[str] = Field(None, description="Fecha de la medición en AAAA-MM-DD; hoy si falta")
+    metodo: Optional[str] = Field("dexa", description="dexa | bioimpedancia | plicometria | bascula | otro")
+    peso_kg: Optional[float] = None
+    porcentaje_grasa: Optional[float] = None
+    masa_muscular_kg: Optional[float] = None
+    musculo_esqueletico_pct: Optional[float] = None
+    masa_osea_kg: Optional[float] = None
+    densidad_osea: Optional[float] = Field(None, description="Densidad mineral ósea en g/cm²")
+    proteina_kg: Optional[float] = None
+    agua_corporal_kg: Optional[float] = None
+    agua_corporal_pct: Optional[float] = None
+    grasa_subcutanea_pct: Optional[float] = None
+    grasa_visceral: Optional[float] = None
+    tmb_kcal: Optional[float] = None
+    edad_corporal: Optional[float] = None
+    peso_ideal_kg: Optional[float] = None
+    notas: Optional[str] = None
+
+
+class PhysiquePhotoInput(BaseModel):
+    data: str = Field(..., description="Imagen en base64, ya reescalada por el cliente")
+    mime_type: str = Field(..., description="image/jpeg | image/png | image/webp")
+    angulo: str = Field("otro", description="frontal | lateral | espalda | otro")
+
+
+class PhysiqueAnalysisRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    photos: conlist(PhysiquePhotoInput, min_length=1) = Field(..., description="Entre 1 y 5 fotos del físico")
+    notas: Optional[str] = Field(None, description="Contexto libre que escriba el usuario")
+

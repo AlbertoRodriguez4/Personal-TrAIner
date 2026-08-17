@@ -1392,6 +1392,12 @@ class _HealthHubGrid extends StatelessWidget {
         sub: 'Importar datos',
         onTap: () => Navigator.pushNamed(context, '/clinic/import'),
       ),
+      (
+        icon: LucideIcons.scanLine,
+        title: 'Físico',
+        sub: 'Análisis por fotos',
+        onTap: () => Navigator.pushNamed(context, '/physique'),
+      ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1408,7 +1414,7 @@ class _HealthHubGrid extends StatelessWidget {
           children: [
             Expanded(child: _NavTile(tile: tiles[2])),
             const SizedBox(width: 12),
-            Expanded(child: const SizedBox()),
+            Expanded(child: _NavTile(tile: tiles[3])),
           ],
         ),
       ],

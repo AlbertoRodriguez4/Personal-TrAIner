@@ -16,6 +16,9 @@ import { ExerciseCatalog } from "../../modules/exercises_catalog/entities/exerci
 import { RecoveryLog } from "../../modules/recovery/entities/recovery_log.entity";
 import { Supplement } from "../../modules/supplements/entities/supplement.entity";
 import { SupplementLog } from "../../modules/supplements/entities/supplement_log.entity";
+import { ClinicalReport } from "../../modules/clinical_data/entities/clinical_report.entity";
+import { ClinicalMarker } from "../../modules/clinical_data/entities/clinical_marker.entity";
+import { PhysiquePhoto } from "../../modules/body_analysis/entities/physique_photo.entity";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -42,6 +45,9 @@ export const AppDataSource = new DataSource({
         RecoveryLog,
         Supplement,
         SupplementLog,
+        ClinicalReport,
+        ClinicalMarker,
+        PhysiquePhoto,
     ],
     migrations: ["src/infrastructure/postgres/migrations/*.ts"],
     subscribers: [],

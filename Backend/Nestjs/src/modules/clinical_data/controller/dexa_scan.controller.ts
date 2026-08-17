@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { DexaScanService } from '../service/dexa_scan.service';
 import { CreateDexaScanDto } from '../dto/create-dexa-scan.dto';
 import { UpdateDexaScanDto } from '../dto/update-dexa-scan.dto';
@@ -17,18 +26,27 @@ export class DexaScanController {
     return this.dexaScanService.findByUser(userId);
   }
 
+  @Get('user/:userId/latest')
+  findLatest(@Param('userId') userId: string) {
+    return this.dexaScanService.findLatest(userId);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.dexaScanService.findOne(id);
+  findOne(@Param('id') id: string, @Query('userId') userId: string) {
+    return this.dexaScanService.findOne(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateDexaScanDto) {
-    return this.dexaScanService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Query('userId') userId: string,
+    @Body() dto: UpdateDexaScanDto,
+  ) {
+    return this.dexaScanService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.dexaScanService.remove(id);
+  remove(@Param('id') id: string, @Query('userId') userId: string) {
+    return this.dexaScanService.remove(id, userId);
   }
 }

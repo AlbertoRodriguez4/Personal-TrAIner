@@ -76,6 +76,76 @@ coach. `chat_engine.py` runs the chat loop, `chat_tools.py` defines what the mod
 holds cross-cutting config (Postgres data-source, an unused InfluxDB scaffold). Never read
 `Backend/Nestjs/dist/` — it's the compiled build, duplicates `src/` in JS.
 
+**Body data (the AI's memory of the user's body).** Three pipelines in `Backend/Python/`,
+in this order of importance — the order matters, it's baked into the prompt:
+
+- `body_composition.py` — **the main one**. Weight, BMI, body-fat %, fat mass, lean mass,
+  muscle mass, FFMI. It's where calories, macros and the bulk-vs-recomp call come from, and
+  it's the only *measured* signal (photos estimate, blood says something else). Deliberately
+  **calls no LLM**: the numbers come from a device and the classification from cited tables
+  (ACE, WHO, Kouri 1995 for FFMI) in `clinical_reference.clasificar_composicion`. Stored in
+  `Densitometrias_DEXA` — the table name is historical; it holds any method (`metodo`:
+  dexa/bioimpedancia/plicometria/bascula/otro).
+  **Every metric is nullable.** A home scale gives weight and a percentage; a DEXA gives ten
+  fields. `DexaScanService.derivar()` fills in whatever is deducible (every kg ↔ % pair —
+  fat, muscle, protein, water — plus lean mass, BMI, FFMI) so the history is homogeneous —
+  never derive these in the client or the prompt, or the same number ends up defined twice.
+  **Always order by `(fecha_escaneo DESC, fecha_registro DESC)`.** `fecha_escaneo` is a
+  `date` with no time, so two measurements on the same day tie and Postgres returns them in
+  whatever order it likes — weigh yourself twice, correct the entry, and the coach keeps
+  reading the first one.
+  The real minimum for the whole app is **weight + height**, and those live on `Usuarios`,
+  not here.
+- `clinical_analysis.py` — PDF/photo of a lab report → Gemini extracts *literally* (pass 1,
+  temp 0) → normalized against `clinical_reference.py` and enriched via `medlineplus_client.py`
+  (NIH/NLM MedlinePlus Connect, LOINC-keyed, no API key) → Gemini writes the report (pass 2,
+  no document present). Persists to `Informes_Clinicos` + `Biomarcadores_Clinicos`. The two
+  passes are the point: interpretation can only lean on the contrasted block it was handed.
+  Also serves the manual-entry form (`analizar_valores_manuales`), so typed values get the
+  same treatment.
+  Pass 1 *also* extracts a `composicion_corporal` block when the document is a DEXA/InBody,
+  and hands it to `body_composition.desde_documento` **before** redacting, so the report is
+  written against the new numbers. A document with composition but no blood markers returns
+  the composition reading and skips the clinical report entirely — there's no analytic to
+  write about.
+- `physique_analysis.py` — physique photos → `pose_analysis` geometry + ACE/WHO/ISSN norms →
+  structured record + photos. If the model sets `fotos_analizables: false`, NOTHING is saved:
+  a guessed `grupos_musculares_retrasados` would silently steer every routine after it.
+- `clinical_reference.py` is the offline half: 33 biomarkers with LOINC, reference range, its
+  cited source, and why it matters for building a physique. **The lab's own printed range
+  always wins** over this table. Adding a marker means adding its synonyms too, or Spanish lab
+  reports will split its time series across several codes.
+  `normalizar_codigo`'s partial match needs **word boundaries and a 3-char minimum**
+  (`LONGITUD_MINIMA_ALIAS_PARCIAL`). Plain substring matching turned a Fitdays scale report
+  into fake blood work: "Masa Esquelética" → calcium (the *ca* in esqueléti-**ca**), "Cantidad
+  de proteína" → sodium (the *na* in proteí-**na**), kg stored as if they were mg/dL, and the
+  coach then discussed a calcium deficit nobody measured. Chemical symbols only match as a
+  whole name.
+
+**Pulso always reads that profile.** `ai_profile.py` fetches `GET /ai-context/:userId` (NestJS
+aggregates identity + profile + composition + physique + clinical) and `chat_engine.run_chat`
+prepends it to the system prompt in **every** mode — not a tool, because as a tool the model
+wouldn't call it when recommending macros or editing a routine. Keep this block small: measured
+at ~700 tokens with a full profile, and Groq's 8000 TPM counts input + reserved output, so it
+competes directly with the routine JSON.
+
+Two things about that block are load-bearing:
+- **Composition goes first and is labelled the main datum**, and the closing paragraph spells
+  out the hierarchy (measured composition > visual estimate > blood). Buried at the end, the
+  model reasoned about an eyeballed body-fat % while holding a DEXA. For the same reason the
+  photo section drops its estimated %/lean mass when a real measurement exists — otherwise the
+  model averages the two.
+- **`completitud` has two levels.** `faltantes` is only weight and height, and *blocks*: without
+  them there's no calorie to compute. Everything else (composition, sex, age, photos, blood) is
+  `recomendados` and must not block the chat — a half-filled profile that answers beats a
+  complete one the user never fills in. With minimums but no composition, the block still
+  forbids assuming body-fat % or lean mass.
+
+**Never use `simple-array` for AI-written sentences.** TypeORM serializes it to one comma-joined
+`text` column, so any element containing a comma comes back split into several. Confirmed in
+production data. Use `jsonb` (see migration `1787000000001-ArraysTextoLibreAJsonb`). It's still
+fine for enum-ish word lists (`angulos_fotos`, `grupos_musculares_*`).
+
 **No auth middleware yet.** There's no JWT guard / session layer — `userId` is passed explicitly as a
 query/body param on every request (e.g. `GET /routine/user/:userId`, `PATCH /routine/:id?userId=...`) and
 services verify ownership by comparing it against the row's `userId` before mutating. When adding a new

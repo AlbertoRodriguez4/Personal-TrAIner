@@ -7,6 +7,10 @@ import { UserService } from './modules/identity/service/user.service';
 import { DexaScan } from './modules/clinical_data/entities/dexa_scan.entity';
 import { DexaScanController } from './modules/clinical_data/controller/dexa_scan.controller';
 import { DexaScanService } from './modules/clinical_data/service/dexa_scan.service';
+import { ClinicalReport } from './modules/clinical_data/entities/clinical_report.entity';
+import { ClinicalMarker } from './modules/clinical_data/entities/clinical_marker.entity';
+import { ClinicalReportController } from './modules/clinical_data/controller/clinical_report.controller';
+import { ClinicalReportService } from './modules/clinical_data/service/clinical_report.service';
 import { PostureEvaluation } from './modules/physical_analysis/entities/posture_evaluation.entity';
 import { PostureEvaluationController } from './modules/physical_analysis/controller/posture_evaluation.controller';
 import { PostureEvaluationService } from './modules/physical_analysis/service/posture_evaluation.service';
@@ -19,6 +23,10 @@ import { TrainingSessionService } from './modules/training_sessions/service/trai
 import { BodyAnalysisRecord } from './modules/body_analysis/entities/body_analysis_record.entity';
 import { BodyAnalysisController } from './modules/body_analysis/controller/body_analysis.controller';
 import { BodyAnalysisService } from './modules/body_analysis/service/body_analysis.service';
+import { PhysiquePhoto } from './modules/body_analysis/entities/physique_photo.entity';
+import { PhysiquePhotoService } from './modules/body_analysis/service/physique_photo.service';
+import { AiContextController } from './modules/ai_context/controller/ai_context.controller';
+import { AiContextService } from './modules/ai_context/service/ai_context.service';
 import { Subscription } from './modules/billing/entities/subscription.entity';
 import { SubscriptionController } from './modules/billing/controller/subscription.controller';
 import { SubscriptionService } from './modules/billing/service/subscription.service';
@@ -57,20 +65,22 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog],
+      entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog, ClinicalReport, ClinicalMarker, PhysiquePhoto],
       synchronize: false,
     }),
-    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog]),
+    TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog, ClinicalReport, ClinicalMarker, PhysiquePhoto]),
   ],
   controllers: [
     UserController,
     DexaScanController,
+    ClinicalReportController,
     PostureEvaluationController,
     NutritionLogController,
     TrainingSessionController,
     SubscriptionController,
     UserProfileController,
     AiController,
+    AiContextController,
     BodyAnalysisController,
     RoutineController,
     TelemetryController,
@@ -82,6 +92,7 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
   providers: [
     UserService,
     DexaScanService,
+    ClinicalReportService,
     PostureEvaluationService,
     NutritionLogService,
     TrainingSessionService,
@@ -89,6 +100,8 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
     UserProfileService,
     AiService,
     BodyAnalysisService,
+    PhysiquePhotoService,
+    AiContextService,
     RoutineService,
     TelemetryService,
     DailySummaryService,
