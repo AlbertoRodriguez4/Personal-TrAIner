@@ -32,4 +32,8 @@ export class UpdateNutritionLogDto {
   @IsString()
   @IsOptional()
   notas?: string;
+
+  @IsString()
+  @IsOptional()
+  nombre_alimento?: string;
 }

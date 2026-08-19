@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/providers/daily_summary_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/api_service.dart';
@@ -660,25 +663,74 @@ class _DailySheet extends StatefulWidget {
 }
 
 class _DailySheetState extends State<_DailySheet> {
-  late final Future<DailyNutritionDetail?> _detailFuture = _load();
+  late Future<DailyNutritionDetail?> _detailFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _detailFuture = _load();
+  }
+
+  String get _isoDate {
+    final date = DateTime(widget.monthDate.year, widget.monthDate.month, widget.day);
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
 
   Future<DailyNutritionDetail?> _load() async {
     final userId = ApiService.getCurrentUserId();
     if (userId == null) return null;
     try {
-      final date = DateTime(
-        widget.monthDate.year,
-        widget.monthDate.month,
-        widget.day,
-      );
-      final iso =
-          '${date.year.toString().padLeft(4, '0')}-'
-          '${date.month.toString().padLeft(2, '0')}-'
-          '${date.day.toString().padLeft(2, '0')}';
-      final raw = await ApiService.getNutritionDayDetail(userId, iso);
+      final raw = await ApiService.getNutritionDayDetail(userId, _isoDate);
       return DailyNutritionDetail.fromJson(raw);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<void> _deleteMeal(MealEntry meal) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(meal.displayName),
+        content: Text('Se borrará este registro (${meal.kcal} kcal) de tu diario.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: DesignTokens.destructive(Theme.of(context).brightness),
+            ),
+            child: const Text('Borrar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    try {
+      await ApiService.deleteNutritionLog(meal.id);
+      if (!mounted) return;
+      setState(() => _detailFuture = _load());
+      // Si el día borrado es hoy, el resumen de Nutrición (macros restantes)
+      // se queda con el dato viejo hasta que alguien más llame a load() —
+      // normalmente al reabrir la pestaña, pero no hay por qué esperar.
+      final todayIso = DateTime.now();
+      final todayStr = '${todayIso.year.toString().padLeft(4, '0')}-'
+          '${todayIso.month.toString().padLeft(2, '0')}-'
+          '${todayIso.day.toString().padLeft(2, '0')}';
+      if (_isoDate == todayStr) {
+        unawaited(context.read<DailySummaryProvider>().load());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo eliminar: $e')));
     }
   }
 
@@ -781,7 +833,7 @@ class _DailySheetState extends State<_DailySheet> {
                     children: [
                       _MacrosSection(detail: detail),
                       const SizedBox(height: 16),
-                      _MealsSection(meals: detail.meals),
+                      _MealsSection(meals: detail.meals, onDelete: _deleteMeal),
                     ],
                   );
                 },
@@ -905,8 +957,9 @@ class _MacroBar extends StatelessWidget {
 }
 
 class _MealsSection extends StatelessWidget {
-  const _MealsSection({required this.meals});
+  const _MealsSection({required this.meals, required this.onDelete});
   final List<MealEntry> meals;
+  final ValueChanged<MealEntry> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -941,7 +994,9 @@ class _MealsSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      meals[i].label,
+                      meals[i].displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: DesignTokens.bodyFont(
                         fontSize: 13.5,
                         weight: FontWeight.w700,
@@ -961,6 +1016,7 @@ class _MealsSection extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${meals[i].kcal} kcal',
                 style: DesignTokens.bodyFont(
@@ -968,6 +1024,13 @@ class _MealsSection extends StatelessWidget {
                   weight: FontWeight.w600,
                   color: mutedFg,
                 ),
+              ),
+              IconButton(
+                onPressed: () => onDelete(meals[i]),
+                icon: Icon(LucideIcons.trash2, size: 16, color: mutedFg),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ],
           ),

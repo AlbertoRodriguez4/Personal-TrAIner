@@ -28,16 +28,26 @@ class MacroTotals {
 /// Una comida registrada ese día.
 @immutable
 class MealEntry {
-  const MealEntry({required this.tipo, required this.kcal, this.notas});
+  const MealEntry({
+    required this.id,
+    required this.tipo,
+    required this.kcal,
+    this.notas,
+    this.nombreAlimento,
+  });
 
+  final String id;
   final String tipo;
   final int kcal;
   final String? notas;
+  final String? nombreAlimento;
 
   factory MealEntry.fromJson(Map<String, dynamic> json) => MealEntry(
+        id: json['id']?.toString() ?? '',
         tipo: json['tipo_comida']?.toString() ?? 'otro',
         kcal: (json['calorias_consumidas'] as num?)?.toInt() ?? 0,
         notas: json['notas']?.toString(),
+        nombreAlimento: json['nombre_alimento']?.toString(),
       );
 
   static const _labels = {
@@ -49,6 +59,11 @@ class MealEntry {
   };
 
   String get label => _labels[tipo] ?? _labels['otro']!;
+
+  /// Nombre del alimento si se guardó (registro manual o escaneo reciente);
+  /// si no, cae al tipo de comida — los registros antiguos, de antes de que
+  /// `nombre_alimento` existiera como columna, no tienen otra cosa que mostrar.
+  String get displayName => (nombreAlimento?.trim().isNotEmpty ?? false) ? nombreAlimento! : label;
 }
 
 /// Detalle completo de un día del calendario nutricional: objetivo vs.

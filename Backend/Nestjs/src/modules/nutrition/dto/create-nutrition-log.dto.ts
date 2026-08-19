@@ -34,4 +34,8 @@ export class CreateNutritionLogDto {
   @IsIn(TIPOS_COMIDA)
   @IsOptional()
   tipo_comida?: string;
+
+  @IsString()
+  @IsOptional()
+  nombre_alimento?: string;
 }
