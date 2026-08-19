@@ -23,6 +23,7 @@ acotado por modo.
 | **Entrenamientos** | Sincronizados de Health Connect o medidos en vivo con banda BLE, con comparación contra tu media |
 | **Sueño y recuperación** | Fases de sueño, HRV y FC en reposo desde Health Connect |
 | **Análisis del físico** | Fotos por ángulo → geometría de pose (MediaPipe) + normas ACE/OMS/ISSN |
+| **Recordatorios** | Avisos locales de entreno (solo los días de tu rutina), pesada semanal y cierre del diario de comidas |
 
 ### Dos decisiones de diseño que explican el resto
 
