@@ -23,14 +23,32 @@ class _PermissionsGatePageState extends State<PermissionsGatePage> {
     _checkAndRequestPermissions();
   }
 
+  // Algunos fabricantes (MIUI en particular) pueden no devolver nunca el
+  // resultado de una pantalla nativa de permisos (Bluetooth/Health Connect)
+  // encadenada justo después del selector de cuenta de Google: el await se
+  // queda colgado sin lanzar excepción y la app se congela en negro sin
+  // avisar. Estos timeouts garantizan que, pase lo que pase, seguimos a
+  // HomePage — que ya era la intención original ("si deniega, dejarlo
+  // entrar igual").
+  static const _permissionTimeout = Duration(seconds: 15);
+
   Future<void> _checkAndRequestPermissions() async {
     try {
       setState(() => _statusMessage = 'Permisos de Bluetooth...');
-      await Permission.bluetoothScan.request();
-      await Permission.bluetoothConnect.request();
+      await Permission.bluetoothScan.request().timeout(
+        _permissionTimeout,
+        onTimeout: () => PermissionStatus.denied,
+      );
+      await Permission.bluetoothConnect.request().timeout(
+        _permissionTimeout,
+        onTimeout: () => PermissionStatus.denied,
+      );
 
       setState(() => _statusMessage = 'Permisos de Health Connect...');
-      final healthOk = await HealthService.requestPermissions();
+      await HealthService.requestPermissions().timeout(
+        _permissionTimeout,
+        onTimeout: () => false,
+      );
 
       if (!mounted) return;
 

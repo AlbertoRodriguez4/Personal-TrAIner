@@ -5,16 +5,20 @@ import 'core/providers/auth_state_provider.dart';
 import 'core/providers/routine_provider.dart';
 import 'core/providers/workout_session_provider.dart';
 import 'core/providers/daily_summary_provider.dart';
+import 'core/providers/intake_provider.dart';
+import 'core/providers/supplement_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/route_loaders.dart';
 import 'features/devices/presentation/screens/devices_page.dart';
 import 'features/recovery/presentation/screens/recovery_page.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/screens/auth_page.dart';
+import 'features/auth/presentation/screens/register_flow_page.dart';
 import 'features/clinic/presentation/screens/clinic_import_page.dart';
-import 'features/focus/presentation/screens/focus_page.dart';
 import 'features/home/presentation/screens/home_page.dart';
-import 'features/onboarding/presentation/screens/onboarding_page.dart';
+import 'features/physique/presentation/screens/physique_page.dart';
+import 'features/profile/presentation/screens/profile_setup_page.dart';
+import 'features/onboarding/presentation/screens/tour_page.dart';
 import 'features/permissions/presentation/permissions_gate_page.dart';
 import 'services/api_service.dart';
 
@@ -54,6 +58,8 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
         ChangeNotifierProvider(create: (_) => RoutineProvider()),
         ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
         ChangeNotifierProvider(create: (_) => DailySummaryProvider()),
+        ChangeNotifierProvider(create: (_) => IntakeProvider()..load()),
+        ChangeNotifierProvider(create: (_) => SupplementProvider()..load()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: Consumer<ThemeProvider>(
@@ -69,8 +75,17 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
                 : AuthPage(onLoginSuccess: _handleLogin),
             routes: {
               '/login': (context) => AuthPage(onLoginSuccess: _handleLogin),
+              '/register': (context) =>
+                  RegisterFlowPage(onRegistered: _handleLogin),
               '/home': (context) => HomePage(onSessionClosed: _handleLogout),
-              '/onboarding': (context) => const OnboardingPage(),
+              // El configurador es también donde aterriza quien entra sin
+              // perfil (cuentas antiguas, Google Sign-In): sustituye al
+              // onboarding, que preguntaba lo mismo en otra pantalla.
+              '/profile': (context) => ProfileSetupPage(
+                    onBack: () => Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/home', (r) => false),
+                  ),
+              '/tour': (context) => const TourPage(),
               '/progress': (context) => ProgressRoute(
                     onBack: () => Navigator.pop(context),
                   ),
@@ -80,15 +95,8 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
               '/devices': (context) => DevicesPage(
                     onBack: () => Navigator.pop(context),
                   ),
-              '/focus': (context) => const FocusPage(
-                    exerciseTitle: 'Press Militar',
-                    seriesLabel: 'Serie 3 de 4',
-                    restTotalSeconds: 105,
-                    defaultWeight: 24,
-                    defaultReps: 8,
-                    defaultRpe: 8.5,
-                  ),
               '/clinic/import': (context) => const ClinicImportPage(),
+              '/physique': (context) => const PhysiquePage(),
             },
             onGenerateRoute: (settings) {
               if (settings.name == '/') {

@@ -24,6 +24,11 @@ dependencies:
   fl_chart: ^0.69.0
   file_picker: ^8.1.2
   google_sign_in: ^7.2.0
+  gpt_markdown: ^1.1.8
+  flutter_svg: ^2.3.0
+  flutter_local_notifications: ^22.3.0
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +40,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.jpg
+    - assets/icons/google_logo.svg
 
 flutter_launcher_icons:
   android: "launcher_icon"

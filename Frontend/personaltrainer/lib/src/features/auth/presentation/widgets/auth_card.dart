@@ -1,11 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../services/api_service.dart';
 import '../../../../core/theme/design_tokens.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'auth_text_field.dart'; // Mantengo la importación aunque no lo usemos, por si acaso
+import '../screens/register_flow_page.dart';
 
 class AuthCard extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -17,63 +18,39 @@ class AuthCard extends StatefulWidget {
 }
 
 class _AuthCardState extends State<AuthCard> {
-  bool _isLogin = true;
   bool _isLoading = false;
-  DateTime? _birthDate;
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _heightController = TextEditingController();
-  final _weightController = TextEditingController();
 
   static bool _googleSignInInitialized = false;
+
+  /// El alta ya no se hace aquí. Pedir nombre, fecha, altura, peso y sexo en la
+  /// misma tarjeta que el login era un muro de campos antes de haber enseñado
+  /// nada; ahora va por pasos en `RegisterFlowPage`, que además deja los
+  /// permisos y el tour dentro del mismo recorrido.
+  void _abrirRegistro() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RegisterFlowPage(onRegistered: widget.onLoginSuccess),
+      ),
+    );
+  }
 
   Future<void> _submit() async {
     if (!_validateInputs()) return;
     setState(() => _isLoading = true);
 
     try {
-      if (_isLogin) {
-        final userData = await ApiService.login(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-        if (!mounted) return;
-        if (userData == null) {
-          _showMessage('Credenciales incorrectas.');
-        } else {
-          await _checkProfileAndProceed();
-        }
+      final userData = await ApiService.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      if (userData == null) {
+        _showMessage('Credenciales incorrectas.');
       } else {
-        final userData = await ApiService.register(
-          nombreCompleto: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          fechaNacimiento: _birthDate != null
-              ? '${_birthDate!.year}-${_birthDate!.month.toString().padLeft(2, '0')}-${_birthDate!.day.toString().padLeft(2, '0')}'
-              : '',
-          estatura: double.tryParse(_heightController.text) ?? 170.0,
-          peso: double.tryParse(_weightController.text) ?? 70.0,
-        );
-
-        if (!mounted) return;
-        if (userData == null) {
-          _showMessage('No se pudo completar el registro.');
-        } else {
-          final loginData = await ApiService.login(
-            _emailController.text.trim(),
-            _passwordController.text,
-          );
-          if (!mounted) return;
-          if (loginData != null) {
-            await _checkProfileAndProceed();
-          } else {
-            _clearFields();
-            setState(() => _isLogin = true);
-            _showMessage('Cuenta creada. Inicia sesión.');
-          }
-        }
+        await _checkProfileAndProceed();
       }
     } catch (e) {
       if (!mounted) return;
@@ -108,8 +85,7 @@ class _AuthCardState extends State<AuthCard> {
         rethrow;
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
 
       if (idToken != null) {
@@ -141,9 +117,13 @@ class _AuthCardState extends State<AuthCard> {
       final profile = await ApiService.getUserProfile(userId);
       if (!mounted) return;
       if (profile == null || profile['id'] == null) {
+        // Cuenta sin perfil: las creadas antes del registro por pasos, o las de
+        // Google, que entran sin pasar por él. Se manda al configurador, que es
+        // el mismo sitio donde se editan estos datos después: así no hay dos
+        // pantallas distintas para rellenar lo mismo.
         Navigator.of(
           context,
-        ).pushNamedAndRemoveUntil('/onboarding', (route) => false);
+        ).pushNamedAndRemoveUntil('/profile', (route) => false);
       } else {
         widget.onLoginSuccess?.call();
       }
@@ -162,24 +142,6 @@ class _AuthCardState extends State<AuthCard> {
       _showMessage('Ingresa tu contraseña.');
       return false;
     }
-    if (!_isLogin) {
-      if (_nameController.text.isEmpty) {
-        _showMessage('Ingresa tu nombre.');
-        return false;
-      }
-      if (_heightController.text.isEmpty || _weightController.text.isEmpty) {
-        _showMessage('Completa altura y peso.');
-        return false;
-      }
-      if (_birthDate == null) {
-        _showMessage('Selecciona tu fecha de nacimiento.');
-        return false;
-      }
-      if (_passwordController.text.length < 6) {
-        _showMessage('La contraseña debe tener al menos 6 caracteres.');
-        return false;
-      }
-    }
     return true;
   }
 
@@ -187,34 +149,10 @@ class _AuthCardState extends State<AuthCard> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<void> _pickBirthDate() async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? DateTime(2000),
-      firstDate: DateTime(1950),
-      lastDate: DateTime.now(),
-    );
-    if (pickedDate != null) {
-      setState(() => _birthDate = pickedDate);
-    }
-  }
-
-  void _clearFields() {
-    _emailController.clear();
-    _passwordController.clear();
-    _nameController.clear();
-    _heightController.clear();
-    _weightController.clear();
-    _birthDate = null;
-  }
-
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _nameController.dispose();
-    _heightController.dispose();
-    _weightController.dispose();
     super.dispose();
   }
 
@@ -225,7 +163,6 @@ class _AuthCardState extends State<AuthCard> {
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final border = DesignTokens.border(b);
-    final surface1 = DesignTokens.surface1(b);
     final card = DesignTokens.card(b);
 
     return Stack(
@@ -266,7 +203,7 @@ class _AuthCardState extends State<AuthCard> {
               ),
               const SizedBox(height: 24),
               Text(
-                _isLogin ? 'Bienvenido de nuevo' : 'Crea tu cuenta',
+                'Bienvenido de nuevo',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
@@ -277,16 +214,15 @@ class _AuthCardState extends State<AuthCard> {
               ),
               const SizedBox(height: 8),
               Text(
-                _isLogin
-                    ? 'Tu IA personal te está esperando.'
-                    : 'Empieza a entrenar con inteligencia.',
+                'Tu IA personal te está esperando.',
                 style: TextStyle(fontSize: 14, color: mutedFg),
                 textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 28),
 
-              // Toggle Modo
+              // Iniciar sesión / Registrarse. El segundo no cambia de modo:
+              // abre el registro por pasos, que es otro recorrido entero.
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -296,24 +232,18 @@ class _AuthCardState extends State<AuthCard> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(
+                    const Expanded(
                       child: _ModeButton(
                         text: 'Iniciar sesión',
-                        active: _isLogin,
-                        onTap: () {
-                          _clearFields();
-                          setState(() => _isLogin = true);
-                        },
+                        active: true,
+                        onTap: null,
                       ),
                     ),
                     Expanded(
                       child: _ModeButton(
                         text: 'Registrarse',
-                        active: !_isLogin,
-                        onTap: () {
-                          _clearFields();
-                          setState(() => _isLogin = false);
-                        },
+                        active: false,
+                        onTap: _isLoading ? null : _abrirRegistro,
                       ),
                     ),
                   ],
@@ -321,70 +251,6 @@ class _AuthCardState extends State<AuthCard> {
               ),
 
               const SizedBox(height: 24),
-
-              // Formulario
-              if (!_isLogin) ...[
-                _Field(
-                  icon: LucideIcons.user,
-                  controller: _nameController,
-                  hint: 'Nombre completo',
-                ),
-                const SizedBox(height: 12),
-                InkWell(
-                  onTap: _pickBirthDate,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: surface1,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: border),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(LucideIcons.calendar, size: 16, color: mutedFg),
-                        const SizedBox(width: 12),
-                        Text(
-                          _birthDate == null
-                              ? 'Fecha de nacimiento'
-                              : '${_birthDate!.day.toString().padLeft(2, '0')}/${_birthDate!.month.toString().padLeft(2, '0')}/${_birthDate!.year}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _birthDate == null ? mutedFg : fg,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Field(
-                        icon: LucideIcons.arrowUpToLine,
-                        controller: _heightController,
-                        hint: 'Altura (cm)',
-                        isNumber: true,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _Field(
-                        icon: Icons.monitor_weight_outlined,
-                        controller: _weightController,
-                        hint: 'Peso (kg)',
-                        isNumber: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
 
               _Field(
                 icon: LucideIcons.mail,
@@ -400,28 +266,26 @@ class _AuthCardState extends State<AuthCard> {
                 isPassword: true,
               ),
 
-              if (_isLogin) ...[
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {}, // TODO
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      '¿Olvidaste tu contraseña?',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: mutedFg,
-                      ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {}, // TODO
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    '¿Olvidaste tu contraseña?',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: mutedFg,
                     ),
                   ),
                 ),
-              ],
+              ),
 
               const SizedBox(height: 24),
 
@@ -440,9 +304,7 @@ class _AuthCardState extends State<AuthCard> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _isLoading
-                            ? 'Procesando...'
-                            : (_isLogin ? 'Entrar' : 'Crear cuenta'),
+                        _isLoading ? 'Procesando...' : 'Entrar',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -504,11 +366,11 @@ class _AuthCardState extends State<AuthCard> {
                   Expanded(
                     child: _SocialBtn(
                       label: 'Google',
-                      icon: const Icon(
-                        LucideIcons.chrome,
-                        size: 16,
-                        color: Color(0xFFEA4335),
-                      ), // Usamos chrome aprox o asset
+                      icon: SvgPicture.asset(
+                        'assets/icons/google_logo.svg',
+                        width: 16,
+                        height: 16,
+                      ),
                       cardColor: card,
                       border: border,
                       fg: fg,
@@ -524,18 +386,13 @@ class _AuthCardState extends State<AuthCard> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _isLogin
-                        ? '¿Aún no tienes cuenta? '
-                        : '¿Ya tienes cuenta? ',
+                    '¿Aún no tienes cuenta? ',
                     style: TextStyle(fontSize: 12, color: mutedFg),
                   ),
                   InkWell(
-                    onTap: () {
-                      _clearFields();
-                      setState(() => _isLogin = !_isLogin);
-                    },
+                    onTap: _isLoading ? null : _abrirRegistro,
                     child: Text(
-                      _isLogin ? 'Regístrate' : 'Inicia sesión',
+                      'Regístrate',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -548,19 +405,40 @@ class _AuthCardState extends State<AuthCard> {
 
               const SizedBox(height: 12),
 
-              InkWell(
-                onTap: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed('/home'), // TODO back logic
-                child: Text(
-                  'VOLVER',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.4,
-                    color: mutedFg,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pushReplacementNamed('/home'), // TODO back logic
+                    child: Text(
+                      'VOLVER',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: mutedFg,
+                      ),
+                    ),
                   ),
-                ),
+                  Text(
+                    '  ·  ',
+                    style: TextStyle(fontSize: 11, color: mutedFg),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pushNamed('/tour'),
+                    child: Text(
+                      'VER TOUR',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: fg,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -573,7 +451,9 @@ class _AuthCardState extends State<AuthCard> {
 class _ModeButton extends StatelessWidget {
   final String text;
   final bool active;
-  final VoidCallback onTap;
+
+  /// Nulo en el botón que ya está activo: no hay nada que hacer al pulsarlo.
+  final VoidCallback? onTap;
 
   const _ModeButton({
     required this.text,
@@ -619,7 +499,6 @@ class _Field extends StatefulWidget {
   final String hint;
   final bool isPassword;
   final bool isEmail;
-  final bool isNumber;
 
   const _Field({
     required this.icon,
@@ -627,7 +506,6 @@ class _Field extends StatefulWidget {
     required this.hint,
     this.isPassword = false,
     this.isEmail = false,
-    this.isNumber = false,
   });
 
   @override
@@ -666,9 +544,7 @@ class _FieldState extends State<_Field> {
               obscureText: _obscured,
               keyboardType: widget.isEmail
                   ? TextInputType.emailAddress
-                  : (widget.isNumber
-                        ? TextInputType.number
-                        : TextInputType.text),
+                  : TextInputType.text,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,

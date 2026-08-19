@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../features/routine/models/exercise.dart';
 import '../../features/routine/models/routine.dart';
+import '../../features/routine/models/routine_day.dart';
 import '../../services/api_service.dart';
 
 class RoutineProvider extends ChangeNotifier {
@@ -32,7 +34,10 @@ class RoutineProvider extends ChangeNotifier {
 
   Future<bool> deleteRoutine(String id) async {
     try {
-      await ApiService.deleteRoutine(id);
+      await ApiService.deleteRoutine(
+        id,
+        userId: ApiService.getCurrentUserId() ?? '',
+      );
       _routines.removeWhere((r) => r.id == id);
       notifyListeners();
       return true;
@@ -47,7 +52,11 @@ class RoutineProvider extends ChangeNotifier {
     try {
       final Map<String, dynamic> response;
       if (id != null) {
-        response = await ApiService.updateRoutine(id, payload);
+        response = await ApiService.updateRoutine(
+          id,
+          payload,
+          userId: ApiService.getCurrentUserId() ?? '',
+        );
       } else {
         final userId = ApiService.getCurrentUserId();
         if (userId != null) {
@@ -73,6 +82,48 @@ class RoutineProvider extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  /// Añade [exercises] al día [dayLabel] de [routine] (creándolo si ese día
+  /// todavía no existía) y persiste la rutina completa. Usado tanto por el
+  /// alta rápida de "hoy" en Home como por el editar-por-día de
+  /// RoutineViewPage, para no repetir la misma lógica de merge en cada sitio.
+  Future<Routine?> addExercisesToDay(
+    Routine routine,
+    String dayLabel,
+    List<Exercise> exercises,
+  ) {
+    final dayIndex = routine.days.indexWhere((d) => d.dayOfWeek == dayLabel);
+    final days = List<RoutineDay>.from(routine.days);
+    if (dayIndex >= 0) {
+      days[dayIndex] = days[dayIndex].copyWith(
+        exercises: [...days[dayIndex].exercises, ...exercises],
+      );
+    } else {
+      days.add(RoutineDay(dayOfWeek: dayLabel, exercises: exercises));
+    }
+    return saveRoutine(routine.copyWith(days: days).toJson(), id: routine.id);
+  }
+
+  /// Reemplaza el ejercicio en [exerciseIndex] del día [dayLabel] por
+  /// [updatedExercise] (series/reps/peso/notas) y persiste. Null si el día o
+  /// el índice ya no existen (la rutina cambió entre leerla y guardar).
+  Future<Routine?> updateExerciseInDay(
+    Routine routine,
+    String dayLabel,
+    int exerciseIndex,
+    Exercise updatedExercise,
+  ) {
+    final dayIndex = routine.days.indexWhere((d) => d.dayOfWeek == dayLabel);
+    if (dayIndex < 0) return Future.value(null);
+    final exercises = List<Exercise>.from(routine.days[dayIndex].exercises);
+    if (exerciseIndex < 0 || exerciseIndex >= exercises.length) {
+      return Future.value(null);
+    }
+    exercises[exerciseIndex] = updatedExercise;
+    final days = List<RoutineDay>.from(routine.days);
+    days[dayIndex] = days[dayIndex].copyWith(exercises: exercises);
+    return saveRoutine(routine.copyWith(days: days).toJson(), id: routine.id);
   }
 
   void clearError() {

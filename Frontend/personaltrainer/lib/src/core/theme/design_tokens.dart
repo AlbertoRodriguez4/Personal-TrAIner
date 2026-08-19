@@ -69,6 +69,62 @@ class DesignTokens {
     colors: [Color(0xFFFBE8B0), Color(0xFFF4D785)],
   );
 
+  // ===== Color por tipo de actividad =====
+  // Mismos valores que `ACTIVITY_COLORS` en routine.builder.tsx / quick-add.tsx
+  // del repo de diseño. Estaban duplicados en routines_home_page y
+  // routine_builder_page; viven acá para no volver a divergir.
+  static const Color activityGym = Color(0xFF059669); // emerald-600
+  static const Color activityCardio = Color(0xFF2563EB); // blue-600
+  static const Color activityCalistenia = Color(0xFFD97706); // amber-600
+  static const Color activityYoga = Color(0xFF7C3AED); // violet-600
+  static const Color activityDeportes = Color(0xFFEC4899); // pink-500
+
+  static Color activity(String type) {
+    switch (type) {
+      case 'cardio':
+        return activityCardio;
+      case 'calistenia':
+        return activityCalistenia;
+      case 'yoga':
+        return activityYoga;
+      case 'deportes':
+        return activityDeportes;
+      case 'gym':
+      default:
+        return activityGym;
+    }
+  }
+
+  // ===== Estados semánticos (éxito / aviso / info) =====
+  // `success` lo usan los chips de "acción realizada" del chat y los estados
+  // completados de la sesión de entreno; `warning` e `info`, los estados de
+  // conexión del pulsómetro y los avisos de sensor.
+  static const Color lightSuccess = Color(0xFF059669); // emerald-600, legible en claro
+  static const Color darkSuccess = Color(0xFF34D399); // emerald-400, legible en oscuro
+  static const Color lightWarning = Color(0xFFD97706); // amber-600
+  static const Color darkWarning = Color(0xFFFBBF24); // amber-400
+  static const Color lightInfo = Color(0xFF2563EB); // blue-600
+  static const Color darkInfo = Color(0xFF60A5FA); // blue-400
+
+  // ===== Rampa de esfuerzo (5 pasos) =====
+  // Un único ramp azul→verde→ámbar→naranja→rojo compartido por las zonas de FC
+  // del detalle de entreno (`workout.$id.tsx`) y las bandas de intensidad de la
+  // sesión en vivo (`session.tsx`). Estaban duplicadas y divergidas: el detalle
+  // usaba tonos apagados propios y la sesión los repetía a mano.
+  static const Color effortLow = Color(0xFF378ADD);      // calentamiento / ligero
+  static const Color effortModerate = Color(0xFF22C55E); // quema grasa / moderado
+  static const Color effortHigh = Color(0xFFF5C84B);     // cardio / intenso
+  static const Color effortVeryHigh = Color(0xFFF08A3D); // anaeróbico / cerca del fallo
+  static const Color effortMax = Color(0xFFE0473A);      // pico / fallo muscular
+
+  static const List<Color> effortRamp = [
+    effortLow,
+    effortModerate,
+    effortHigh,
+    effortVeryHigh,
+    effortMax,
+  ];
+
   // ===== Chart colors =====
   static const Color chart1 = Color(0xFFE76F51);
   static const Color chart2 = Color(0xFF2A9D8F);
@@ -92,7 +148,10 @@ class DesignTokens {
   static const Color recoveryAlertTo = Color(0xFFF4D785);
   static const Color recoveryAlertText = Color(0xFF9A3412);
   static const Color recoveryAlertIcon = Color(0xFFC2410C);
-  static const Color recoveryStageAwake = Color(0xFF3A3F4D);
+  // Gris claro deliberado: "Despierto" es el segmento que menos debe pesar
+  // visualmente en la barra de fases (ver recovery.tsx). Antes era un slate
+  // oscuro que lo convertía en el más llamativo de los cuatro.
+  static const Color recoveryStageAwake = Color(0xFFC7C7CC);
 
   static const LinearGradient recoveryHeroGradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -157,6 +216,12 @@ class DesignTokens {
       b == Brightness.dark ? darkRing : lightRing;
   static Color destructive(Brightness b) =>
       b == Brightness.dark ? darkDestructive : lightDestructive;
+  static Color success(Brightness b) =>
+      b == Brightness.dark ? darkSuccess : lightSuccess;
+  static Color warning(Brightness b) =>
+      b == Brightness.dark ? darkWarning : lightWarning;
+  static Color info(Brightness b) =>
+      b == Brightness.dark ? darkInfo : lightInfo;
 
   // Radios del design system (0.625rem base)
   static const double radius = 10.0;

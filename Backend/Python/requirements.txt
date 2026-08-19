@@ -3,5 +3,12 @@ uvicorn[standard]
 pydantic
 requests
 google-genai
+groq
 python-dotenv
 httpx
+# Preprocesado de pose en analisis_fisico (Tasks API, PoseLandmarker) — version
+# fijada tras probar import + inferencia real en Windows sin fallos de DLL
+# (ver vision_computacional_postura/SKILL.md). No subir a "latest" sin repetir
+# esa prueba: hay reportes de crashes de DLL en mediapipe sobre Windows.
+mediapipe==1.0.0
+numpy==2.2.6

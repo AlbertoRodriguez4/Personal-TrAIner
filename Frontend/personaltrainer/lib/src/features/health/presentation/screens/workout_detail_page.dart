@@ -24,7 +24,21 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   double _maxHr = 0;
   double _minHr = 0;
   int _durationMinutes = 0;
-  
+
+  /// `totalEnergyBurned` sale de agregar `TOTAL_CALORIES_BURNED` en Health
+  /// Connect; Mi Fitness solo escribe la variante "activa" para los
+  /// entrenamientos del reloj, así que ese campo llega null aunque
+  /// `_caloriesData` (ACTIVE_ENERGY_BURNED de la misma ventana) sí tenga
+  /// datos — de ahí este respaldo sumado en vez de leer el campo a ciegas.
+  double? _effectiveKcal;
+
+  /// Mismo respaldo, pero para las sesiones históricas del mismo tipo que
+  /// alimentan `_buildComparisonCard`: sin esto, la media contra la que se
+  /// compara sale de un puñado (o cero) de sesiones válidas y la fila
+  /// "Calorías" de la comparativa queda tan rota como el total de arriba.
+  /// Clave = `dateFrom.toIso8601String()`, igual que `origenId` en el sync.
+  Map<String, double> _historicalKcalByStart = {};
+
   late WorkoutHealthValue _workoutValue;
 
   @override
@@ -42,12 +56,33 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     );
     final history = await HealthService.fetchWorkouts(forceRefresh: false);
 
+    // Solo las del mismo tipo (lo único que usa la comparativa) y en paralelo:
+    // son consultas locales a Health Connect, no llamadas de red, pero
+    // lanzarlas una a una sumaría su latencia en vez de solaparla.
+    final sameTypeHistory = history.where((w) {
+      if (w.value is! WorkoutHealthValue) return false;
+      return (w.value as WorkoutHealthValue).workoutActivityType ==
+          _workoutValue.workoutActivityType;
+    });
+    final historicalKcalEntries = await Future.wait(
+      sameTypeHistory.map((w) async {
+        final val = w.value as WorkoutHealthValue;
+        final kcal = val.totalEnergyBurned?.toDouble() ??
+            await HealthService.sumActiveCalories(w.dateFrom, w.dateTo);
+        return MapEntry(w.dateFrom.toIso8601String(), kcal);
+      }),
+    );
+
     if (!mounted) return;
 
     setState(() {
       _hrData = details['heart_rate'] ?? [];
       _caloriesData = details['calories'] ?? [];
       _historicalWorkouts = history;
+      _historicalKcalByStart = {
+        for (final e in historicalKcalEntries)
+          if (e.value != null) e.key: e.value!,
+      };
 
       if (_hrData.isNotEmpty) {
         final hrValues = _hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
@@ -55,6 +90,17 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         _maxHr = hrValues.reduce((a, b) => a > b ? a : b);
         _minHr = hrValues.reduce((a, b) => a < b ? a : b);
       }
+
+      _effectiveKcal = _workoutValue.totalEnergyBurned?.toDouble() ??
+          (_caloriesData.isEmpty
+              ? null
+              : _caloriesData
+                  .where((p) => p.value is NumericHealthValue)
+                  .fold<double>(
+                    0,
+                    (sum, p) => sum + (p.value as NumericHealthValue).numericValue.toDouble(),
+                  ));
+
       _isLoading = false;
     });
   }
@@ -159,7 +205,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   }
 
   Widget _buildStatsGrid(Color cardBg, Color border, Color muted, Color fg) {
-    final kcal = _workoutValue.totalEnergyBurned?.toInt();
+    final kcal = _effectiveKcal?.toInt();
     final kcalStr = kcal != null ? '$kcal' : '--';
     final kcalPerMin = kcal != null && _durationMinutes > 0 ? (kcal / _durationMinutes).toStringAsFixed(1) : '--';
     
@@ -328,26 +374,26 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
           Text('ZONAS DE ENTRENAMIENTO', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(999),
             child: SizedBox(
               height: 12,
               child: Row(
                 children: [
-                  if (p1 > 0) Expanded(flex: (p1 * 100).toInt(), child: Container(color: const Color(0xFF378ADD))),
-                  if (p2 > 0) Expanded(flex: (p2 * 100).toInt(), child: Container(color: const Color(0xFF639922))),
-                  if (p3 > 0) Expanded(flex: (p3 * 100).toInt(), child: Container(color: const Color(0xFFBA7517))),
-                  if (p4 > 0) Expanded(flex: (p4 * 100).toInt(), child: Container(color: const Color(0xFFD85A30))),
-                  if (p5 > 0) Expanded(flex: (p5 * 100).toInt(), child: Container(color: const Color(0xFFA32D2D))),
+                  if (p1 > 0) Expanded(flex: (p1 * 100).toInt(), child: Container(color: DesignTokens.effortLow)),
+                  if (p2 > 0) Expanded(flex: (p2 * 100).toInt(), child: Container(color: DesignTokens.effortModerate)),
+                  if (p3 > 0) Expanded(flex: (p3 * 100).toInt(), child: Container(color: DesignTokens.effortHigh)),
+                  if (p4 > 0) Expanded(flex: (p4 * 100).toInt(), child: Container(color: DesignTokens.effortVeryHigh)),
+                  if (p5 > 0) Expanded(flex: (p5 * 100).toInt(), child: Container(color: DesignTokens.effortMax)),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 20),
-          _buildZoneLegendRow('Calentamiento', p1, 'Quema grasa', p2, const Color(0xFF378ADD), const Color(0xFF639922), fg),
+          _buildZoneLegendRow('Calentamiento', p1, 'Quema grasa', p2, DesignTokens.effortLow, DesignTokens.effortModerate, fg),
           const SizedBox(height: 8),
-          _buildZoneLegendRow('Cardio', p3, 'Anaeróbico', p4, const Color(0xFFBA7517), const Color(0xFFD85A30), fg),
+          _buildZoneLegendRow('Cardio', p3, 'Anaeróbico', p4, DesignTokens.effortHigh, DesignTokens.effortVeryHigh, fg),
           const SizedBox(height: 8),
-          _buildZoneLegendRow('Pico', p5, '', 0, const Color(0xFFA32D2D), Colors.transparent, fg),
+          _buildZoneLegendRow('Pico', p5, '', 0, DesignTokens.effortMax, Colors.transparent, fg),
         ],
       ),
     );
@@ -393,9 +439,14 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('INTENSIDAD', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+              Text('INTENSIDAD DEL ENTRENO', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
               const SizedBox(height: 2),
-              Text(label, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold)),
+              // El % de FC máx. ya se calculaba para elegir la etiqueta, pero
+              // nunca se enseñaba: es el dato que explica POR QUÉ pone "Alta".
+              Text(
+                '$label · ${(pct * 100).round()}% FC máx.',
+                style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           Row(
@@ -406,7 +457,10 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                 width: 12, height: 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: active ? Color.lerp(const Color(0xFF639922), const Color(0xFFA32D2D), i / 4) : border,
+                  // Los inactivos son anillos huecos, no puntos rellenos: así
+                  // el nivel se lee de un vistazo por cuántos están "encendidos".
+                  color: active ? DesignTokens.effortRamp[i] : Colors.transparent,
+                  border: active ? null : Border.all(color: border, width: 1.5),
                 ),
               );
             }),
@@ -427,13 +481,24 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     double totalDur = 0;
     double totalKcal = 0;
     int validKcal = 0;
+    // Intensidad = kcal por minuto. Es lo único comparable entre sesiones sin
+    // relanzar una consulta de FC por cada entreno histórico, y sigue siendo un
+    // dato real derivado, no una estimación inventada.
+    double totalKcalPerMin = 0;
+    int validKcalPerMin = 0;
 
     for (var w in sameType) {
-      totalDur += w.dateTo.difference(w.dateFrom).inMinutes;
+      final mins = w.dateTo.difference(w.dateFrom).inMinutes;
+      totalDur += mins;
       final val = w.value as WorkoutHealthValue;
-      if (val.totalEnergyBurned != null) {
-        totalKcal += val.totalEnergyBurned!;
+      final kcal = val.totalEnergyBurned ?? _historicalKcalByStart[w.dateFrom.toIso8601String()];
+      if (kcal != null) {
+        totalKcal += kcal;
         validKcal++;
+        if (mins > 0) {
+          totalKcalPerMin += kcal / mins;
+          validKcalPerMin++;
+        }
       }
     }
 
@@ -441,7 +506,18 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final avgKcal = validKcal > 0 ? totalKcal / validKcal : 0;
 
     final durDelta = (_durationMinutes - avgDur).toDouble();
-    final kcalDelta = (_workoutValue.totalEnergyBurned ?? 0).toDouble() - avgKcal;
+    final kcalDelta = (_effectiveKcal ?? 0) - avgKcal;
+
+    // Delta de intensidad en %, solo si hay base y duración con la que dividir.
+    double? intensityDelta;
+    if (validKcalPerMin > 0 && _durationMinutes > 0) {
+      final avgKcalPerMin = totalKcalPerMin / validKcalPerMin;
+      final currentKcalPerMin = (_effectiveKcal ?? 0) / _durationMinutes;
+      if (avgKcalPerMin > 0 && currentKcalPerMin > 0) {
+        intensityDelta =
+            ((currentKcalPerMin - avgKcalPerMin) / avgKcalPerMin) * 100;
+      }
+    }
 
     return Container(
       decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: border, width: 0.5)),
@@ -451,9 +527,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         children: [
           Text('COMPARATIVA PERSONAL', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
-          _buildCompRow(LucideIcons.clock, 'Duración', durDelta, 'min', fg, muted),
+          _buildCompRow(LucideIcons.clock, 'Duración', durDelta, 'min', fg, muted, border),
           const SizedBox(height: 12),
-          _buildCompRow(LucideIcons.flame, 'Calorías', kcalDelta, 'kcal', fg, muted),
+          _buildCompRow(LucideIcons.flame, 'Calorías', kcalDelta, 'kcal', fg, muted, border),
+          if (intensityDelta != null) ...[
+            const SizedBox(height: 12),
+            _buildCompRow(LucideIcons.activity, 'Intensidad', intensityDelta, '%', fg, muted, border),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
@@ -467,21 +547,41 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     );
   }
 
-  Widget _buildCompRow(IconData icon, String label, double delta, String unit, Color fg, Color muted) {
+  Widget _buildCompRow(IconData icon, String label, double delta, String unit, Color fg, Color muted, Color border) {
     final absDelta = delta.abs().round();
     final isSimilar = absDelta < 5;
     final color = isSimilar ? muted : (delta > 0 ? const Color(0xFF4ADE80) : const Color(0xFFF87171));
     final sign = delta > 0 ? '+' : '-';
-    final text = isSimilar ? 'similar a tu media' : '$sign$absDelta $unit que tu media';
+    // '%' va pegado al número; el resto de unidades separadas.
+    final amount = unit == '%' ? '$sign$absDelta$unit' : '$sign$absDelta $unit';
+    final text = isSimilar ? 'similar a tu media' : '$amount que tu media';
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border.withOpacity(0.5), width: 0.5),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: muted),
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: muted),
+          ),
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: TextStyle(color: fg, fontSize: 14, fontWeight: FontWeight.w500))),
+          if (!isSimilar) ...[
+            Icon(delta > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+                size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
           Text(text, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
         ],
       ),

@@ -35,6 +35,24 @@ export class UpdateUserProfileDto {
   objetivos?: string[];
 
   @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  actividades?: string[];
+
+  @IsOptional()
+  @IsString()
+  sexo?: string;
+
+  @IsOptional()
+  @IsNumber()
+  fc_reposo?: number;
+
+  @IsOptional()
+  @IsNumber()
+  horas_sueno_habitual?: number;
+
+  @IsOptional()
   @IsString()
   tipo_cuerpo?: string;
 
@@ -57,4 +75,25 @@ export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   notas_adicionales?: string;
+
+  // ===== Metas diarias =====
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_kcal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_proteinas_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_carbohidratos_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_grasas_g?: number;
 }

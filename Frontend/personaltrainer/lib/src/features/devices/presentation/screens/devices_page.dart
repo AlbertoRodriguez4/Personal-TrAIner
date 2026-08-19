@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/health_service.dart';
 
 /// Pantalla de gestión de wearables — réplica de `devices.tsx`.
@@ -29,6 +30,9 @@ class _DevicesPageState extends State<DevicesPage> {
   Set<DeviceIdentifier> _connectedOrBondedIds = {};
   int _stepsToday = 0;
   int? _lastHr;
+  DateTime? _lastSync;
+  int? _batteryPct;
+  String? _firmware;
   StreamSubscription<List<ScanResult>>? _scanSub;
 
   @override
@@ -82,6 +86,11 @@ class _DevicesPageState extends State<DevicesPage> {
         _connectedOrBondedIds = bondedAndConnectedIds;
         _loading = false;
       });
+
+      // Intento best-effort de leer batería/firmware del reloj si resulta que
+      // está conectado a esta app. No bloquea el listado.
+      final watch = connected.where(_isXiaomi).firstOrNull;
+      if (watch != null) unawaited(_readDeviceInfo(watch));
     } catch (e) {
       print('[BLE] scan error: $e');
       if (mounted) setState(() => _loading = false);
@@ -93,13 +102,43 @@ class _DevicesPageState extends State<DevicesPage> {
     try {
       final steps = await HealthService.fetchTodaySteps();
       final hr    = await HealthService.fetchLatestHeartRate();
+      final sync  = await HealthService.fetchLastSyncTime();
       if (mounted) setState(() {
         _stepsToday     = steps;
         _lastHr         = hr;
+        _lastSync       = sync;
         _metricsLoading = false;
       });
     } catch (e) {
       if (mounted) setState(() => _metricsLoading = false);
+    }
+  }
+
+  /// Batería y firmware por GATT estándar (Battery Service 0x180F, Device
+  /// Information 0x180A). Solo funciona si el reloj está conectado a ESTA app;
+  /// con Mi Fitness acaparando la conexión lo normal es que no devuelva nada,
+  /// y entonces esos datos simplemente no se muestran.
+  Future<void> _readDeviceInfo(BluetoothDevice device) async {
+    try {
+      if (device.isDisconnected) return;
+      final services = await device.discoverServices();
+      for (final s in services) {
+        final sid = s.uuid.str128.toLowerCase();
+        for (final c in s.characteristics) {
+          final cid = c.uuid.str128.toLowerCase();
+          if (sid.contains('180f') && cid.contains('2a19')) {
+            final v = await c.read();
+            if (v.isNotEmpty && mounted) setState(() => _batteryPct = v.first);
+          } else if (sid.contains('180a') && cid.contains('2a26')) {
+            final v = await c.read();
+            if (v.isNotEmpty && mounted) {
+              setState(() => _firmware = String.fromCharCodes(v).trim());
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('[BLE] no se pudo leer batería/firmware: $e');
     }
   }
 
@@ -123,12 +162,19 @@ class _DevicesPageState extends State<DevicesPage> {
     final primary = _found.where(_isXiaomi).firstOrNull;
     final others  = _found.where((d) => !_isXiaomi(d)).toList();
 
+    // Batería y firmware solo aparecen si el reloj los ha reportado de verdad
+    // por GATT; si no, el subtítulo se queda en el estado de conexión a secas.
+    final extras = [
+      if (_batteryPct != null) 'batería $_batteryPct%',
+      if (_firmware != null && _firmware!.isNotEmpty) 'firmware $_firmware',
+    ];
+
     final primaryDevice = PrimaryDevice(
       name: (primary?.platformName.isNotEmpty ?? false)
           ? primary!.platformName
           : 'Redmi Watch 5',
       sub: primary != null
-          ? 'Emparejado · Bluetooth activo'
+          ? ['Emparejado · Bluetooth activo', ...extras].join(' · ')
           : 'No detectado — abre Mi Fitness y activa BT',
     );
 
@@ -147,6 +193,11 @@ class _DevicesPageState extends State<DevicesPage> {
     final metrics = [
       DeviceMetric(label: 'Pasos hoy',   value: stepsStr, suffix: 'steps'),
       DeviceMetric(label: 'FC reciente', value: hrStr,    suffix: 'bpm'),
+      DeviceMetric(
+        label: 'Última sync',
+        value: _metricsLoading ? '…' : HealthService.formatRelative(_lastSync),
+        suffix: '',
+      ),
     ];
 
     final otherDevices = <OtherDevice>[
@@ -225,7 +276,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
       child: Row(
         children: [
-          _RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
+          RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
           const SizedBox(width: 12),
           Text(title.toUpperCase(), style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
         ],
@@ -580,25 +631,4 @@ class OtherDevice {
   final String sub;
   final String status;
   final bool muted;
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, this.onTap});
-  final IconData icon;
-  final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: DesignTokens.surface1(b), shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: DesignTokens.foreground(b)),
-      ),
-    );
-  }
 }

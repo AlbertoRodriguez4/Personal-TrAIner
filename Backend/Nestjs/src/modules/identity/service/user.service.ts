@@ -4,7 +4,9 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { User } from '../entities/user.entity';
+import { JwtService } from '@nestjs/jwt';
 import { UserDto } from '../dto/user.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
 
 const googleClient = new OAuth2Client('853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com');
 
@@ -13,6 +15,7 @@ export class UserService {
     constructor(
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
+        private readonly jwtService: JwtService,
     ) { }
 
     /**
@@ -44,8 +47,8 @@ export class UserService {
 
         // 5. Separamos la contraseña del resto de los datos usando desestructuración
         const { password, ...userWithoutPassword } = savedUser;
-        
-        return userWithoutPassword;
+
+        return this.conToken(userWithoutPassword);
     }
 
     /**
@@ -71,8 +74,8 @@ export class UserService {
 
         // 5. Separamos la contraseña del resto de los datos usando desestructuración
         const { password: _, ...userWithoutPassword } = user;
-        
-        return userWithoutPassword;
+
+        return this.conToken(userWithoutPassword);
     }
 
     async googleLogin(idToken: string) {
@@ -104,7 +107,19 @@ export class UserService {
         }
 
         const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
+        return this.conToken(userWithoutPassword);
+    }
+
+    /// Añade el token de sesión a la respuesta de registro/login.
+    ///
+    /// El `sub` del token es lo ÚNICO en lo que confía `JwtAuthGuard` para saber
+    /// quién pide: el `userId` que venga en la URL o en el cuerpo se compara
+    /// contra este, nunca al revés.
+    private conToken<T extends { id: string }>(usuario: T) {
+        return {
+            ...usuario,
+            access_token: this.jwtService.sign({ sub: usuario.id }),
+        };
     }
 
     // --- MÉTODOS CRUD ESTÁNDAR ---
@@ -123,7 +138,10 @@ export class UserService {
         return await this.userRepository.findOneBy({ id });
     }
 
-    async update(id: string, updateUserDto: UserDto) {
+    /// El DTO se escribe tal cual en la tabla, así que solo puede traer campos
+    /// que sean seguros de guardar sin transformar. `UpdateUserDto` no incluye
+    /// la contraseña justamente por eso.
+    async update(id: string, updateUserDto: UpdateUserDto) {
         await this.userRepository.update(id, updateUserDto);
         return this.findOne(id);
     }

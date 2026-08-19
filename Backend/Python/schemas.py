@@ -230,16 +230,25 @@ class SetTelemetryInput(BaseModel):
             }
         }
 
+class ChatImage(BaseModel):
+    data: str
+    mime_type: str = Field(..., alias="mimeType")
+
+    class Config:
+        populate_by_name = True
+
+
 class ChatTurn(BaseModel):
     role: str = Field(..., description="'user' o 'model'")
     text: str
 
 class ChatRequest(BaseModel):
     user_id: str = Field(..., description="UUID del usuario")
-    mode: str = Field(..., description="creador_rutina | revisor_rutina | sueno_recuperacion | nutricion | entrenamiento")
+    mode: str = Field(..., description="creador_rutina | revisor_rutina | sueno_recuperacion | nutricion | entrenamiento | analisis_fisico")
     message: str
     history: List[ChatTurn] = Field(default_factory=list)
     health_context: Optional[dict] = Field(None, description="Datos crudos de Health Connect, solo para modo sueno_recuperacion")
+    images: List[ChatImage] = Field(default_factory=list)
 
 class ChatAction(BaseModel):
     tool: str
@@ -248,4 +257,90 @@ class ChatAction(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     actions_taken: List[ChatAction]
+
+
+# ============================================================
+# MÓDULO 5: Análisis clínico y de físico (una sola pasada, no chat)
+# ============================================================
+
+class ClinicalReportRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    data: str = Field(..., description="PDF o imagen del informe en base64, sin el prefijo 'data:'")
+    mime_type: str = Field(..., description="application/pdf | image/jpeg | image/png | image/webp")
+    file_name: Optional[str] = Field(None, description="Nombre original del archivo, solo para mostrarlo en el historial")
+
+
+class ClinicalManualValue(BaseModel):
+    codigo: str = Field(..., description="Nombre o código del biomarcador (se normaliza en el servidor)")
+    valor: float
+    unidad: Optional[str] = None
+    rango_min: Optional[float] = None
+    rango_max: Optional[float] = None
+
+
+class ClinicalManualRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    valores: conlist(ClinicalManualValue, min_length=1)
+    fecha: Optional[str] = Field(None, description="Fecha de la analítica en AAAA-MM-DD; hoy si falta")
+
+
+class BodyCompositionRequest(BaseModel):
+    """Una medición de composición corporal tecleada a mano.
+
+    Todos los valores son opcionales por diseño: una báscula de casa da peso y
+    porcentaje de grasa y nada más, y obligar a rellenar el resto solo
+    conseguiría que el usuario se inventase los huecos. El servidor comprueba
+    que llegue al menos uno y deriva los que se puedan deducir."""
+    user_id: str = Field(..., description="UUID del usuario")
+    fecha: Optional[str] = Field(None, description="Fecha de la medición en AAAA-MM-DD; hoy si falta")
+    metodo: Optional[str] = Field("dexa", description="dexa | bioimpedancia | plicometria | bascula | otro")
+    peso_kg: Optional[float] = None
+    porcentaje_grasa: Optional[float] = None
+    masa_muscular_kg: Optional[float] = None
+    musculo_esqueletico_pct: Optional[float] = None
+    masa_osea_kg: Optional[float] = None
+    densidad_osea: Optional[float] = Field(None, description="Densidad mineral ósea en g/cm²")
+    proteina_kg: Optional[float] = None
+    agua_corporal_kg: Optional[float] = None
+    agua_corporal_pct: Optional[float] = None
+    grasa_subcutanea_pct: Optional[float] = None
+    grasa_visceral: Optional[float] = None
+    tmb_kcal: Optional[float] = None
+    edad_corporal: Optional[float] = None
+    peso_ideal_kg: Optional[float] = None
+    notas: Optional[str] = None
+
+
+class PhysiquePhotoInput(BaseModel):
+    data: str = Field(..., description="Imagen en base64, ya reescalada por el cliente")
+    mime_type: str = Field(..., description="image/jpeg | image/png | image/webp")
+    angulo: str = Field("otro", description="frontal | lateral | espalda | otro")
+
+
+class PhysiqueAnalysisRequest(BaseModel):
+    user_id: str = Field(..., description="UUID del usuario")
+    photos: conlist(PhysiquePhotoInput, min_length=1) = Field(..., description="Entre 1 y 5 fotos del físico")
+    notas: Optional[str] = Field(None, description="Contexto libre que escriba el usuario")
+
+
+class FoodEstimateRequest(BaseModel):
+    """Registro manual de comida (nutricion, sin foto): un nombre + una cantidad.
+    La cantidad es SIEMPRE una de las dos formas, nunca ambas — el cliente elige
+    entre pestaña 'Gramos' o 'Referencias' y solo manda el campo de esa pestaña."""
+    user_id: str = Field(..., description="UUID del usuario")
+    nombre_alimento: str = Field(..., min_length=1, description="Ej. 'Pechuga de pollo'")
+    cantidad_g: Optional[float] = Field(None, gt=0, description="Modo Gramos")
+    referencia_unidad: Optional[str] = Field(
+        None,
+        description="Modo Referencias: 'palma' | 'puno' | 'punado' | 'pulgar' | 'vaso' | "
+        "'cuarto_plato' | 'media_plato' | 'plato_completo'",
+    )
+    referencia_cantidad: Optional[float] = Field(1.0, gt=0, description="Ej. 2 para '2 puños'")
+
+
+class FoodSuggestionsRequest(BaseModel):
+    """Autocompletado del catálogo local mientras el usuario escribe — ver
+    food_lookup.sugerir. No toca USDA/Open Food Facts, solo el catálogo
+    propio, así que responde lo bastante rápido para llamarse en cada tecla."""
+    query: str = Field(..., min_length=1)
 

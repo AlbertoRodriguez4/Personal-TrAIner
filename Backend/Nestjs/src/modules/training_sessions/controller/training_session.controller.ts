@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { TrainingSessionService } from '../service/training_session.service';
 import { CreateTrainingSessionDto } from '../dto/create-training-session.dto';
 import { UpdateTrainingSessionDto } from '../dto/update-training-session.dto';
@@ -15,6 +15,14 @@ export class TrainingSessionController {
   @Get('user/:userId')
   findByUser(@Param('userId') userId: string) {
     return this.trainingSessionService.findByUser(userId);
+  }
+
+  /// Sesión + media del usuario en cada métrica + cuánto se desvía esta
+  /// sesión de esa media. Antes de `:id` en las rutas para que Nest no lo
+  /// confunda con `findOne(':id')`.
+  @Get(':id/analysis')
+  getAnalysis(@Param('id') id: string, @Query('userId') userId: string) {
+    return this.trainingSessionService.getAnalysis(id, userId);
   }
 
   @Get(':id')

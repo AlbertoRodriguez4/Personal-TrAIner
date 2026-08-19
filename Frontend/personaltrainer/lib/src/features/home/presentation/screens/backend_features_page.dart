@@ -480,26 +480,29 @@ class _BackendFeaturesPageState extends State<BackendFeaturesPage> {
               await _runAction(
                 () async {
                   if (isEditing) {
-                    await ApiService.updateDexaScan(current['id'].toString(), {
-                      'userId': userId,
-                      'fecha_escaneo': dateController.text.trim(),
-                      'porcentaje_grasa':
-                          double.tryParse(fatController.text.trim()) ?? 0,
-                      'masa_muscular_kg':
-                          double.tryParse(muscleController.text.trim()) ?? 0,
-                      'densidad_osea':
-                          double.tryParse(boneController.text.trim()) ?? 0,
-                    });
+                    await ApiService.updateDexaScan(
+                      current['id'].toString(),
+                      userId,
+                      {
+                        'fecha_escaneo': dateController.text.trim(),
+                        'porcentaje_grasa':
+                            double.tryParse(fatController.text.trim()),
+                        'masa_muscular_kg':
+                            double.tryParse(muscleController.text.trim()),
+                        'densidad_osea':
+                            double.tryParse(boneController.text.trim()),
+                      },
+                    );
                   } else {
-                    await ApiService.createDexaScan(
+                    await ApiService.registerBodyComposition(
                       userId: userId,
-                      fechaEscaneo: dateController.text.trim(),
+                      fecha: dateController.text.trim(),
                       porcentajeGrasa:
-                          double.tryParse(fatController.text.trim()) ?? 0,
+                          double.tryParse(fatController.text.trim()),
                       masaMuscularKg:
-                          double.tryParse(muscleController.text.trim()) ?? 0,
+                          double.tryParse(muscleController.text.trim()),
                       densidadOsea:
-                          double.tryParse(boneController.text.trim()) ?? 0,
+                          double.tryParse(boneController.text.trim()),
                     );
                   }
                   await _loadAll();
@@ -830,8 +833,8 @@ class _BackendFeaturesPageState extends State<BackendFeaturesPage> {
                     ),
             ),
             _sectionCard(
-              title: 'DEXA',
-              subtitle: '${_dexaScans.length} escaneos',
+              title: 'Composicion corporal',
+              subtitle: '${_dexaScans.length} mediciones',
               actions: [
                 IconButton(
                   onPressed: () => _openDexaDialog(),
@@ -839,16 +842,24 @@ class _BackendFeaturesPageState extends State<BackendFeaturesPage> {
                 ),
               ],
               child: _dexaScans.isEmpty
-                  ? const Text('Sin escaneos DEXA.')
+                  ? const Text('Sin mediciones de composicion corporal.')
                   : Column(
                       children: _dexaScans.map((scan) {
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text('Grasa ${scan['porcentaje_grasa']}%'),
-                          subtitle: Text(_dateOnly(scan['fecha_escaneo'])),
+                          title: Text(
+                            'Peso ${scan['peso_kg'] ?? '—'} kg · '
+                            'Grasa ${scan['porcentaje_grasa'] ?? '—'}%',
+                          ),
+                          subtitle: Text(
+                            '${_dateOnly(scan['fecha_escaneo'])} · ${scan['metodo'] ?? 'dexa'}',
+                          ),
                           onTap: () => _showJsonDetails(
-                            'DEXA',
-                            ApiService.getDexaScanById(scan['id'].toString()),
+                            'Composicion corporal',
+                            ApiService.getDexaScanById(
+                              scan['id'].toString(),
+                              _userId ?? '',
+                            ),
                           ),
                           trailing: Wrap(
                             spacing: 4,
@@ -862,9 +873,10 @@ class _BackendFeaturesPageState extends State<BackendFeaturesPage> {
                                 onPressed: () => _runAction(() async {
                                   await ApiService.deleteDexaScan(
                                     scan['id'].toString(),
+                                    _userId ?? '',
                                   );
                                   await _loadAll();
-                                }, successMessage: 'DEXA eliminado'),
+                                }, successMessage: 'Medicion eliminada'),
                               ),
                             ],
                           ),

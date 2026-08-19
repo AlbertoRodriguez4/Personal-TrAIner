@@ -3,7 +3,17 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.111:3000';
+  /// URL del backend, fijada al compilar:
+  ///     flutter build apk --release --dart-define=API_BASE_URL=https://tu-backend
+  ///
+  /// El valor por defecto es la IP del portátil en la red local, que es lo que
+  /// sirve mientras se desarrolla. Ojo: al ser de la LAN, una APK compilada sin
+  /// `--dart-define` solo funciona en esa misma wifi, y deja de funcionar en
+  /// cuanto el router le asigna otra IP al equipo.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.1.111:3000',
+  );
   static const String _sessionKey = 'pt_session_user';
 
   static String? _authToken;
@@ -18,6 +28,9 @@ class ApiService {
 
   static Map<String, String> get _jsonHeaders => {
     'Content-Type': 'application/json',
+    // El backend exige Bearer en todo salvo login/registro. Sin esto, cada
+    // llamada vuelve con un 401.
+    if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
   static dynamic _decodeBody(http.Response response) {
@@ -65,37 +78,47 @@ class ApiService {
     required String path,
     Map<String, dynamic>? body,
     Map<String, String>? queryParams,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path, queryParams);
     late final http.Response response;
 
+    Future<http.Response> conTimeout(Future<http.Response> peticion) =>
+        timeout == null ? peticion : peticion.timeout(timeout);
+
     switch (method) {
       case 'GET':
-        response = await http.get(uri, headers: _jsonHeaders);
+        response = await conTimeout(http.get(uri, headers: _jsonHeaders));
         break;
       case 'POST':
-        response = await http.post(
-          uri,
-          headers: _jsonHeaders,
-          body: body == null ? null : jsonEncode(body),
+        response = await conTimeout(
+          http.post(
+            uri,
+            headers: _jsonHeaders,
+            body: body == null ? null : jsonEncode(body),
+          ),
         );
         break;
       case 'PUT':
-        response = await http.put(
-          uri,
-          headers: _jsonHeaders,
-          body: body == null ? null : jsonEncode(body),
+        response = await conTimeout(
+          http.put(
+            uri,
+            headers: _jsonHeaders,
+            body: body == null ? null : jsonEncode(body),
+          ),
         );
         break;
       case 'PATCH':
-        response = await http.patch(
-          uri,
-          headers: _jsonHeaders,
-          body: body == null ? null : jsonEncode(body),
+        response = await conTimeout(
+          http.patch(
+            uri,
+            headers: _jsonHeaders,
+            body: body == null ? null : jsonEncode(body),
+          ),
         );
         break;
       case 'DELETE':
-        response = await http.delete(uri, headers: _jsonHeaders);
+        response = await conTimeout(http.delete(uri, headers: _jsonHeaders));
         break;
       default:
         throw ArgumentError('Metodo HTTP no soportado: $method');
@@ -120,7 +143,7 @@ class ApiService {
         return null;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
       await _persistSession();
       return userData;
     } catch (_) {
@@ -143,7 +166,7 @@ class ApiService {
         return null;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
       await _persistSession();
       return userData;
     } catch (_) {
@@ -239,7 +262,7 @@ class ApiService {
         return;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
     } catch (_) {
       await prefs.remove(_sessionKey);
     }
@@ -295,27 +318,78 @@ class ApiService {
     return _toMapList(decoded);
   }
 
-  static Future<Map<String, dynamic>> getDexaScanById(String id) async {
-    final decoded = await _request(method: 'GET', path: '/dexa-scans/$id');
+  static Future<Map<String, dynamic>> getDexaScanById(
+    String id,
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/dexa-scans/$id',
+      queryParams: {'userId': userId},
+    );
     return _toMap(decoded) ?? {};
   }
 
-  static Future<Map<String, dynamic>> createDexaScan({
+  /// Última medición de composición corporal, o `null` si no hay ninguna.
+  static Future<Map<String, dynamic>?> getLatestBodyComposition(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/dexa-scans/user/$userId/latest',
+    );
+    return _toMap(decoded);
+  }
+
+  /// Guarda una medición y devuelve `{medicion, clasificacion, lecturas,
+  /// fuentes_consultadas}`. Va por `/ai` y no directo a `/dexa-scans` porque las
+  /// tablas de referencia con las que se clasifica (ACE, OMS, Kouri) viven en el
+  /// servicio Python: así la pantalla enseña los mismos tramos que lee la IA.
+  ///
+  /// Todos los valores son opcionales menos el usuario. Basta con el peso.
+  static Future<Map<String, dynamic>> registerBodyComposition({
     required String userId,
-    required String fechaEscaneo,
-    required double porcentajeGrasa,
-    required double masaMuscularKg,
-    required double densidadOsea,
+    String? fecha,
+    String? metodo,
+    double? pesoKg,
+    double? porcentajeGrasa,
+    double? masaMuscularKg,
+    double? musculoEsqueleticoPct,
+    double? masaOseaKg,
+    double? densidadOsea,
+    double? proteinaKg,
+    double? aguaCorporalKg,
+    double? aguaCorporalPct,
+    double? grasaSubcutaneaPct,
+    double? grasaVisceral,
+    double? tmbKcal,
+    double? edadCorporal,
+    double? pesoIdealKg,
+    String? notas,
   }) async {
     final decoded = await _request(
       method: 'POST',
-      path: '/dexa-scans',
+      path: '/ai/body-composition',
       body: {
         'userId': userId,
-        'fecha_escaneo': fechaEscaneo,
-        'porcentaje_grasa': porcentajeGrasa,
-        'masa_muscular_kg': masaMuscularKg,
-        'densidad_osea': densidadOsea,
+        if (fecha != null) 'fecha': fecha,
+        if (metodo != null) 'metodo': metodo,
+        if (pesoKg != null) 'pesoKg': pesoKg,
+        if (porcentajeGrasa != null) 'porcentajeGrasa': porcentajeGrasa,
+        if (masaMuscularKg != null) 'masaMuscularKg': masaMuscularKg,
+        if (musculoEsqueleticoPct != null)
+          'musculoEsqueleticoPct': musculoEsqueleticoPct,
+        if (masaOseaKg != null) 'masaOseaKg': masaOseaKg,
+        if (densidadOsea != null) 'densidadOsea': densidadOsea,
+        if (proteinaKg != null) 'proteinaKg': proteinaKg,
+        if (aguaCorporalKg != null) 'aguaCorporalKg': aguaCorporalKg,
+        if (aguaCorporalPct != null) 'aguaCorporalPct': aguaCorporalPct,
+        if (grasaSubcutaneaPct != null) 'grasaSubcutaneaPct': grasaSubcutaneaPct,
+        if (grasaVisceral != null) 'grasaVisceral': grasaVisceral,
+        if (tmbKcal != null) 'tmbKcal': tmbKcal,
+        if (edadCorporal != null) 'edadCorporal': edadCorporal,
+        if (pesoIdealKg != null) 'pesoIdealKg': pesoIdealKg,
+        if (notas != null && notas.isNotEmpty) 'notas': notas,
       },
     );
     return _toMap(decoded) ?? {};
@@ -323,18 +397,184 @@ class ApiService {
 
   static Future<Map<String, dynamic>> updateDexaScan(
     String id,
+    String userId,
     Map<String, dynamic> data,
   ) async {
     final decoded = await _request(
       method: 'PUT',
       path: '/dexa-scans/$id',
+      queryParams: {'userId': userId},
       body: data,
     );
     return _toMap(decoded) ?? {};
   }
 
-  static Future<void> deleteDexaScan(String id) async {
-    await _request(method: 'DELETE', path: '/dexa-scans/$id');
+  static Future<void> deleteDexaScan(String id, String userId) async {
+    await _request(
+      method: 'DELETE',
+      path: '/dexa-scans/$id',
+      queryParams: {'userId': userId},
+    );
+  }
+
+  // ===================== Clínica (informes y biomarcadores) =====================
+
+  /// El análisis encadena dos pasadas al modelo más varias consultas a
+  /// MedlinePlus, así que tarda bastante más que una petición normal. Sin este
+  /// margen la app corta antes de que el backend termine y el usuario cree que
+  /// falló un análisis que en realidad sí se guardó.
+  static const Duration _timeoutAnalisisIa = Duration(minutes: 3);
+
+  /// Sube un PDF o una foto de una analítica: el backend la extrae, la contrasta
+  /// contra fuentes oficiales, redacta el resumen y lo guarda.
+  static Future<Map<String, dynamic>> analyzeClinicalDocument({
+    required String userId,
+    required String base64Data,
+    required String mimeType,
+    String? fileName,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/clinical-report',
+      timeout: _timeoutAnalisisIa,
+      body: {
+        'userId': userId,
+        'data': base64Data,
+        'mimeType': mimeType,
+        if (fileName != null) 'fileName': fileName,
+      },
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<List<Map<String, dynamic>>> getClinicalReports(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/clinical-reports/user/$userId',
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<Map<String, dynamic>> getClinicalReport(
+    String id,
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/clinical-reports/$id',
+      queryParams: {'userId': userId},
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<void> deleteClinicalReport(String id, String userId) async {
+    await _request(
+      method: 'DELETE',
+      path: '/clinical-reports/$id',
+      queryParams: {'userId': userId},
+    );
+  }
+
+  /// Último valor registrado de cada biomarcador (venga de un documento o de
+  /// una alta manual).
+  static Future<List<Map<String, dynamic>>> getLatestClinicalMarkers(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/clinical-reports/user/$userId/markers/latest',
+    );
+    return _toMapList(decoded);
+  }
+
+  /// Valores tecleados a mano. Van por el servicio de IA (no directos a la
+  /// tabla) para que reciban la misma clasificación contra fuentes oficiales y
+  /// el mismo resumen que los extraídos de un documento.
+  static Future<Map<String, dynamic>> analyzeManualClinicalValues({
+    required String userId,
+    required List<Map<String, dynamic>> values,
+    DateTime? fecha,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/clinical-manual',
+      timeout: _timeoutAnalisisIa,
+      body: {
+        'userId': userId,
+        if (fecha != null) 'fecha': fecha.toIso8601String().substring(0, 10),
+        'valores': values,
+      },
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  // ===================== Físico (fotos y seguimiento) =====================
+
+  /// Envía las fotos del físico; el backend las analiza contra las normas de
+  /// composición corporal publicadas y guarda el registro con sus fotos.
+  static Future<Map<String, dynamic>> analyzePhysiquePhotos({
+    required String userId,
+    required List<Map<String, String>> photos,
+    String? notas,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/physique-analysis',
+      timeout: _timeoutAnalisisIa,
+      body: {
+        'userId': userId,
+        'photos': photos,
+        if (notas != null && notas.trim().isNotEmpty) 'notas': notas.trim(),
+      },
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<List<Map<String, dynamic>>> getBodyAnalysisRecords(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/body-analysis/user/$userId',
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<List<Map<String, dynamic>>> getPhysiquePhotos(
+    String recordId,
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/body-analysis/$recordId/photos',
+      queryParams: {'userId': userId},
+    );
+    return _toMapList(decoded);
+  }
+
+  /// URL directa de una foto, para `Image.network`. Las fotos van por bytes
+  /// desde Postgres, no por una carpeta estática, así que la ruta necesita el
+  /// `userId` para la comprobación de propiedad.
+  static String physiquePhotoUrl(String photoId, String userId) =>
+      '$baseUrl/body-analysis/photos/$photoId?userId=$userId';
+
+  /// Cabeceras para `Image.network`, que no pasa por `_request` y por tanto no
+  /// lleva el token por su cuenta. Sin esto las fotos del físico responden 401
+  /// desde que existe la guarda de autenticación.
+  static Map<String, String> get imageHeaders =>
+      _authToken == null ? const {} : {'Authorization': 'Bearer $_authToken'};
+
+  static Future<void> deleteBodyAnalysisRecord(String id) async {
+    await _request(method: 'DELETE', path: '/body-analysis/$id');
+  }
+
+  /// Perfil consolidado (datos básicos + físico + clínica) con el flag de
+  /// completitud que usa la IA para decidir si puede personalizar.
+  static Future<Map<String, dynamic>> getAiContext(String userId) async {
+    final decoded = await _request(method: 'GET', path: '/ai-context/$userId');
+    return _toMap(decoded) ?? {};
   }
 
   static Future<List<Map<String, dynamic>>> getPostureEvaluationsByUser(
@@ -439,6 +679,8 @@ class ApiService {
     required double carbohidratosG,
     required double grasasG,
     String? notas,
+    String? tipoComida,
+    String? nombreAlimento,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -451,9 +693,52 @@ class ApiService {
         'carbohidratos_g': carbohidratosG,
         'grasas_g': grasasG,
         'notas': notas,
+        if (tipoComida != null) 'tipo_comida': tipoComida,
+        if (nombreAlimento != null) 'nombre_alimento': nombreAlimento,
       },
     );
     return _toMap(decoded) ?? {};
+  }
+
+  /// Estima kcal/macros de un alimento por nombre + cantidad (gramos, o una
+  /// referencia corporal/de plato) para el registro manual sin foto. No
+  /// guarda nada — solo uno de [cantidadG] / [referenciaUnidad] debe llegar,
+  /// según qué pestaña esté activa en el formulario.
+  static Future<Map<String, dynamic>> estimateFoodMacros({
+    required String userId,
+    required String nombreAlimento,
+    double? cantidadG,
+    String? referenciaUnidad,
+    double? referenciaCantidad,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/food-estimate',
+      body: {
+        'userId': userId,
+        'nombreAlimento': nombreAlimento,
+        if (cantidadG != null) 'cantidadG': cantidadG,
+        if (referenciaUnidad != null) 'referenciaUnidad': referenciaUnidad,
+        if (referenciaCantidad != null) 'referenciaCantidad': referenciaCantidad,
+      },
+      timeout: const Duration(seconds: 12),
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  /// Autocompletado del catálogo local mientras el usuario escribe el nombre
+  /// del alimento — ver comentario en `estimateFoodMacros`.
+  static Future<List<String>> suggestFoods(String query) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/food-suggestions',
+      body: {'query': query},
+      timeout: const Duration(seconds: 6),
+    );
+    final map = _toMap(decoded);
+    final lista = map?['sugerencias'];
+    if (lista is! List) return [];
+    return lista.map((e) => e.toString()).toList();
   }
 
   static Future<Map<String, dynamic>> updateNutritionLog(
@@ -470,6 +755,72 @@ class ApiService {
 
   static Future<void> deleteNutritionLog(String id) async {
     await _request(method: 'DELETE', path: '/nutrition-logs/$id');
+  }
+
+  static Future<List<Map<String, dynamic>>> getNutritionCalendar(
+    String userId, {
+    required String from,
+    required String to,
+  }) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/nutrition-logs/user/$userId/calendar',
+      queryParams: {'from': from, 'to': to},
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<Map<String, dynamic>> getNutritionDayDetail(
+    String userId,
+    String date,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/nutrition-logs/user/$userId/day/$date',
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  // ── Suplementos ───────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getSupplementsToday(
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/supplements/user/$userId/today',
+    );
+    return _toMapList(decoded);
+  }
+
+  static Future<Map<String, dynamic>> createSupplement({
+    required String userId,
+    required String nombre,
+    String? dosis,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/supplements',
+      body: {'userId': userId, 'nombre': nombre, 'dosis': dosis},
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  static Future<void> deleteSupplement(String id, String userId) async {
+    await _request(
+      method: 'DELETE',
+      path: '/supplements/$id',
+      queryParams: {'userId': userId},
+    );
+  }
+
+  static Future<bool> toggleSupplementToday(String id, String userId) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/supplements/$id/toggle',
+      body: {'userId': userId},
+    );
+    return _toMap(decoded)?['tomado'] == true;
   }
 
   static Future<List<Map<String, dynamic>>> getTrainingSessionsByUser(
@@ -496,6 +847,13 @@ class ApiService {
     required String tipoEntrenamiento,
     required List<Map<String, dynamic>> ejercicios,
     String estado = 'pendiente',
+    int? duracionMinutos,
+    int? caloriasKcal,
+    int? frecuenciaCardiacaMedia,
+    int? frecuenciaCardiacaMax,
+    double? distanciaKm,
+    String? origen,
+    String? origenId,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -506,7 +864,31 @@ class ApiService {
         'tipo_entrenamiento': tipoEntrenamiento,
         'ejercicios': ejercicios,
         'estado': estado,
+        if (duracionMinutos != null) 'duracion_minutos': duracionMinutos,
+        if (caloriasKcal != null) 'calorias_kcal': caloriasKcal,
+        if (frecuenciaCardiacaMedia != null)
+          'frecuencia_cardiaca_media': frecuenciaCardiacaMedia,
+        if (frecuenciaCardiacaMax != null)
+          'frecuencia_cardiaca_max': frecuenciaCardiacaMax,
+        if (distanciaKm != null) 'distancia_km': distanciaKm,
+        if (origen != null) 'origen': origen,
+        if (origenId != null) 'origen_id': origenId,
       },
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  /// Sesión + la media del usuario en cada métrica + cuánto se desvía esta
+  /// sesión de esa media, para poder enseñar "vs. tu media" en vez de solo el
+  /// número suelto.
+  static Future<Map<String, dynamic>> getTrainingSessionAnalysis(
+    String id,
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/training-sessions/$id/analysis',
+      queryParams: {'userId': userId},
     );
     return _toMap(decoded) ?? {};
   }
@@ -590,12 +972,20 @@ class ApiService {
     String? intensidad,
     String? nivelExperiencia,
     List<String>? objetivos,
+    List<String>? actividades,
+    String? sexo,
+    int? fcReposo,
+    double? horasSuenoHabitual,
     String? tipoCuerpo,
     String? condicionesMedicas,
     double? bmi,
     double? dexaPorcentajeGrasa,
     double? dexaMasaMuscularKg,
     String? notasAdicionales,
+    double? metaKcal,
+    double? metaProteinasG,
+    double? metaCarbohidratosG,
+    double? metaGrasasG,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -605,13 +995,24 @@ class ApiService {
         'dias_entrenamiento_semana': diasEntrenamientoSemana,
         'intensidad': intensidad,
         'nivel_experiencia': nivelExperiencia,
-        'objetivos': objetivos,
+        // El DTO valida las listas con `@ArrayNotEmpty`, así que una lista
+        // vacía tumba el guardado entero con un 400. Deseleccionar todos los
+        // objetivos es una accion legitima: se manda `null`, que sí acepta.
+        'objetivos': (objetivos?.isEmpty ?? true) ? null : objetivos,
+        'actividades': (actividades?.isEmpty ?? true) ? null : actividades,
+        'sexo': sexo,
+        'fc_reposo': fcReposo,
+        'horas_sueno_habitual': horasSuenoHabitual,
         'tipo_cuerpo': tipoCuerpo,
         'condiciones_medicas': condicionesMedicas,
         'bmi': bmi,
         'dexa_porcentaje_grasa': dexaPorcentajeGrasa,
         'dexa_masa_muscular_kg': dexaMasaMuscularKg,
         'notas_adicionales': notasAdicionales,
+        'meta_kcal': metaKcal,
+        'meta_proteinas_g': metaProteinasG,
+        'meta_carbohidratos_g': metaCarbohidratosG,
+        'meta_grasas_g': metaGrasasG,
       },
     );
     return _toMap(decoded) ?? {};
@@ -622,8 +1023,11 @@ class ApiService {
     return _toMapList(decoded);
   }
 
-  static Future<Map<String, dynamic>> getRoutineById(String id) async {
-    final decoded = await _request(method: 'GET', path: '/api/routines/$id');
+  static Future<Map<String, dynamic>> getRoutineById(
+    String id, {
+    required String userId,
+  }) async {
+    final decoded = await _request(method: 'GET', path: '/api/routines/$id?userId=$userId');
     return _toMap(decoded) ?? {};
   }
 
@@ -640,18 +1044,22 @@ class ApiService {
 
   static Future<Map<String, dynamic>> updateRoutine(
     String id,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    required String userId,
+  }) async {
     final decoded = await _request(
       method: 'PATCH',
-      path: '/api/routines/$id',
+      path: '/api/routines/$id?userId=$userId',
       body: data,
     );
     return _toMap(decoded) ?? {};
   }
 
-  static Future<void> deleteRoutine(String id) async {
-    await _request(method: 'DELETE', path: '/api/routines/$id');
+  static Future<void> deleteRoutine(
+    String id, {
+    required String userId,
+  }) async {
+    await _request(method: 'DELETE', path: '/api/routines/$id?userId=$userId');
   }
 
   static Future<Map<String, dynamic>> updateUserProfile({
@@ -700,24 +1108,6 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
-  static Future<Map<String, dynamic>> analyzeNutritionPhoto(String base64Image, String userId, {String? userMessage}) async {
-    String finalPrompt = 'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
-    if (userMessage != null && userMessage.isNotEmpty) {
-      finalPrompt += '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
-    }
-
-    final decoded = await _request(
-      method: 'POST',
-      path: '/ai/analizar-nutricion',
-      body: {
-        'image_base64': base64Image,
-        'prompt': finalPrompt,
-        'user_id': userId,
-      },
-    );
-    return _toMap(decoded) ?? {};
-  }
-
   static Future<Map<String, dynamic>> getDailySummary(String userId) async {
     final decoded = await _request(
       method: 'GET',
@@ -732,6 +1122,7 @@ class ApiService {
     required String message,
     List<Map<String, String>> history = const [],
     Map<String, dynamic>? healthContext,
+    List<Map<String, String>> images = const [],
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -742,6 +1133,7 @@ class ApiService {
         'message': message,
         'history': history,
         if (healthContext != null) 'healthContext': healthContext,
+        if (images.isNotEmpty) 'images': images,
       },
     );
     return _toMap(decoded) ?? {};

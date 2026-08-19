@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { PhysiquePhoto } from './physique_photo.entity';
 
 @Entity('Analisis_Fisico_Records')
 export class BodyAnalysisRecord {
@@ -29,10 +30,13 @@ export class BodyAnalysisRecord {
   @Column({ type: 'varchar', length: 50, nullable: true })
   nivel_fitness_estimado?: string;
 
-  @Column({ type: 'simple-array', nullable: true })
+  // jsonb y no `simple-array`: este último serializa a un CSV, y estas dos
+  // guardan frases redactadas por la IA — con una coma dentro volvían partidas
+  // en varios elementos.
+  @Column({ type: 'jsonb', nullable: true })
   puntos_fuertes_fisicos?: string[];
 
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   areas_mejora_fisicas?: string[];
 
   @Column({ type: 'text', nullable: true })
@@ -46,4 +50,44 @@ export class BodyAnalysisRecord {
 
   @Column({ type: 'text', nullable: true })
   comparacion_progreso?: string;
+
+  // ===== Seguimiento por fotos (apartado "Físico") =====
+
+  /// 'chat' (análisis pedido dentro de Pulso) | 'seguimiento_fotos' (subida
+  /// desde el apartado de físico). Permite separar el historial estructurado
+  /// del ruido de análisis puntuales pedidos por chat.
+  @Column({ type: 'varchar', length: 30, default: 'chat' })
+  origen: string;
+
+  @Column({ type: 'int', default: 0 })
+  num_fotos: number;
+
+  @Column({ type: 'simple-array', nullable: true })
+  angulos_fotos?: string[];
+
+  /// Grupos musculares por detrás del resto. Es EL dato que hace que la rutina
+  /// generada priorice unos ejercicios sobre otros.
+  @Column({ type: 'simple-array', nullable: true })
+  grupos_musculares_retrasados?: string[];
+
+  @Column({ type: 'simple-array', nullable: true })
+  grupos_musculares_dominantes?: string[];
+
+  /// Proporciones estimadas a ojo/pose (ratio hombro-cintura, simetría…).
+  @Column({ type: 'jsonb', nullable: true })
+  medidas_estimadas?: Record<string, unknown>;
+
+  @Column({ type: 'text', nullable: true })
+  postura_observaciones?: string;
+
+  /// Una frase accionable: en qué se tiene que centrar el entrenamiento ahora.
+  @Column({ type: 'text', nullable: true })
+  prioridad_entrenamiento?: string;
+
+  /// Normas de composición corporal y demás fuentes usadas para clasificar.
+  @Column({ type: 'jsonb', nullable: true })
+  fuentes_consultadas?: Record<string, unknown>[];
+
+  @OneToMany(() => PhysiquePhoto, (foto) => foto.record)
+  fotos: PhysiquePhoto[];
 }

@@ -17,7 +17,6 @@ Asegurate de tener instalado:
 - **Python** (3.10 o superior, con launcher `py`) → https://python.org
 - **Flutter** (SDK estable) → https://docs.flutter.dev/get-started/install
 - **PostgreSQL** (corriendo como servicio)
-- **Ollama** (para el analisis con IA) → https://ollama.com
 
 ## Como ejecutar
 
@@ -42,7 +41,7 @@ Asegurate de tener instalado:
 2. **Verifica dependencias**: Asegura que `node_modules` y `pub get` esten listos.
 3. **Verifica puertos**: Comprueba que los puertos 8000 (Python) y 3000 (NestJS) esten libres.
 4. **Inicia servicios**: Abre 3 ventanas de terminal independientes:
-   - **Backend Python** (FastAPI + Ollama): http://localhost:8000
+   - **Backend Python** (FastAPI + Gemini): http://localhost:8000
    - **Backend NestJS** (API principal): http://localhost:3000
    - **Frontend Flutter** (App en Chrome)
 
@@ -67,10 +66,4 @@ Busca y cierra el proceso que esta usando ese puerto, o reinicia tu PC.
 Asegurate de que el servicio de PostgreSQL este corriendo en Windows:
 ```powershell
 Get-Service | Where-Object { $_.Name -like "*postgres*" }
-```
-
-### "Ollama no responde"
-El backend Python intenta iniciar Ollama automaticamente, pero si falla, abre una terminal y ejecuta:
-```bash
-ollama serve
 ```

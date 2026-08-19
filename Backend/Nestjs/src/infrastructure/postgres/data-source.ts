@@ -8,13 +8,17 @@ import { PostureEvaluation } from "../../modules/physical_analysis/entities/post
 import { DexaScan } from "../../modules/clinical_data/entities/dexa_scan.entity";
 import { TrainingSession } from "../../modules/training_sessions/entities/training_session.entity";
 import { UserProfile } from "../../modules/user_profile/entities/user_profile.entity";
-import { CustomRoutine } from "../../modules/custom_routine/entities/custom_routine.entity";
 import { BodyAnalysisRecord } from "../../modules/body_analysis/entities/body_analysis_record.entity";
 import { Routine } from "../../modules/routine/entities/routine.entity";
 import { RoutineDay } from "../../modules/routine/entities/routine_day.entity";
 import { Exercise } from "../../modules/routine/entities/exercise.entity";
 import { ExerciseCatalog } from "../../modules/exercises_catalog/entities/exercise_catalog.entity";
 import { RecoveryLog } from "../../modules/recovery/entities/recovery_log.entity";
+import { Supplement } from "../../modules/supplements/entities/supplement.entity";
+import { SupplementLog } from "../../modules/supplements/entities/supplement_log.entity";
+import { ClinicalReport } from "../../modules/clinical_data/entities/clinical_report.entity";
+import { ClinicalMarker } from "../../modules/clinical_data/entities/clinical_marker.entity";
+import { PhysiquePhoto } from "../../modules/body_analysis/entities/physique_photo.entity";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -33,14 +37,23 @@ export const AppDataSource = new DataSource({
         DexaScan,
         TrainingSession,
         UserProfile,
-        CustomRoutine,
         BodyAnalysisRecord,
         Routine,
         RoutineDay,
         Exercise,
         ExerciseCatalog,
         RecoveryLog,
+        Supplement,
+        SupplementLog,
+        ClinicalReport,
+        ClinicalMarker,
+        PhysiquePhoto,
     ],
-    migrations: ["src/infrastructure/postgres/migrations/*.ts"],
+    // Relativo a este fichero y aceptando .ts y .js, para que el mismo
+    // data-source sirva en desarrollo (ts-node sobre src/) y en el contenedor de
+    // producción (JavaScript ya compilado en dist/). Con la ruta fija a
+    // "src/**/*.ts" que había antes, las migraciones no se encontraban en el
+    // contenedor: ts-node es devDependency y no está en la imagen final.
+    migrations: [__dirname + "/migrations/*{.ts,.js}"],
     subscribers: [],
 });

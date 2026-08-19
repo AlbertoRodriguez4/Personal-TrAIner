@@ -20,6 +20,20 @@ export class UserProfile {
   @Column({ type: 'simple-array', nullable: true })
   objetivos: string[];
 
+  @Column({ type: 'simple-array', nullable: true })
+  actividades: string[];
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  sexo: string;
+
+  @Column({ type: 'int', nullable: true })
+  fc_reposo: number;
+
+  // Self-report único de registro (distinto de RecoveryLog.horas_sueno, que es
+  // el dato diario calculado a partir de Health Connect).
+  @Column({ type: 'decimal', precision: 4, scale: 2, nullable: true })
+  horas_sueno_habitual: number;
+
   @Column({ type: 'varchar', length: 50, nullable: true })
   tipo_cuerpo: string;
 

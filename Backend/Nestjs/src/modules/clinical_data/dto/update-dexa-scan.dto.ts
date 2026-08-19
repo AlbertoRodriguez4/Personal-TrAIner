@@ -1,27 +1,9 @@
-import { IsDateString, IsNumber, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { PartialType, OmitType } from '@nestjs/mapped-types';
+import { CreateDexaScanDto } from './create-dexa-scan.dto';
 
-export class UpdateDexaScanDto {
-  @IsUUID()
-  @IsOptional()
-  userId?: string;
-
-  @IsDateString()
-  @IsOptional()
-  fecha_escaneo?: string;
-
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  @IsOptional()
-  porcentaje_grasa?: number;
-
-  @IsNumber()
-  @Min(0)
-  @IsOptional()
-  masa_muscular_kg?: number;
-
-  @IsNumber()
-  @Min(0)
-  @IsOptional()
-  densidad_osea?: number;
-}
+/// Todo opcional salvo el `userId`, que aquí no viaja en el cuerpo sino como
+/// query param, igual que en `routine` y `nutrition`: el servicio lo usa para
+/// comprobar que la medición es de quien dice serlo antes de tocarla.
+export class UpdateDexaScanDto extends PartialType(
+  OmitType(CreateDexaScanDto, ['userId'] as const),
+) {}

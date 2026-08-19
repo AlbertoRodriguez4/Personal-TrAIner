@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/health_service.dart';
 
 /// Pantalla de Recuperación & Sueño IA — réplica de `recovery.tsx`.
@@ -113,11 +114,16 @@ class _RecoveryPageState extends State<RecoveryPage> {
                   (stageMin['light'] ?? 0) +
                   (stageMin['awake'] ?? 0);
     double pctOf(int v) => total > 0 ? (v / total) * 100 : 0.0;
+    // Trío del gradiente IA (púrpura → índigo → azul) para las fases dormidas,
+    // gris claro para "Despierto". Antes tomaba prestados tokens de los fondos
+    // de otras tarjetas (recoveryGlass*/recoveryAlert*), lo que dejaba las fases
+    // en pasteles lavanda/dorado y pintaba "Despierto" como el segmento más
+    // oscuro y llamativo, justo al revés de lo que la barra quiere comunicar.
     final stages = <SleepStage>[
-      SleepStage(label: 'Profundo',  pct: pctOf(stageMin['deep']  ?? 0), color: DesignTokens.recoveryGlassFrom),
-      SleepStage(label: 'REM',       pct: pctOf(stageMin['rem']   ?? 0), color: DesignTokens.recoveryAlertFrom),
-      SleepStage(label: 'Ligero',    pct: pctOf(stageMin['light'] ?? 0), color: DesignTokens.recoveryAlertTo),
-      SleepStage(label: 'Despierto', pct: pctOf(stageMin['awake'] ?? 0), color: const Color(0xFF3A3F4D)),
+      SleepStage(label: 'Profundo',  pct: pctOf(stageMin['deep']  ?? 0), color: DesignTokens.aiFrom),
+      SleepStage(label: 'REM',       pct: pctOf(stageMin['rem']   ?? 0), color: DesignTokens.aiVia),
+      SleepStage(label: 'Ligero',    pct: pctOf(stageMin['light'] ?? 0), color: DesignTokens.aiTo),
+      SleepStage(label: 'Despierto', pct: pctOf(stageMin['awake'] ?? 0), color: DesignTokens.recoveryStageAwake),
     ];
 
     return Scaffold(
@@ -145,7 +151,7 @@ class _RecoveryPageState extends State<RecoveryPage> {
                 _SleepStagesCard(
                   totalBed: totalBed,
                   stages: stages,
-                  hrvDeltaPercent: 0,
+                  hrvDeltaLabel: _r?.hrvDeltaLabel,
                 ),
                 if (_r == null) ...[
                   const SizedBox(height: 20),
@@ -177,7 +183,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
       child: Row(
         children: [
-          _RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
+          RoundIconButton(icon: LucideIcons.arrowLeft, onTap: onBack ?? () => Navigator.maybePop(context)),
           const SizedBox(width: 12),
           Text(title.toUpperCase(), style: DesignTokens.labelSmall(color: DesignTokens.mutedForeground(b))),
         ],
@@ -356,10 +362,13 @@ class _StatPillsRow extends StatelessWidget {
 /// barra apilada horizontal + leyenda 2 columnas — equivalente al de barras
 /// apiladas del prototipo (no circular, igual que en `recovery.tsx`).
 class _SleepStagesCard extends StatelessWidget {
-  const _SleepStagesCard({required this.totalBed, required this.stages, required this.hrvDeltaPercent});
+  const _SleepStagesCard({required this.totalBed, required this.stages, this.hrvDeltaLabel});
   final String totalBed;
   final List<SleepStage> stages;
-  final int hrvDeltaPercent;
+
+  /// Ya formateado ('+8%' / '−3%'). null = el reloj no reporta HRV o aún no
+  /// hay 7 noches de línea base; en ese caso la fila no se dibuja.
+  final String? hrvDeltaLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -419,33 +428,35 @@ class _SleepStagesCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: DesignTokens.surface1(b),
-              borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
-            ),
-            child: Row(
-              children: [
-                Icon(LucideIcons.activity, size: 16, color: DesignTokens.aiTo),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: RichText(
-                    text: TextSpan(
-                      style: DesignTokens.bodyFont(fontSize: 12, color: DesignTokens.foreground(b)),
-                      children: [
-                        const TextSpan(text: 'VFC nocturna '),
-                        TextSpan(text: '${hrvDeltaPercent >= 0 ? '+' : ''}$hrvDeltaPercent%',
-                            style: DesignTokens.bodyFont(fontSize: 12, weight: FontWeight.w700, color: DesignTokens.foreground(b))),
-                        const TextSpan(text: ' vs media semanal.'),
-                      ],
+          if (hrvDeltaLabel != null) ...[
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: DesignTokens.surface1(b),
+                borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.activity, size: 16, color: DesignTokens.aiTo),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: DesignTokens.bodyFont(fontSize: 12, color: DesignTokens.foreground(b)),
+                        children: [
+                          const TextSpan(text: 'VFC nocturna '),
+                          TextSpan(text: hrvDeltaLabel!,
+                              style: DesignTokens.bodyFont(fontSize: 12, weight: FontWeight.w700, color: DesignTokens.foreground(b))),
+                          const TextSpan(text: ' vs media semanal.'),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -460,25 +471,4 @@ class SleepStage {
   final String label;
   final double pct;
   final Color color;
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, this.onTap});
-  final IconData icon;
-  final VoidCallback? onTap;
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: DesignTokens.surface1(b), shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: DesignTokens.foreground(b)),
-      ),
-    );
-  }
 }

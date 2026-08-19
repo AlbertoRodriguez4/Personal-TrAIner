@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   Sparkles, Play, Home, Dumbbell, Apple, Activity, ChevronRight,
   Heart, Camera, ScanLine, FileText, Upload, AlertTriangle,
   Image as ImageIcon, TrendingDown, TrendingUp, CircleUser,
   Zap, Plus,
+  Droplets, Pill, Minus, X, Check, MessageSquare, Moon, LineChart,
 } from 'lucide-react';
 import { useNav, type TabKey } from './nav';
 
@@ -79,11 +80,12 @@ function SectionLink({
 export function HomeScreen() {
   return (
     <>
-      <PredictiveAlert />
       <AICoachCTA />
+      <PredictiveAlert />
       <NewSectionsRow />
       <QuickActions />
       <DailySummary />
+      <HydrationMini />
       <XiaomiLastWorkout />
       <WorkoutCard />
     </>
@@ -105,31 +107,79 @@ function NewSectionsRow() {
 
 function AICoachCTA() {
   const { navigate } = useNav();
+  const modules = [
+    { icon: Dumbbell, label: 'Crear rutina' },
+    { icon: Moon, label: 'Sueño' },
+    { icon: Apple, label: 'Nutrición' },
+    { icon: LineChart, label: 'Progreso' },
+  ];
   return (
-    <button
-      onClick={() => navigate({ name: 'chat' })}
-      className="group relative block w-full overflow-hidden rounded-[28px] p-[1px] shadow-card text-left"
-      aria-label="Hablar con la IA"
+    <section
+      aria-label="Pulso, tu entrenador IA"
+      className="bg-ai-gradient relative overflow-hidden rounded-[34px] p-5 text-white shadow-card"
     >
-      <span className="bg-ai-gradient absolute inset-0" aria-hidden />
-      <div className="relative flex items-center gap-3 rounded-[27px] bg-background/85 p-4 backdrop-blur-xl">
-        <div className="bg-ai-gradient flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-soft">
-          <Sparkles className="h-5 w-5" />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-10 -top-14 h-44 w-44 rounded-full bg-white/20 blur-2xl"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-white/10 blur-2xl"
+      />
+      <div className="relative">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-[20px] bg-white/20 backdrop-blur-xl">
+              <span aria-hidden className="absolute inset-0 rounded-[20px] bg-white/10 animate-ai-pulse" />
+              <Sparkles className="relative h-7 w-7" />
+              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-white/80 bg-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">
+                Pulso · AI Coach
+              </p>
+              <p className="text-[24px] font-bold leading-tight tracking-tight">
+                Tu entrenador IA
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-xl">
+            En línea
+          </span>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            AI Coach
-          </p>
-          <p className="truncate text-[15px] font-semibold leading-tight">
-            Habla con tu entrenador IA
-          </p>
-          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
-            Pregunta sobre rutinas, macros o recuperación
-          </p>
+
+        <p className="mt-3 text-[13px] leading-snug text-white/85">
+          Crea y edita rutinas, interpreta tu sueño y ajusta tus macros. Pulso lee tus datos reales y actúa por ti.
+        </p>
+
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {modules.map(({ icon: Icon, label }) => (
+            <button
+              key={label}
+              onClick={() => navigate({ name: 'chat' })}
+              className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/15 px-1 py-3 text-center backdrop-blur-xl transition active:scale-95 hover:bg-white/25"
+            >
+              <Icon className="h-4 w-4" strokeWidth={2.25} />
+              <span className="text-[10px] font-semibold leading-tight">{label}</span>
+            </button>
+          ))}
         </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+
+        <button
+          onClick={() => navigate({ name: 'chat' })}
+          className="mt-3 flex w-full items-center justify-between gap-3 rounded-full bg-white px-4 py-3 text-left shadow-soft transition active:scale-[0.98]"
+          aria-label="Abrir chat con Pulso"
+        >
+          <span className="flex items-center gap-2 text-[14px] font-semibold text-foreground/50">
+            <MessageSquare className="h-4 w-4 text-foreground/40" />
+            Escribe a Pulso…
+          </span>
+          <span className="bg-ai-gradient grid h-8 w-8 place-items-center rounded-full text-white">
+            <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+        </button>
       </div>
-    </button>
+    </section>
   );
 }
 
@@ -440,6 +490,8 @@ export function NutritionScreen() {
   return (
     <>
       <MacrosOverview />
+      <HydrationCard />
+      <SupplementsCard />
       <CameraViewer />
       <ScanResultCard />
       <button
@@ -475,6 +527,291 @@ function MacrosOverview() {
           ))}
         </div>
       </div>
+    </section>
+  );
+}
+
+/* ------------------- AGUA Y SUPLEMENTOS ------------------- */
+
+type Supplement = { id: string; name: string; dose: string; taken: boolean };
+
+const GLASS_ML = 250;
+const WATER_GOAL_ML = 2500;
+
+function readStore<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function useWater() {
+  const [ml, setMl] = useState<number>(() => readStore('pt-water-ml', 1000));
+  const update = (next: number) => {
+    const clamped = Math.max(0, Math.min(next, WATER_GOAL_ML * 2));
+    setMl(clamped);
+    try {
+      window.localStorage.setItem('pt-water-ml', JSON.stringify(clamped));
+    } catch { /* almacenamiento no disponible */ }
+  };
+  return { ml, update };
+}
+
+const DEFAULT_SUPPLEMENTS: Supplement[] = [
+  { id: 's1', name: 'Creatina monohidrato', dose: '5 g', taken: true },
+  { id: 's2', name: 'Vitamina D3', dose: '2000 UI', taken: false },
+  { id: 's3', name: 'Omega 3', dose: '1 cápsula', taken: false },
+];
+
+function useSupplements() {
+  const [items, setItems] = useState<Supplement[]>(() =>
+    readStore('pt-supplements', DEFAULT_SUPPLEMENTS),
+  );
+  const persist = (next: Supplement[]) => {
+    setItems(next);
+    try {
+      window.localStorage.setItem('pt-supplements', JSON.stringify(next));
+    } catch { /* almacenamiento no disponible */ }
+  };
+  return { items, persist };
+}
+
+function HydrationCard() {
+  const { ml, update } = useWater();
+  const pct = Math.min(ml / WATER_GOAL_ML, 1);
+  const glasses = Math.round(WATER_GOAL_ML / GLASS_ML);
+  const filled = Math.round(ml / GLASS_ML);
+  return (
+    <section aria-label="Hidratación" className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Hidratación
+          </p>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-[28px] font-bold tracking-tight">{(ml / 1000).toFixed(2)}</span>
+            <span className="text-[13px] text-muted-foreground">/ {(WATER_GOAL_ML / 1000).toFixed(1)} L</span>
+          </div>
+          <p className="text-[12px] text-muted-foreground">
+            Faltan {Math.max(WATER_GOAL_ML - ml, 0)} ml · vaso de {GLASS_ML} ml
+          </p>
+        </div>
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sky-50 text-sky-600">
+          <Droplets className="h-5 w-5" strokeWidth={2.25} />
+        </div>
+      </div>
+
+      <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-[linear-gradient(90deg,#46b5e8,#6a5cf0)] transition-all"
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {Array.from({ length: glasses }).map((_, i) => (
+          <button
+            key={i}
+            aria-label={`Marcar ${i + 1} vasos`}
+            onClick={() => update((i + 1) * GLASS_ML)}
+            className={`h-8 w-6 rounded-md ring-1 transition active:scale-95 ${
+              i < filled ? 'bg-sky-400/80 ring-sky-500/40' : 'bg-surface-1 ring-border'
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          onClick={() => update(ml - GLASS_ML)}
+          className="grid h-10 w-10 place-items-center rounded-full bg-surface-1 text-foreground ring-1 ring-border transition active:scale-95"
+          aria-label="Quitar vaso"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => update(ml + GLASS_ML)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-full bg-ai-gradient px-4 py-3 text-[14px] font-semibold text-white shadow-soft transition active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Añadir vaso
+        </button>
+        <button
+          onClick={() => update(ml + 500)}
+          className="rounded-full bg-surface-1 px-4 py-3 text-[13px] font-semibold text-foreground ring-1 ring-border transition active:scale-95"
+        >
+          +500 ml
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SupplementsCard() {
+  const { items, persist } = useSupplements();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [dose, setDose] = useState('');
+  const done = items.filter((s) => s.taken).length;
+
+  const add = () => {
+    const n = name.trim();
+    if (!n) return;
+    persist([...items, { id: `s${Date.now()}`, name: n, dose: dose.trim() || '1 dosis', taken: false }]);
+    setName('');
+    setDose('');
+    setAdding(false);
+  };
+
+  return (
+    <section aria-label="Suplementos" className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Suplementos de hoy
+          </p>
+          <h2 className="mt-1 text-[20px] font-bold tracking-tight">
+            {done}/{items.length} tomados
+          </h2>
+        </div>
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-ai-soft text-foreground">
+          <Pill className="h-5 w-5" strokeWidth={2.25} />
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {items.map((s) => (
+          <div key={s.id} className="flex items-center gap-3 rounded-2xl bg-surface-1 px-3 py-2.5">
+            <button
+              onClick={() =>
+                persist(items.map((it) => (it.id === s.id ? { ...it, taken: !it.taken } : it)))
+              }
+              aria-label={s.taken ? `Desmarcar ${s.name}` : `Marcar ${s.name}`}
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition active:scale-95 ${
+                s.taken ? 'bg-ai-gradient text-white' : 'bg-card text-muted-foreground ring-1 ring-border'
+              }`}
+            >
+              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            </button>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className={`truncate text-[14px] font-semibold ${s.taken ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                {s.name}
+              </p>
+              <p className="text-[11px] text-muted-foreground">{s.dose}</p>
+            </div>
+            <button
+              onClick={() => persist(items.filter((it) => it.id !== s.id))}
+              aria-label={`Eliminar ${s.name}`}
+              className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition hover:bg-card active:scale-95"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <p className="rounded-2xl bg-surface-1 px-3 py-4 text-center text-[13px] text-muted-foreground">
+            Aún no has añadido suplementos.
+          </p>
+        )}
+      </div>
+
+      {adding ? (
+        <div className="mt-3 space-y-2 rounded-2xl bg-surface-1 p-3">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nombre (ej. Creatina)"
+            className="w-full rounded-xl bg-card px-3 py-2.5 text-[14px] outline-none ring-1 ring-border placeholder:text-muted-foreground"
+          />
+          <input
+            value={dose}
+            onChange={(e) => setDose(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+            placeholder="Dosis (ej. 5 g)"
+            className="w-full rounded-xl bg-card px-3 py-2.5 text-[14px] outline-none ring-1 ring-border placeholder:text-muted-foreground"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={add}
+              className="flex-1 rounded-full bg-ai-gradient px-4 py-2.5 text-[13px] font-semibold text-white shadow-soft transition active:scale-95"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => setAdding(false)}
+              className="rounded-full bg-card px-4 py-2.5 text-[13px] font-semibold text-foreground ring-1 ring-border transition active:scale-95"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-surface-1 px-4 py-3 text-[14px] font-semibold text-foreground ring-1 ring-border transition active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Añadir suplemento
+        </button>
+      )}
+    </section>
+  );
+}
+
+function HydrationMini() {
+  const { ml, update } = useWater();
+  const { items } = useSupplements();
+  const { setTab } = useNav();
+  const pct = Math.min(ml / WATER_GOAL_ML, 1);
+  const done = items.filter((s) => s.taken).length;
+  return (
+    <section aria-label="Agua y suplementos" className="grid grid-cols-2 gap-3">
+      <div className="rounded-2xl bg-card p-4 shadow-soft">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Agua</p>
+          <Droplets className="h-4 w-4 text-sky-500" strokeWidth={2.25} />
+        </div>
+        <p className="mt-1.5 text-[20px] font-bold tracking-tight">
+          {(ml / 1000).toFixed(2)}
+          <span className="ml-1 text-[11px] font-medium text-muted-foreground">/ 2.5 L</span>
+        </p>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-[linear-gradient(90deg,#46b5e8,#6a5cf0)]" style={{ width: `${pct * 100}%` }} />
+        </div>
+        <button
+          onClick={() => update(ml + GLASS_ML)}
+          className="mt-3 flex w-full items-center justify-center gap-1 rounded-full bg-surface-1 py-2 text-[12px] font-semibold text-foreground ring-1 ring-border transition active:scale-95"
+        >
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} /> Vaso
+        </button>
+      </div>
+      <button
+        onClick={() => setTab('nutrition')}
+        className="rounded-2xl bg-card p-4 text-left shadow-soft transition active:scale-[0.98]"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Suplementos</p>
+          <Pill className="h-4 w-4 text-foreground/70" strokeWidth={2.25} />
+        </div>
+        <p className="mt-1.5 text-[20px] font-bold tracking-tight">
+          {done}
+          <span className="ml-1 text-[11px] font-medium text-muted-foreground">/ {items.length} hoy</span>
+        </p>
+        <div className="mt-2 space-y-1">
+          {items.slice(0, 2).map((s) => (
+            <p key={s.id} className="truncate text-[11px] text-muted-foreground">
+              {s.taken ? '✓' : '·'} {s.name}
+            </p>
+          ))}
+        </div>
+        <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-ai-gradient">
+          Gestionar <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        </span>
+      </button>
     </section>
   );
 }
@@ -934,6 +1271,7 @@ function MeshFigure({ label, tilt, muted = false }: { label: string; tilt: numbe
 /* ============================== BOTTOM NAV ============================== */
 
 export function BottomNav({ active, onChange }: { active: TabKey; onChange: (k: TabKey) => void }) {
+  const { navigate } = useNav();
   const items: { key: TabKey; icon: typeof Home; label: string }[] = [
     { key: 'home', icon: Home, label: 'Inicio' },
     { key: 'train', icon: Dumbbell, label: 'Entrenar' },
@@ -943,6 +1281,16 @@ export function BottomNav({ active, onChange }: { active: TabKey; onChange: (k: 
   ];
   return (
     <nav className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-4 pb-5 pt-2">
+      <div className="mb-3 flex justify-end">
+        <button
+          onClick={() => navigate({ name: 'chat' })}
+          aria-label="Hablar con Pulso"
+          className="bg-ai-gradient pointer-events-auto inline-flex items-center gap-2 rounded-full px-4 py-3 text-white shadow-card transition active:scale-95"
+        >
+          <Sparkles className="h-[18px] w-[18px]" />
+          <span className="text-[13px] font-semibold">Pulso</span>
+        </button>
+      </div>
       <div className="glass pointer-events-auto flex items-center justify-around rounded-[28px] px-2 py-2 shadow-card">
         {items.map(({ key, icon: Icon, label }) => {
           const isActive = key === active;

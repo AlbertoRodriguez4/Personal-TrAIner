@@ -1,4 +1,6 @@
-import { IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+
+const TIPOS_COMIDA = ['desayuno', 'comida', 'snack', 'cena', 'otro'];
 
 export class CreateNutritionLogDto {
   @IsUUID()
@@ -28,4 +30,12 @@ export class CreateNutritionLogDto {
   @IsString()
   @IsOptional()
   notas?: string;
+
+  @IsIn(TIPOS_COMIDA)
+  @IsOptional()
+  tipo_comida?: string;
+
+  @IsString()
+  @IsOptional()
+  nombre_alimento?: string;
 }

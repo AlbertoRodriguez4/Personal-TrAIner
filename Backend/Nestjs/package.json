@@ -3,6 +3,7 @@
     "@nestjs/common": "^11.1.19",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.19",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/platform-express": "^11.1.19",
     "@nestjs/typeorm": "^11.0.1",
@@ -32,6 +33,7 @@
     "start:prod": "node dist/main",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- migration:generate src/infrastructure/postgres/migrations/Actualizacion -d src/infrastructure/postgres/data-source.ts",
-    "migration:run": "npm run typeorm -- migration:run -d src/infrastructure/postgres/data-source.ts"
+    "migration:run": "npm run typeorm -- migration:run -d src/infrastructure/postgres/data-source.ts",
+    "migration:run:prod": "typeorm migration:run -d dist/infrastructure/postgres/data-source.js"
   }
 }

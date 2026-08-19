@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"/c/Users/altf4/.claude/projects/C--Users-altf4-Desktop-Proyecto-entrenador-personal-IA-Personal-TrAIner/memory/\" 2>&1)",
+      "Bash(ls -la \"/c/Users/altf4/.claude/projects/\" 2>&1 | grep -i \"personal\" )",
+      "Bash(flutter analyze *)",
+      "Bash(tar -xzf tmf.tar.gz)",
+      "Bash(rmdir trainer-mind-flow *)",
+      "Bash(mv trainer-mind-flow-main *)",
+      "Bash(curl -s \"https://api.github.com/repos/AlbertoRodriguez4/trainer-mind-flow/commits/main\")",
+      "Bash(grep -n '^/\\\\* ====\\\\|^function \\\\|^export function ' 'C:\\\\Users\\\\altf4\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-altf4-Desktop-Proyecto-entrenador-personal-IA-Personal-TrAIner\\\\153fc2ae-f048-4631-ab4d-0fde7cbd9f48\\\\scratchpad/trainer-mind-flow/src/screens.tsx')",
+      "Bash(grep -n '^/\\\\* ====\\\\|^function \\\\|^export function ' 'C:\\\\Users\\\\altf4\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-altf4-Desktop-Proyecto-entrenador-personal-IA-Personal-TrAIner\\\\153fc2ae-f048-4631-ab4d-0fde7cbd9f48\\\\scratchpad/trainer-mind-flow/src/deep-screens.tsx')",
+      "Bash(grep -n '^/\\\\* ====\\\\|^function \\\\|^export function ' 'C:\\\\Users\\\\altf4\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-altf4-Desktop-Proyecto-entrenador-personal-IA-Personal-TrAIner\\\\153fc2ae-f048-4631-ab4d-0fde7cbd9f48\\\\scratchpad/trainer-mind-flow/src/progress.tsx')",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python -c \"import google.genai.errors as e; import inspect; print\\(inspect.getsource\\(e\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import groq; print\\(groq.__version__\\)\")",
+      "Bash(pip install *)"
+    ]
+  }
+}
