@@ -11,7 +11,11 @@ async function bootstrap() {
   // Esto hace que los DTOs funcionen automáticamente
   app.useGlobalPipes(new ValidationPipe());
   
-  await app.listen(3000);
-  console.log(`🚀 Servidor corriendo en: http://localhost:3000`);
+  // El puerto sale del entorno para que el contenedor pueda mandarlo. '0.0.0.0'
+  // es obligatorio dentro de Docker: sin él Nest escucha solo en el localhost
+  // DEL CONTENEDOR y ni el proxy ni el otro servicio pueden alcanzarlo.
+  const port = parseInt(process.env.PORT ?? '3000', 10);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Servidor corriendo en el puerto ${port}`);
 }
 bootstrap();

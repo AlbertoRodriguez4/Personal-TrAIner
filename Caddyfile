@@ -1,0 +1,11 @@
+# Caddy pide y renueva el certificado TLS solo, con que el dominio apunte aquí.
+{$DOMINIO} {
+	encode gzip
+	# El cuerpo de las peticiones lleva fotos en base64 (análisis de físico,
+	# comidas, informes clínicos). El límite por defecto de Caddy las cortaría;
+	# esto acompaña al límite de 50 MB que ya tiene Express en NestJS.
+	request_body {
+		max_size 50MB
+	}
+	reverse_proxy api:3000
+}

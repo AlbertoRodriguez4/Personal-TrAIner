@@ -49,6 +49,11 @@ export const AppDataSource = new DataSource({
         ClinicalMarker,
         PhysiquePhoto,
     ],
-    migrations: ["src/infrastructure/postgres/migrations/*.ts"],
+    // Relativo a este fichero y aceptando .ts y .js, para que el mismo
+    // data-source sirva en desarrollo (ts-node sobre src/) y en el contenedor de
+    // producción (JavaScript ya compilado en dist/). Con la ruta fija a
+    // "src/**/*.ts" que había antes, las migraciones no se encontraban en el
+    // contenedor: ts-node es devDependency y no está en la imagen final.
+    migrations: [__dirname + "/migrations/*{.ts,.js}"],
     subscribers: [],
 });

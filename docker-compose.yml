@@ -1,0 +1,82 @@
+# Los tres servicios de Personal TrAIner, para un servidor propio.
+#
+# Regla de oro del reparto de puertos: SOLO Caddy publica al exterior (80/443).
+# Ni Postgres ni el servicio Python exponen nada fuera de la red interna de
+# Docker — el Python porque su clave interna le da acceso a los datos de
+# cualquier usuario, y Postgres porque no hace falta explicar por qué.
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # NestJS arranca conectando a la BD: sin este healthcheck se levanta antes
+      # de que Postgres acepte conexiones y muere en el primer intento.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./Backend/Nestjs
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      AI_PYTHON_URL: http://ia:8000
+    expose:
+      - "3000"
+
+  ia:
+    build: ./Backend/Python
+    restart: unless-stopped
+    environment:
+      NEST_BASE_URL: http://api:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      GROQ_TPM_LIMIT: ${GROQ_TPM_LIMIT:-8000}
+    expose:
+      - "8000"
+
+  proxy:
+    # Caddy saca el certificado de Let's Encrypt y lo renueva solo. Hace falta
+    # HTTPS de verdad: Android bloquea el tráfico HTTP en claro por defecto, así
+    # que sin certificado la app no conecta.
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
