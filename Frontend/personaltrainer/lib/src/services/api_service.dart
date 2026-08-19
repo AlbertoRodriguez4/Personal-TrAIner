@@ -3,7 +3,17 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.111:3000';
+  /// URL del backend, fijada al compilar:
+  ///     flutter build apk --release --dart-define=API_BASE_URL=https://tu-backend
+  ///
+  /// El valor por defecto es la IP del portátil en la red local, que es lo que
+  /// sirve mientras se desarrolla. Ojo: al ser de la LAN, una APK compilada sin
+  /// `--dart-define` solo funciona en esa misma wifi, y deja de funcionar en
+  /// cuanto el router le asigna otra IP al equipo.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.1.111:3000',
+  );
   static const String _sessionKey = 'pt_session_user';
 
   static String? _authToken;
@@ -18,6 +28,9 @@ class ApiService {
 
   static Map<String, String> get _jsonHeaders => {
     'Content-Type': 'application/json',
+    // El backend exige Bearer en todo salvo login/registro. Sin esto, cada
+    // llamada vuelve con un 401.
+    if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
   static dynamic _decodeBody(http.Response response) {
@@ -130,7 +143,7 @@ class ApiService {
         return null;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
       await _persistSession();
       return userData;
     } catch (_) {
@@ -153,7 +166,7 @@ class ApiService {
         return null;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
       await _persistSession();
       return userData;
     } catch (_) {
@@ -249,7 +262,7 @@ class ApiService {
         return;
       }
       _currentUser = userData;
-      _authToken = userData['id']?.toString();
+      _authToken = userData['access_token']?.toString();
     } catch (_) {
       await prefs.remove(_sessionKey);
     }
@@ -547,6 +560,12 @@ class ApiService {
   static String physiquePhotoUrl(String photoId, String userId) =>
       '$baseUrl/body-analysis/photos/$photoId?userId=$userId';
 
+  /// Cabeceras para `Image.network`, que no pasa por `_request` y por tanto no
+  /// lleva el token por su cuenta. Sin esto las fotos del físico responden 401
+  /// desde que existe la guarda de autenticación.
+  static Map<String, String> get imageHeaders =>
+      _authToken == null ? const {} : {'Authorization': 'Bearer $_authToken'};
+
   static Future<void> deleteBodyAnalysisRecord(String id) async {
     await _request(method: 'DELETE', path: '/body-analysis/$id');
   }
@@ -661,6 +680,7 @@ class ApiService {
     required double grasasG,
     String? notas,
     String? tipoComida,
+    String? nombreAlimento,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -674,9 +694,51 @@ class ApiService {
         'grasas_g': grasasG,
         'notas': notas,
         if (tipoComida != null) 'tipo_comida': tipoComida,
+        if (nombreAlimento != null) 'nombre_alimento': nombreAlimento,
       },
     );
     return _toMap(decoded) ?? {};
+  }
+
+  /// Estima kcal/macros de un alimento por nombre + cantidad (gramos, o una
+  /// referencia corporal/de plato) para el registro manual sin foto. No
+  /// guarda nada — solo uno de [cantidadG] / [referenciaUnidad] debe llegar,
+  /// según qué pestaña esté activa en el formulario.
+  static Future<Map<String, dynamic>> estimateFoodMacros({
+    required String userId,
+    required String nombreAlimento,
+    double? cantidadG,
+    String? referenciaUnidad,
+    double? referenciaCantidad,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/food-estimate',
+      body: {
+        'userId': userId,
+        'nombreAlimento': nombreAlimento,
+        if (cantidadG != null) 'cantidadG': cantidadG,
+        if (referenciaUnidad != null) 'referenciaUnidad': referenciaUnidad,
+        if (referenciaCantidad != null) 'referenciaCantidad': referenciaCantidad,
+      },
+      timeout: const Duration(seconds: 12),
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  /// Autocompletado del catálogo local mientras el usuario escribe el nombre
+  /// del alimento — ver comentario en `estimateFoodMacros`.
+  static Future<List<String>> suggestFoods(String query) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/food-suggestions',
+      body: {'query': query},
+      timeout: const Duration(seconds: 6),
+    );
+    final map = _toMap(decoded);
+    final lista = map?['sugerencias'];
+    if (lista is! List) return [];
+    return lista.map((e) => e.toString()).toList();
   }
 
   static Future<Map<String, dynamic>> updateNutritionLog(
@@ -785,6 +847,13 @@ class ApiService {
     required String tipoEntrenamiento,
     required List<Map<String, dynamic>> ejercicios,
     String estado = 'pendiente',
+    int? duracionMinutos,
+    int? caloriasKcal,
+    int? frecuenciaCardiacaMedia,
+    int? frecuenciaCardiacaMax,
+    double? distanciaKm,
+    String? origen,
+    String? origenId,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -795,7 +864,31 @@ class ApiService {
         'tipo_entrenamiento': tipoEntrenamiento,
         'ejercicios': ejercicios,
         'estado': estado,
+        if (duracionMinutos != null) 'duracion_minutos': duracionMinutos,
+        if (caloriasKcal != null) 'calorias_kcal': caloriasKcal,
+        if (frecuenciaCardiacaMedia != null)
+          'frecuencia_cardiaca_media': frecuenciaCardiacaMedia,
+        if (frecuenciaCardiacaMax != null)
+          'frecuencia_cardiaca_max': frecuenciaCardiacaMax,
+        if (distanciaKm != null) 'distancia_km': distanciaKm,
+        if (origen != null) 'origen': origen,
+        if (origenId != null) 'origen_id': origenId,
       },
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  /// Sesión + la media del usuario en cada métrica + cuánto se desvía esta
+  /// sesión de esa media, para poder enseñar "vs. tu media" en vez de solo el
+  /// número suelto.
+  static Future<Map<String, dynamic>> getTrainingSessionAnalysis(
+    String id,
+    String userId,
+  ) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/training-sessions/$id/analysis',
+      queryParams: {'userId': userId},
     );
     return _toMap(decoded) ?? {};
   }
@@ -889,6 +982,10 @@ class ApiService {
     double? dexaPorcentajeGrasa,
     double? dexaMasaMuscularKg,
     String? notasAdicionales,
+    double? metaKcal,
+    double? metaProteinasG,
+    double? metaCarbohidratosG,
+    double? metaGrasasG,
   }) async {
     final decoded = await _request(
       method: 'POST',
@@ -898,8 +995,11 @@ class ApiService {
         'dias_entrenamiento_semana': diasEntrenamientoSemana,
         'intensidad': intensidad,
         'nivel_experiencia': nivelExperiencia,
-        'objetivos': objetivos,
-        'actividades': actividades,
+        // El DTO valida las listas con `@ArrayNotEmpty`, así que una lista
+        // vacía tumba el guardado entero con un 400. Deseleccionar todos los
+        // objetivos es una accion legitima: se manda `null`, que sí acepta.
+        'objetivos': (objetivos?.isEmpty ?? true) ? null : objetivos,
+        'actividades': (actividades?.isEmpty ?? true) ? null : actividades,
         'sexo': sexo,
         'fc_reposo': fcReposo,
         'horas_sueno_habitual': horasSuenoHabitual,
@@ -909,6 +1009,10 @@ class ApiService {
         'dexa_porcentaje_grasa': dexaPorcentajeGrasa,
         'dexa_masa_muscular_kg': dexaMasaMuscularKg,
         'notas_adicionales': notasAdicionales,
+        'meta_kcal': metaKcal,
+        'meta_proteinas_g': metaProteinasG,
+        'meta_carbohidratos_g': metaCarbohidratosG,
+        'meta_grasas_g': metaGrasasG,
       },
     );
     return _toMap(decoded) ?? {};

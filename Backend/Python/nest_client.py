@@ -3,6 +3,20 @@ import requests
 
 NEST_BASE_URL = os.environ.get("NEST_BASE_URL", "http://localhost:3000")
 
+# NestJS exige token en todos sus endpoints. Este servicio actúa en nombre del
+# usuario pero no tiene su token: la petición original la recibió NestJS, que
+# solo nos pasa el `user_id`. Así que se identifica con una clave interna
+# compartida, y NestJS le permite operar sobre el usuario que le indiquen.
+#
+# Esto es seguro SOLO mientras este servicio no esté expuesto a internet: en el
+# despliegue vive en la red interna de Docker y únicamente NestJS le habla. Si
+# algún día se publica su puerto, esta clave pasa a ser una llave maestra.
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+
+def _headers() -> dict:
+    return {"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}
+
 
 class NestApiError(Exception):
     def __init__(self, status_code: int, detail: str):
@@ -13,7 +27,9 @@ class NestApiError(Exception):
 
 def _request(method: str, path: str, json: dict | None = None, params: dict | None = None):
     url = f"{NEST_BASE_URL}{path}"
-    resp = requests.request(method, url, json=json, params=params, timeout=20)
+    resp = requests.request(
+        method, url, json=json, params=params, headers=_headers(), timeout=20
+    )
     if not resp.ok:
         raise NestApiError(resp.status_code, resp.text)
     return resp.json() if resp.content else None

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { User } from './modules/identity/entities/user.entity';
 import { UserController } from './modules/identity/controller/user.controller';
 import { UserService } from './modules/identity/service/user.service';
@@ -57,7 +60,8 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -90,6 +94,11 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
     SupplementController,
   ],
   providers: [
+    // Guarda global: TODO endpoint exige token salvo los marcados con @Public().
+    // Registrarla aquí y no controlador por controlador es deliberado — así una
+    // ruta nueva nace protegida, en vez de quedar abierta si alguien olvida el
+    // decorador.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
     UserService,
     DexaScanService,
     ClinicalReportService,
