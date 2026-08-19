@@ -94,5 +94,18 @@
         <intent>
             <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
         </intent>
+        <!--
+          Cámara para image_picker (Físico, Clínica y el chat de Pulso).
+          OBLIGATORIO desde Android 11 (API 30): el filtrado de visibilidad de
+          paquetes esconde la app de cámara si no se declara aquí, y entonces
+          `startActivityForResult(ACTION_IMAGE_CAPTURE)` lanza
+          ActivityNotFoundException — image_picker lo traduce a
+          `no_available_camera` y la cámara ni se abre. La galería sí funciona
+          sin esto, que es lo que hacía parecer que el problema era de permisos.
+          El plugin NO lo declara en su propio manifest: es cosa de la app.
+        -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
     </queries>
 </manifest>

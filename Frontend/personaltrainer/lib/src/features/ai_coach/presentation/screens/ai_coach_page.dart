@@ -157,7 +157,14 @@ class _AiCoachPageState extends State<AiCoachPage>
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final photo = await _imagePicker.pickImage(source: source);
+      // Reescalado en origen, igual que en Clínica y Físico: sin esto se
+      // mandaba la foto de cámara a resolución completa (varios MB, +33 % al
+      // pasarla a base64) sin que el modelo la leyera mejor.
+      final photo = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
       if (photo != null) {
         setState(() {
           _attachedPhotos.add(photo);
@@ -165,9 +172,16 @@ class _AiCoachPageState extends State<AiCoachPage>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al capturar imagen: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('no_available_camera')
+                ? 'No se ha podido abrir la cámara. Puedes adjuntar la foto '
+                    'desde la galería.'
+                : 'Error al capturar imagen: $e',
+          ),
+        ),
+      );
     }
   }
 

@@ -71,20 +71,42 @@ class _PhysiquePageState extends State<PhysiquePage> {
   }
 
   Future<void> _elegirFoto(String angulo, ImageSource source) async {
-    // 1280 px / calidad 80 es el tamaño con el que se dimensionó el almacenado
-    // en BBDD (`Fotos_Fisico`): suficiente para juzgar el físico y ~200 KB.
-    final x = await ImagePicker().pickImage(
-      source: source,
-      maxWidth: 1280,
-      imageQuality: 80,
-    );
-    if (x == null) return;
-    final bytes = await x.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _error = null;
-      _fotos[angulo] = bytes;
-    });
+    // Sin este try/catch, un fallo de la cámara (`no_available_camera`) se
+    // perdía como excepción asíncrona sin manejar: al usuario no le pasaba
+    // absolutamente nada al pulsar "Tomar foto", ni foto ni aviso, y parecía
+    // que el botón estuviera muerto.
+    try {
+      // 1280 px / calidad 80 es el tamaño con el que se dimensionó el almacenado
+      // en BBDD (`Fotos_Fisico`): suficiente para juzgar el físico y ~200 KB.
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1280,
+        imageQuality: 80,
+      );
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _error = null;
+        _fotos[angulo] = bytes;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _mensajeErrorFoto(e, source));
+    }
+  }
+
+  /// `no_available_camera` es el error que devuelve image_picker cuando no
+  /// encuentra ninguna app de cámara visible. Merece su propio mensaje porque
+  /// el genérico ("error al abrir la cámara") no dice qué hacer.
+  String _mensajeErrorFoto(Object e, ImageSource source) {
+    if (e.toString().contains('no_available_camera')) {
+      return 'No se ha podido abrir la cámara. Prueba a elegir la foto desde '
+          'la galería.';
+    }
+    return source == ImageSource.camera
+        ? 'No se ha podido tomar la foto: $e'
+        : 'No se ha podido abrir la galería: $e';
   }
 
   void _pedirOrigen(String angulo) {
@@ -797,6 +819,7 @@ class _FotosGuardadasState extends State<_FotosGuardadas> {
                   borderRadius: BorderRadius.circular(14),
                   child: Image.network(
                     ApiService.physiquePhotoUrl(id, widget.userId),
+                    headers: ApiService.imageHeaders,
                     width: 108,
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => const SizedBox(width: 108),
