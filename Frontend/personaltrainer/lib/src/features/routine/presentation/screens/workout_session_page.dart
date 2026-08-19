@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/providers/workout_session_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
+import '../../../../services/api_service.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/exercise.dart';
 import '../../models/routine.dart';
@@ -1476,6 +1477,10 @@ class _SummaryView extends StatelessWidget {
             ),
           ],
         ),
+        if (provider.results.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _ComparisonCard(provider: provider),
+        ],
         const SizedBox(height: 24),
         if (provider.results.isEmpty)
           const Center(
@@ -1499,6 +1504,162 @@ class _SummaryView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "Vs. tu media": compara esta sesión (ya guardada en el backend con métricas
+/// reales de la banda BLE) contra la media de todas las sesiones completadas
+/// del usuario. `endSession()` guarda de forma asíncrona (fire-and-forget, no
+/// puede bloquear el resumen), así que este widget espera a que
+/// `savedSessionId` esté disponible antes de pedir el análisis.
+class _ComparisonCard extends StatefulWidget {
+  const _ComparisonCard({required this.provider});
+  final WorkoutSessionProvider provider;
+
+  @override
+  State<_ComparisonCard> createState() => _ComparisonCardState();
+}
+
+class _ComparisonCardState extends State<_ComparisonCard> {
+  Map<String, dynamic>? _analisis;
+  bool _cargando = false;
+  String? _idYaPedido;
+
+  @override
+  void didUpdateWidget(_ComparisonCard old) {
+    super.didUpdateWidget(old);
+    _pedirSiHaceFalta();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pedirSiHaceFalta();
+  }
+
+  void _pedirSiHaceFalta() {
+    final id = widget.provider.savedSessionId;
+    if (id == null || id == _idYaPedido || _cargando) return;
+    _idYaPedido = id;
+    _cargar(id);
+  }
+
+  Future<void> _cargar(String id) async {
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+    setState(() => _cargando = true);
+    try {
+      final res = await ApiService.getTrainingSessionAnalysis(id, userId);
+      if (!mounted) return;
+      setState(() => _analisis = res);
+    } catch (_) {
+      // Sin análisis no pasa nada grave: el resumen sigue enseñando lo suyo.
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    if (widget.provider.isSavingSession || _cargando) {
+      return const SizedBox(
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final analisis = _analisis;
+    final sesionesAnalizadas = analisis?['sesiones_analizadas'] as int? ?? 0;
+    if (analisis == null || sesionesAnalizadas <= 1) {
+      // La media incluye esta misma sesión (es la única forma de que el
+      // backend sepa si hay suficientes datos), así que con 1 sola sesión
+      // completada la comparación sería "esto vs. esto mismo".
+      return const SizedBox.shrink();
+    }
+
+    final delta =
+        (analisis['delta_pct'] as Map?)?.cast<String, dynamic>() ?? {};
+    final filas = <(String, String, num?)>[
+      ('Duración', 'duracion_minutos', delta['duracion_minutos'] as num?),
+      ('Calorías', 'calorias_kcal', delta['calorias_kcal'] as num?),
+      (
+        'FC media',
+        'frecuencia_cardiaca_media',
+        delta['frecuencia_cardiaca_media'] as num?
+      ),
+    ].where((f) => f.$3 != null).toList();
+
+    if (filas.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DesignTokens.surface1(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'VS. TU MEDIA · $sesionesAnalizadas sesiones',
+            style: DesignTokens.labelSmall(
+                color: DesignTokens.mutedForeground(b)),
+          ),
+          const SizedBox(height: 10),
+          for (final fila in filas)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(fila.$1,
+                        style: DesignTokens.bodyFont(
+                            fontSize: 13,
+                            color: DesignTokens.foreground(b))),
+                  ),
+                  _DeltaPill(pct: fila.$3!.toDouble()),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// +12% en verde/rojo según convenga leerlo así: para la mayoría de sesiones
+/// "más que tu media" no es ni bueno ni malo por sí solo, así que se muestra
+/// neutro (mismo tono que el texto) en vez de arriesgar un color equivocado.
+class _DeltaPill extends StatelessWidget {
+  const _DeltaPill({required this.pct});
+  final double pct;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final signo = pct > 0 ? '+' : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$signo${pct.toStringAsFixed(0)}%',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: DesignTokens.foreground(b),
+        ),
+      ),
     );
   }
 }

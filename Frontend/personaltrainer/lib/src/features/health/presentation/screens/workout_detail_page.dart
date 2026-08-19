@@ -24,7 +24,21 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   double _maxHr = 0;
   double _minHr = 0;
   int _durationMinutes = 0;
-  
+
+  /// `totalEnergyBurned` sale de agregar `TOTAL_CALORIES_BURNED` en Health
+  /// Connect; Mi Fitness solo escribe la variante "activa" para los
+  /// entrenamientos del reloj, así que ese campo llega null aunque
+  /// `_caloriesData` (ACTIVE_ENERGY_BURNED de la misma ventana) sí tenga
+  /// datos — de ahí este respaldo sumado en vez de leer el campo a ciegas.
+  double? _effectiveKcal;
+
+  /// Mismo respaldo, pero para las sesiones históricas del mismo tipo que
+  /// alimentan `_buildComparisonCard`: sin esto, la media contra la que se
+  /// compara sale de un puñado (o cero) de sesiones válidas y la fila
+  /// "Calorías" de la comparativa queda tan rota como el total de arriba.
+  /// Clave = `dateFrom.toIso8601String()`, igual que `origenId` en el sync.
+  Map<String, double> _historicalKcalByStart = {};
+
   late WorkoutHealthValue _workoutValue;
 
   @override
@@ -42,12 +56,33 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     );
     final history = await HealthService.fetchWorkouts(forceRefresh: false);
 
+    // Solo las del mismo tipo (lo único que usa la comparativa) y en paralelo:
+    // son consultas locales a Health Connect, no llamadas de red, pero
+    // lanzarlas una a una sumaría su latencia en vez de solaparla.
+    final sameTypeHistory = history.where((w) {
+      if (w.value is! WorkoutHealthValue) return false;
+      return (w.value as WorkoutHealthValue).workoutActivityType ==
+          _workoutValue.workoutActivityType;
+    });
+    final historicalKcalEntries = await Future.wait(
+      sameTypeHistory.map((w) async {
+        final val = w.value as WorkoutHealthValue;
+        final kcal = val.totalEnergyBurned?.toDouble() ??
+            await HealthService.sumActiveCalories(w.dateFrom, w.dateTo);
+        return MapEntry(w.dateFrom.toIso8601String(), kcal);
+      }),
+    );
+
     if (!mounted) return;
 
     setState(() {
       _hrData = details['heart_rate'] ?? [];
       _caloriesData = details['calories'] ?? [];
       _historicalWorkouts = history;
+      _historicalKcalByStart = {
+        for (final e in historicalKcalEntries)
+          if (e.value != null) e.key: e.value!,
+      };
 
       if (_hrData.isNotEmpty) {
         final hrValues = _hrData.map((e) => (e.value as NumericHealthValue).numericValue.toDouble()).toList();
@@ -55,6 +90,17 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         _maxHr = hrValues.reduce((a, b) => a > b ? a : b);
         _minHr = hrValues.reduce((a, b) => a < b ? a : b);
       }
+
+      _effectiveKcal = _workoutValue.totalEnergyBurned?.toDouble() ??
+          (_caloriesData.isEmpty
+              ? null
+              : _caloriesData
+                  .where((p) => p.value is NumericHealthValue)
+                  .fold<double>(
+                    0,
+                    (sum, p) => sum + (p.value as NumericHealthValue).numericValue.toDouble(),
+                  ));
+
       _isLoading = false;
     });
   }
@@ -159,7 +205,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   }
 
   Widget _buildStatsGrid(Color cardBg, Color border, Color muted, Color fg) {
-    final kcal = _workoutValue.totalEnergyBurned?.toInt();
+    final kcal = _effectiveKcal?.toInt();
     final kcalStr = kcal != null ? '$kcal' : '--';
     final kcalPerMin = kcal != null && _durationMinutes > 0 ? (kcal / _durationMinutes).toStringAsFixed(1) : '--';
     
@@ -445,11 +491,12 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
       final mins = w.dateTo.difference(w.dateFrom).inMinutes;
       totalDur += mins;
       final val = w.value as WorkoutHealthValue;
-      if (val.totalEnergyBurned != null) {
-        totalKcal += val.totalEnergyBurned!;
+      final kcal = val.totalEnergyBurned ?? _historicalKcalByStart[w.dateFrom.toIso8601String()];
+      if (kcal != null) {
+        totalKcal += kcal;
         validKcal++;
         if (mins > 0) {
-          totalKcalPerMin += val.totalEnergyBurned! / mins;
+          totalKcalPerMin += kcal / mins;
           validKcalPerMin++;
         }
       }
@@ -459,14 +506,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     final avgKcal = validKcal > 0 ? totalKcal / validKcal : 0;
 
     final durDelta = (_durationMinutes - avgDur).toDouble();
-    final kcalDelta = (_workoutValue.totalEnergyBurned ?? 0).toDouble() - avgKcal;
+    final kcalDelta = (_effectiveKcal ?? 0) - avgKcal;
 
     // Delta de intensidad en %, solo si hay base y duración con la que dividir.
     double? intensityDelta;
     if (validKcalPerMin > 0 && _durationMinutes > 0) {
       final avgKcalPerMin = totalKcalPerMin / validKcalPerMin;
-      final currentKcalPerMin =
-          (_workoutValue.totalEnergyBurned ?? 0).toDouble() / _durationMinutes;
+      final currentKcalPerMin = (_effectiveKcal ?? 0) / _durationMinutes;
       if (avgKcalPerMin > 0 && currentKcalPerMin > 0) {
         intensityDelta =
             ((currentKcalPerMin - avgKcalPerMin) / avgKcalPerMin) * 100;

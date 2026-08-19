@@ -197,6 +197,17 @@ class WorkoutSessionProvider extends ChangeNotifier {
   Timer? _sessionTimer;
   int _sessionElapsedSeconds = 0;
   int get sessionElapsedSeconds => _sessionElapsedSeconds;
+  DateTime? _sessionStartAt;
+
+  /// Id de la sesión ya guardada en el backend (para pedir su análisis en el
+  /// resumen) y bandera para no duplicarla si `endSession()` se llama más de
+  /// una vez (pasa: el botón "Finalizar" y el back de la cabecera llaman a lo
+  /// mismo, y nada impide que el usuario toque los dos).
+  String? _savedSessionId;
+  String? get savedSessionId => _savedSessionId;
+  bool _sessionSaved = false;
+  bool _saving = false;
+  bool get isSavingSession => _saving;
   String get sessionElapsedFormatted {
     final m = (_sessionElapsedSeconds ~/ 60).toString().padLeft(2, '0');
     final s = (_sessionElapsedSeconds % 60).toString().padLeft(2, '0');
@@ -338,6 +349,8 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _workoutDetected = false;
     _paused = false;
     _sessionElapsedSeconds = 0;
+    _sessionStartAt = DateTime.now();
+    _sessionSaved = false;
     _startSessionTimer();
     notifyListeners();
   }
@@ -488,6 +501,85 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _sessionTimer?.cancel();
     _phase = Phase.finished;
     notifyListeners();
+    // Fire-and-forget: guardar no puede bloquear al usuario viendo su propio
+    // resumen. `_SummaryView` sondea `savedSessionId`/`isSavingSession` para
+    // pedir el análisis en cuanto la sesión tenga id.
+    unawaited(_persistSession());
+  }
+
+  /// gym/calistenia → fuerza (con o sin peso externo, es trabajo de fuerza);
+  /// cardio/deportes → cardio; yoga → flexibilidad. `tipo_entrenamiento` está
+  /// restringido a solo esos tres valores en toda la app — ver la nota en
+  /// `crear_rutina_personalizada` sobre por qué no se puede aflojar ese enum.
+  String _tipoSesionDesdeActividad(String? activityType) {
+    switch (activityType) {
+      case 'cardio':
+      case 'deportes':
+        return 'cardio';
+      case 'yoga':
+        return 'flexibilidad';
+      default:
+        return 'fuerza';
+    }
+  }
+
+  /// Guarda la sesión que de verdad ocurrió, con las métricas que midió la
+  /// banda BLE. Antes de esto, una sesión rastreada en vivo terminaba en la
+  /// pantalla de resumen y ahí se quedaba — nada se guardaba en el backend, así
+  /// que no había ni historial ni con qué comparar la siguiente.
+  Future<void> _persistSession() async {
+    if (_sessionSaved || _results.isEmpty) return;
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+
+    _sessionSaved = true; // se marca antes del await: un doble tap no duplica
+    _saving = true;
+    notifyListeners();
+
+    try {
+      final fcMedias = _results.map((r) => r.avgBpm).where((v) => v > 0).toList();
+      final fcMaxima = _results.map((r) => r.maxBpm).where((v) => v > 0);
+
+      final guardada = await ApiService.createTrainingSession(
+        userId: userId,
+        fechaProgramada:
+            (_sessionStartAt ?? DateTime.now()).toIso8601String(),
+        tipoEntrenamiento: _tipoSesionDesdeActividad(_routine?.activityType),
+        ejercicios: [
+          for (final r in _results)
+            {
+              'ejercicio': r.exerciseName,
+              'serie': r.setNumber,
+              'duracion_seg': r.durationSec,
+              'fc_media': r.avgBpm,
+              'fc_max': r.maxBpm,
+              'rir_estimado': r.rirEstimated,
+              'zona': r.zone,
+              'al_fallo': r.reachedFailure,
+            },
+        ],
+        estado: 'completado',
+        duracionMinutos: (_sessionElapsedSeconds / 60).round(),
+        caloriasKcal: estimatedKcal,
+        frecuenciaCardiacaMedia: fcMedias.isEmpty
+            ? null
+            : (fcMedias.reduce((a, b) => a + b) / fcMedias.length).round(),
+        frecuenciaCardiacaMax: fcMaxima.isEmpty
+            ? null
+            : fcMaxima.reduce((a, b) => a > b ? a : b),
+        origen: 'app',
+      );
+      _savedSessionId = guardada['id']?.toString();
+    } catch (_) {
+      // No hay dónde mostrar el error en una pantalla que ya se está cerrando;
+      // el usuario ya vio su resumen en pantalla, perder el guardado no puede
+      // bloquear el flujo. `_sessionSaved` se queda en true a propósito: un
+      // reintento automático aquí podría duplicar si el POST sí llegó a
+      // guardarse y solo falló la respuesta.
+    } finally {
+      _saving = false;
+      notifyListeners();
+    }
   }
 
   void clearError() {
