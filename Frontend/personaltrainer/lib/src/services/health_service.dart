@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'api_service.dart';
+
 class HealthService {
   static final Health _health = Health();
 
@@ -192,6 +194,153 @@ class HealthService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // SINCRONIZAR WORKOUTS DE HEALTH CONNECT AL BACKEND
+  // ─────────────────────────────────────────────────────────────────────────
+  static bool _syncing = false;
+
+  /// fuerza/cardio/flexibilidad: el mismo enum restringido que usa el resto
+  /// de la app para `tipo_entrenamiento` — ver la nota sobre por qué no se
+  /// puede aflojar en `chat_tools.crear_rutina_decl`.
+  static String _tipoSesionDesdeWorkout(HealthWorkoutActivityType tipo) {
+    switch (tipo) {
+      case HealthWorkoutActivityType.STRENGTH_TRAINING:
+      case HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING:
+        return 'fuerza';
+      case HealthWorkoutActivityType.YOGA:
+      case HealthWorkoutActivityType.PILATES:
+        return 'flexibilidad';
+      default:
+        return 'cardio';
+    }
+  }
+
+  /// Suma las calorías activas (`ActiveCaloriesBurnedRecord` de Health Connect)
+  /// registradas en `[start, end]`. Respaldo para cuando `WorkoutHealthValue.
+  /// totalEnergyBurned` viene null: ese campo sale de agregar
+  /// `TOTAL_CALORIES_BURNED`, y Mi Fitness —igual que con las fases de sueño—
+  /// solo escribe la variante "activa", nunca la total, así que un
+  /// entrenamiento del reloj Xiaomi/Redmi llega sin `totalEnergyBurned` aunque
+  /// las calorías sí estén en Health Connect bajo el otro tipo.
+  static Future<double?> sumActiveCalories(DateTime start, DateTime end) async {
+    try {
+      final data = await _health.getHealthDataFromTypes(
+        startTime: start,
+        endTime: end,
+        types: [HealthDataType.ACTIVE_ENERGY_BURNED],
+      );
+      final clean = _health.removeDuplicates(data).where(
+            (p) => p.value is NumericHealthValue,
+          );
+      if (clean.isEmpty) return null;
+      return clean.fold<double>(
+        0,
+        (sum, p) => sum + (p.value as NumericHealthValue).numericValue.toDouble(),
+      );
+    } catch (e) {
+      print('[HC] sumActiveCalories ERROR: $e');
+      return null;
+    }
+  }
+
+  /// Guarda como `TrainingSession` (origen 'health_connect') los entrenamientos
+  /// que Health Connect tiene y el backend todavía no, con su FC media/máxima
+  /// real leída de la misma ventana de tiempo del workout. Sin esto, un
+  /// entrenamiento grabado por el reloj nunca llegaba a formar parte del
+  /// historial ni de la media contra la que se compara una sesión.
+  ///
+  /// Idempotente por diseño: `origen_id` es el `dateFrom` exacto del workout,
+  /// así que llamarla varias veces (se dispara cada vez que se abre Inicio)
+  /// no duplica nada — sólo sincroniza lo que aparezca nuevo.
+  static Future<void> syncWorkoutsToBackend() async {
+    if (_syncing) return; // una sincronización a la vez basta
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+    _syncing = true;
+
+    try {
+      final workouts = await fetchWorkouts();
+      if (workouts.isEmpty) return;
+
+      final existentes = await ApiService.getTrainingSessionsByUser(userId);
+      final idsSincronizados = existentes
+          .where((s) => s['origen'] == 'health_connect')
+          .map((s) => s['origen_id']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      for (final w in workouts) {
+        if (w.value is! WorkoutHealthValue) continue;
+        final valor = w.value as WorkoutHealthValue;
+        // Igual que en `_RecentWorkoutsSection`: Health Connect genera sesiones
+        // de "caminar" como ruido de fondo constante, no como algo que el
+        // usuario registraría como un entrenamiento.
+        if (valor.workoutActivityType == HealthWorkoutActivityType.WALKING) {
+          continue;
+        }
+
+        final origenId = w.dateFrom.toIso8601String();
+        if (idsSincronizados.contains(origenId)) continue;
+
+        int? fcMedia, fcMax;
+        try {
+          final hr = await _health.getHealthDataFromTypes(
+            startTime: w.dateFrom,
+            endTime: w.dateTo,
+            types: [HealthDataType.HEART_RATE],
+          );
+          final bpms = _health
+              .removeDuplicates(hr)
+              .map((p) => (p.value as NumericHealthValue).numericValue.round())
+              .where((v) => v > 0)
+              .toList();
+          if (bpms.isNotEmpty) {
+            fcMedia = (bpms.reduce((a, b) => a + b) / bpms.length).round();
+            fcMax = bpms.reduce((a, b) => a > b ? a : b);
+          }
+        } catch (e) {
+          print('[HC] sync: FC del workout $origenId ERROR: $e');
+        }
+
+        double? calorias = valor.totalEnergyBurned?.toDouble();
+        if (calorias == null || calorias <= 0) {
+          calorias = await sumActiveCalories(w.dateFrom, w.dateTo);
+        }
+
+        try {
+          await ApiService.createTrainingSession(
+            userId: userId,
+            fechaProgramada: w.dateFrom.toIso8601String(),
+            tipoEntrenamiento: _tipoSesionDesdeWorkout(valor.workoutActivityType),
+            ejercicios: [
+              {
+                'fuente': translateWorkoutActivityType(valor.workoutActivityType),
+                'sourceName': w.sourceName,
+              },
+            ],
+            estado: 'completado',
+            duracionMinutos: w.dateTo.difference(w.dateFrom).inMinutes,
+            caloriasKcal: calorias?.round(),
+            frecuenciaCardiacaMedia: fcMedia,
+            frecuenciaCardiacaMax: fcMax,
+            distanciaKm: valor.totalDistance == null
+                ? null
+                : valor.totalDistance! / 1000,
+            origen: 'health_connect',
+            origenId: origenId,
+          );
+          idsSincronizados.add(origenId);
+        } catch (e) {
+          print('[HC] sync: guardar workout $origenId ERROR: $e');
+        }
+      }
+    } catch (e) {
+      print('[HC] syncWorkoutsToBackend ERROR: $e');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // DIAGNÓSTICO COMPLETO (llamar desde el botón Debug en la UI)
   // ─────────────────────────────────────────────────────────────────────────
   static Future<Map<String, String>> runDiagnostic() async {
@@ -340,6 +489,10 @@ class HealthService {
       if (w.dateFrom.isBefore(start) || w.dateFrom.isAfter(end)) continue;
       final v = w.value as WorkoutHealthValue;
       final durationMin = w.dateTo.difference(w.dateFrom).inMinutes;
+      double? calorias = v.totalEnergyBurned?.toDouble();
+      if (calorias == null || calorias <= 0) {
+        calorias = await sumActiveCalories(w.dateFrom, w.dateTo);
+      }
       out.add(
         DayWorkoutSummary(
           title: translateWorkoutActivityType(v.workoutActivityType),
@@ -347,7 +500,7 @@ class HealthService {
           start: w.dateFrom,
           end: w.dateTo,
           durationMinutes: durationMin,
-          totalEnergyCalories: v.totalEnergyBurned?.toInt(),
+          totalEnergyCalories: calorias?.toInt(),
           totalDistanceMeters: v.totalDistance?.toInt(),
           rawDataPoint: w,
         ),
@@ -585,16 +738,46 @@ class HealthService {
     }
   }
 
-  /// Se queda solo con el registro más reciente (mayor dateTo) de un tipo de dato de
-  /// sueño. Xiaomi/Mi Fitness re-sincroniza la noche completa cada vez que el reloj
-  /// sincroniza, y Health Connect no reemplaza el registro anterior: quedan varios
-  /// registros que solapan o duplican el mismo período. Sumar la duración de todos
-  /// infla el total (ej. 20h de sueño en una noche real de 8h) — solo el último
-  /// registro que llegó es válido, los anteriores se descartan.
-  static List<HealthDataPoint> _latestRecordOnly(List<HealthDataPoint> points) {
+  /// Colapsa cada GRUPO de registros solapados a uno solo (el de `dateTo` más
+  /// tardío), dejando intactos los que no solapan con nada.
+  ///
+  /// Xiaomi/Mi Fitness re-sincroniza la noche completa cada vez que el reloj
+  /// sincroniza, y Health Connect no reemplaza el registro anterior: quedan
+  /// varias copias que solapan el mismo período, y sumar la duración de todas
+  /// infla el total (ej. 20h de sueño en una noche real de 8h). De cada grupo
+  /// de copias solapadas solo la última sincronización es válida.
+  ///
+  /// La versión anterior de esto se quedaba con UN ÚNICO registro para toda la
+  /// lista (el de `dateTo` más tardío de todos), no por grupo — y ahí estaba
+  /// el bug: Xiaomi escribe cada fase (profundo/REM/ligero) como VARIOS
+  /// segmentos NO solapados repartidos a lo largo de la noche (son
+  /// secuenciales, no se pisan entre sí). Quedarse con "el más reciente de
+  /// toda la lista" descartaba casi todos esos segmentos y dejaba detectados
+  /// unos pocos minutos de sueño en vez de la noche completa.
+  static List<HealthDataPoint> _collapseOverlapping(
+    List<HealthDataPoint> points,
+  ) {
     if (points.length <= 1) return points;
-    final sorted = [...points]..sort((a, b) => a.dateTo.compareTo(b.dateTo));
-    return [sorted.last];
+    final sorted = [...points]..sort((a, b) => a.dateFrom.compareTo(b.dateFrom));
+
+    final resultado = <HealthDataPoint>[];
+    var finDeCluster = sorted.first.dateTo;
+    var mejorDelCluster = sorted.first;
+
+    for (final p in sorted.skip(1)) {
+      if (p.dateFrom.isBefore(finDeCluster)) {
+        // Solapa con el clúster en curso: gana el de dateTo más tardío.
+        if (p.dateTo.isAfter(mejorDelCluster.dateTo)) mejorDelCluster = p;
+        if (p.dateTo.isAfter(finDeCluster)) finDeCluster = p.dateTo;
+      } else {
+        // No solapa: cierra el clúster anterior y empieza uno nuevo.
+        resultado.add(mejorDelCluster);
+        mejorDelCluster = p;
+        finDeCluster = p.dateTo;
+      }
+    }
+    resultado.add(mejorDelCluster);
+    return resultado;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -623,7 +806,7 @@ class HealthService {
           endTime: sleepEnd,
           types: [t],
         );
-        final clean = _latestRecordOnly(_health.removeDuplicates(d));
+        final clean = _collapseOverlapping(_health.removeDuplicates(d));
         print('[HC]   ${t.name}: ${clean.length} registros');
         for (final p in clean.take(3)) {
           print('[HC]     ${p.dateFrom} → ${p.dateTo} (${p.sourceName})');
@@ -634,8 +817,6 @@ class HealthService {
         return [];
       }
     }
-
-    ;
 
     int minutesOf(List<HealthDataPoint> list) {
       var m = 0;
@@ -818,7 +999,7 @@ class HealthService {
             endTime: sleepEnd,
             types: [type],
           );
-          final clean = _latestRecordOnly(_health.removeDuplicates(d));
+          final clean = _collapseOverlapping(_health.removeDuplicates(d));
           print('[HC]   ${type.name}: ${clean.length} registros');
           for (final p in clean.take(3)) {
             print('[HC]     ${p.dateFrom} → ${p.dateTo} (${p.sourceName})');
@@ -846,7 +1027,7 @@ class HealthService {
             endTime: sleepEnd,
             types: [entry.value],
           );
-          final clean = _latestRecordOnly(_health.removeDuplicates(d));
+          final clean = _collapseOverlapping(_health.removeDuplicates(d));
           final mins = clean.fold(
             0,
             (acc, p) => acc + p.dateTo.difference(p.dateFrom).inMinutes,
