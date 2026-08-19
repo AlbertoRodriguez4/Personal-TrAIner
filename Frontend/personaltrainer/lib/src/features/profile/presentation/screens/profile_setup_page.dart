@@ -5,6 +5,7 @@ import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/analysis_report.dart';
 import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/api_service.dart';
+import '../../../../services/notification_service.dart';
 import '../widgets/profile_fields.dart';
 
 /// Configurador de perfil. Se entra tocando la foto de perfil en Inicio.
@@ -61,6 +62,13 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _proteinas = TextEditingController();
   final _carbohidratos = TextEditingController();
   final _grasas = TextEditingController();
+
+  // Notificaciones (preferencia del dispositivo, no del perfil)
+  NotificationPreferences _notis = const NotificationPreferences();
+
+  /// Días (1=lunes … 7=domingo) en los que la rutina activa tiene sesión, para
+  /// que el recordatorio de entrenar no suene los días de descanso.
+  List<int> _diasRutina = const [];
 
   // Solo lectura
   Map<String, dynamic>? _composicion;
@@ -139,6 +147,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
       final completitud =
           (contexto['completitud'] as Map?)?.cast<String, dynamic>() ?? {};
+      final notis = await NotificationService.cargarPreferencias();
+      final diasRutina = await _cargarDiasRutina(userId);
+      if (!mounted) return;
 
       setState(() {
         _nombre.text = ApiService.getCurrentUserName() ?? '';
@@ -178,6 +189,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         }
 
         _composicion = composicion;
+        _notis = notis;
+        _diasRutina = diasRutina;
         _recomendadosPendientes = reportList(completitud['recomendados']);
         _tieneMinimos = completitud['tiene_minimos'] == true;
         _cargando = false;
@@ -341,6 +354,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             _seccionIdentidad(b),
             _seccionDeportiva(b),
             _seccionMetas(b),
+            _seccionNotificaciones(b),
             _seccionComposicion(b),
           ],
         ),
@@ -590,6 +604,152 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
+  /// `day_of_week` se guarda como nombre en español ("Lunes", "Miércoles"),
+  /// no como número, así que hay que traducirlo. Se normalizan los acentos
+  /// porque un "Miercoles" sin tilde escrito por la IA no debería perder el
+  /// recordatorio de ese día.
+  static const _numeroPorDia = {
+    'lunes': DateTime.monday,
+    'martes': DateTime.tuesday,
+    'miercoles': DateTime.wednesday,
+    'jueves': DateTime.thursday,
+    'viernes': DateTime.friday,
+    'sabado': DateTime.saturday,
+    'domingo': DateTime.sunday,
+  };
+
+  Future<List<int>> _cargarDiasRutina(String userId) async {
+    try {
+      final rutinas = await ApiService.getRoutines(userId);
+      final activa = rutinas.firstWhere(
+        (r) => r['activa'] == true,
+        orElse: () => rutinas.isNotEmpty ? rutinas.first : <String, dynamic>{},
+      );
+      final dias = (activa['days'] as List?) ?? const [];
+      final numeros = <int>{};
+      for (final d in dias) {
+        if (d is! Map) continue;
+        final clave = reportText(d['day_of_week'])
+            .toLowerCase()
+            .replaceAll(RegExp('[áà]'), 'a')
+            .replaceAll(RegExp('[éè]'), 'e')
+            .replaceAll(RegExp('[íì]'), 'i')
+            .replaceAll(RegExp('[óò]'), 'o')
+            .replaceAll(RegExp('[úù]'), 'u')
+            .trim();
+        final n = _numeroPorDia[clave];
+        if (n != null) numeros.add(n);
+      }
+      return numeros.toList()..sort();
+    } catch (_) {
+      // Sin rutina no se bloquea nada: el servicio avisa a diario.
+      return const [];
+    }
+  }
+
+  /* ─────────────── Notificaciones ─────────────── */
+
+  /// Aplica un cambio de preferencias: guarda, reprograma y refresca.
+  ///
+  /// Se reprograma en cada cambio en vez de solo al pulsar "Guardar cambios"
+  /// porque estas preferencias viven en el móvil, no en el perfil del servidor:
+  /// si esperaran al botón, un usuario que active un aviso y salga de la
+  /// pantalla se quedaría sin él sin entender por qué.
+  Future<void> _aplicarNotis(NotificationPreferences nuevas) async {
+    // Al encender el interruptor general hay que pedir permiso ANTES de
+    // programar nada: en Android 13+, sin POST_NOTIFICATIONS el sistema
+    // descarta los avisos en silencio y la app parecería estar rota.
+    if (nuevas.activadas && !_notis.activadas) {
+      final concedido = await NotificationService.pedirPermiso();
+      if (!concedido) {
+        if (!mounted) return;
+        setState(() => _error =
+            'Android no ha concedido el permiso de notificaciones. Actívalo en '
+            'los ajustes del sistema para esta app.');
+        return;
+      }
+    }
+
+    setState(() => _notis = nuevas);
+    await NotificationService.guardarPreferencias(nuevas);
+    // Los días de la rutina activa: así el recordatorio de entrenar solo suena
+    // los días que de verdad toca. Si no hay rutina, el servicio avisa a diario.
+    await NotificationService.reprogramar(
+      nuevas,
+      diasEntrenamiento: _diasRutina,
+    );
+  }
+
+  Widget _seccionNotificaciones(Brightness b) {
+    return ProfileSection(
+      icon: LucideIcons.bell,
+      title: 'Recordatorios',
+      children: [
+        _FilaInterruptor(
+          titulo: 'Activar recordatorios',
+          sub: 'Avisos locales del móvil. No sale ningún dato del dispositivo.',
+          valor: _notis.activadas,
+          onChanged: (v) => _aplicarNotis(_notis.copyWith(activadas: v)),
+        ),
+        if (_notis.activadas) ...[
+          const SizedBox(height: 6),
+          Divider(color: DesignTokens.border(b)),
+          const SizedBox(height: 6),
+          _FilaInterruptor(
+            titulo: 'Entrenamiento',
+            sub: _diasRutina.isEmpty
+                ? 'Todos los días (aún no tienes rutina activa)'
+                : 'Solo los días que tu rutina tiene sesión',
+            valor: _notis.entrenamiento,
+            onChanged: (v) => _aplicarNotis(_notis.copyWith(entrenamiento: v)),
+          ),
+          if (_notis.entrenamiento)
+            _SelectorHora(
+              etiqueta: 'A las',
+              hora: _notis.horaEntrenamiento,
+              onChanged: (h) =>
+                  _aplicarNotis(_notis.copyWith(horaEntrenamiento: h)),
+            ),
+          const SizedBox(height: 10),
+          _FilaInterruptor(
+            titulo: 'Pesarte',
+            sub: 'De tu composición salen las calorías y los macros: si se '
+                'queda vieja, el plan también.',
+            valor: _notis.composicion,
+            onChanged: (v) => _aplicarNotis(_notis.copyWith(composicion: v)),
+          ),
+          if (_notis.composicion) ...[
+            _SelectorDia(
+              dia: _notis.diaComposicion,
+              onChanged: (d) =>
+                  _aplicarNotis(_notis.copyWith(diaComposicion: d)),
+            ),
+            _SelectorHora(
+              etiqueta: 'A las',
+              hora: _notis.horaComposicion,
+              onChanged: (h) =>
+                  _aplicarNotis(_notis.copyWith(horaComposicion: h)),
+            ),
+          ],
+          const SizedBox(height: 10),
+          _FilaInterruptor(
+            titulo: 'Cerrar el diario de comidas',
+            sub: 'Un aviso por la noche por si te falta algo por anotar',
+            valor: _notis.nutricion,
+            onChanged: (v) => _aplicarNotis(_notis.copyWith(nutricion: v)),
+          ),
+          if (_notis.nutricion)
+            _SelectorHora(
+              etiqueta: 'A las',
+              hora: _notis.horaNutricion,
+              onChanged: (h) =>
+                  _aplicarNotis(_notis.copyWith(horaNutricion: h)),
+            ),
+        ],
+      ],
+    );
+  }
+
   /* ─────────────── Composición (solo lectura) ─────────────── */
 
   Widget _seccionComposicion(Brightness b) {
@@ -699,6 +859,143 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 }
 
 /* ─────────────────────── Piezas de la pantalla ─────────────────────── */
+
+/// Fila de interruptor con título y explicación debajo.
+class _FilaInterruptor extends StatelessWidget {
+  const _FilaInterruptor({
+    required this.titulo,
+    required this.sub,
+    required this.valor,
+    required this.onChanged,
+  });
+  final String titulo, sub;
+  final bool valor;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo,
+                    style: DesignTokens.bodyFont(
+                        fontSize: 13.5,
+                        weight: FontWeight.w700,
+                        color: DesignTokens.foreground(b))),
+                const SizedBox(height: 2),
+                Text(sub,
+                    style: DesignTokens.bodyFont(
+                        fontSize: 11.5,
+                        height: 1.35,
+                        color: DesignTokens.mutedForeground(b))),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch(value: valor, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+/// Selector de hora en punto. Solo horas, sin minutos: es un recordatorio, y
+/// las alarmas son inexactas por diseño — ofrecer "18:37" prometería una
+/// precisión que el sistema no garantiza.
+class _SelectorHora extends StatelessWidget {
+  const _SelectorHora({
+    required this.etiqueta,
+    required this.hora,
+    required this.onChanged,
+  });
+  final String etiqueta;
+  final int hora;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 2, bottom: 6),
+      child: Row(
+        children: [
+          Text(etiqueta,
+              style: DesignTokens.bodyFont(
+                  fontSize: 12, color: DesignTokens.mutedForeground(b))),
+          const SizedBox(width: 10),
+          DropdownButton<int>(
+            value: hora,
+            underline: const SizedBox.shrink(),
+            isDense: true,
+            style: DesignTokens.bodyFont(
+                fontSize: 13,
+                weight: FontWeight.w700,
+                color: DesignTokens.foreground(b)),
+            items: [
+              for (var h = 0; h < 24; h++)
+                DropdownMenuItem(
+                  value: h,
+                  child: Text('${h.toString().padLeft(2, '0')}:00'),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectorDia extends StatelessWidget {
+  const _SelectorDia({required this.dia, required this.onChanged});
+  final int dia;
+  final ValueChanged<int> onChanged;
+
+  static const _nombres = [
+    'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 2),
+      child: Row(
+        children: [
+          Text('El día',
+              style: DesignTokens.bodyFont(
+                  fontSize: 12, color: DesignTokens.mutedForeground(b))),
+          const SizedBox(width: 10),
+          DropdownButton<int>(
+            value: dia,
+            underline: const SizedBox.shrink(),
+            isDense: true,
+            style: DesignTokens.bodyFont(
+                fontSize: 13,
+                weight: FontWeight.w700,
+                color: DesignTokens.foreground(b)),
+            items: [
+              for (var d = 1; d <= 7; d++)
+                DropdownMenuItem(value: d, child: Text(_nombres[d - 1])),
+            ],
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _Cabecera extends StatelessWidget {
   const _Cabecera({required this.onBack, this.onLogout});

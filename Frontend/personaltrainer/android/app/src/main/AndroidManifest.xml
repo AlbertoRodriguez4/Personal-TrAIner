@@ -10,6 +10,16 @@
 
     <!-- Health Connect Permissions -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+
+    <!-- Notificaciones locales (recordatorios de entreno, pesarte y nutricion).
+         POST_NOTIFICATIONS es obligatorio desde Android 13: sin el, el sistema
+         descarta los avisos en silencio.
+         RECEIVE_BOOT_COMPLETED hace que los recordatorios ya programados
+         sobrevivan a un reinicio del movil; sin el se pierden todos al apagar.
+         No se pide SCHEDULE_EXACT_ALARM a proposito: los recordatorios usan
+         alarmas inexactas, que no requieren ese permiso restringido. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
