@@ -139,7 +139,23 @@ buscar_ejercicios_decl = types.FunctionDeclaration(
 
 def buscar_ejercicios_catalogo(user_id: str, grupo_muscular: str | None = None) -> dict:
     params = {"grupo": grupo_muscular} if grupo_muscular else None
-    return {"ejercicios": nest.get("/exercises-catalog", params=params)}
+    catalogo = nest.get("/exercises-catalog", params=params) or []
+    # Solo nombre, grupo y equipamiento: es lo único que el modelo usa para
+    # elegir un ejercicio. El UUID no lo necesita (la rutina se guarda por
+    # nombre) y la descripción es texto largo que multiplica por tres el tamaño
+    # del catálogo dentro de la conversación, compitiendo por el mismo
+    # presupuesto de tokens que el JSON de la rutina que tiene que generar.
+    return {
+        "ejercicios": [
+            {
+                "nombre": e.get("nombre"),
+                "grupo_muscular": e.get("grupo_muscular"),
+                "equipamiento": e.get("equipamiento"),
+            }
+            for e in catalogo
+            if isinstance(e, dict)
+        ]
+    }
 
 
 # ============================================================
@@ -153,7 +169,43 @@ obtener_rutina_activa_decl = types.FunctionDeclaration(
 )
 
 def obtener_rutina_activa(user_id: str) -> dict:
-    return nest.get(f"/api/routines/user/{user_id}/active")
+    """La rutina activa, sin los campos que el revisor no mira.
+
+    Se queda fuera el UUID de cada día y de cada ejercicio (`aplicar_cambios_rutina`
+    sobreescribe los días enteros, no ejercicio a ejercicio: solo necesita el id de
+    la RUTINA) y los timestamps. En una rutina de 6 días eso es aproximadamente un
+    tercio del JSON, y va directo contra el mismo presupuesto de tokens con el que
+    el modelo tiene que redactar los cambios que propone."""
+    rutina = nest.get(f"/api/routines/user/{user_id}/active") or {}
+    if not isinstance(rutina, dict) or not rutina.get("id"):
+        return rutina
+
+    return {
+        "routine_id": rutina.get("id"),
+        "nombre": rutina.get("name"),
+        "tipo_entrenamiento": rutina.get("activity_type"),
+        "dias": [
+            {
+                "dia_semana": d.get("day_of_week"),
+                "enfoque": d.get("focus"),
+                "ejercicios": [
+                    {
+                        k: v
+                        for k, v in {
+                            "nombre": e.get("name"),
+                            "series": e.get("sets"),
+                            "repeticiones": e.get("reps"),
+                            "peso_kg": e.get("weight"),
+                            "duracion": e.get("duration"),
+                        }.items()
+                        if v is not None
+                    }
+                    for e in (d.get("exercises") or [])
+                ],
+            }
+            for d in (rutina.get("days") or [])
+        ],
+    }
 
 
 aplicar_cambios_rutina_decl = types.FunctionDeclaration(
@@ -232,6 +284,7 @@ registrar_comida_decl = types.FunctionDeclaration(
     parameters=types.Schema(
         type="OBJECT",
         properties={
+            "nombre_alimento": types.Schema(type="STRING", description="Nombre corto del plato/alimento, ej. 'Salmón, quinoa y aguacate'"),
             "fecha_registro": types.Schema(type="STRING", description="YYYY-MM-DD"),
             "calorias_consumidas": types.Schema(type="INTEGER"),
             "proteinas_g": types.Schema(type="NUMBER"),
@@ -293,6 +346,36 @@ def obtener_resumen_diario(user_id: str) -> dict:
     return nest.get(f"/daily/{user_id}")
 
 
+ajustar_metas_decl = types.FunctionDeclaration(
+    name="ajustar_metas_nutricionales",
+    description=(
+        "Actualiza las metas diarias de calorías y macros del usuario — las que ve en su "
+        "perfil y contra las que se mide obtener_resumen_diario. Úsala no solo cuando lo "
+        "pida explícitamente, sino cada vez que detectes que las metas actuales ya no "
+        "encajan con lo que sabés de él: una composición corporal nueva, un peso "
+        "desactualizado, un cambio de objetivo, o metas que nunca se llegaron a fijar. "
+        "Mandá solo los campos que cambian; los que omitas se quedan como están."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "meta_kcal": types.Schema(type="NUMBER", description="Calorías diarias objetivo"),
+            "meta_proteinas_g": types.Schema(type="NUMBER"),
+            "meta_carbohidratos_g": types.Schema(type="NUMBER"),
+            "meta_grasas_g": types.Schema(type="NUMBER"),
+        },
+    ),
+)
+
+def ajustar_metas_nutricionales(user_id: str, **kwargs) -> dict:
+    cambios = {k: v for k, v in kwargs.items() if v is not None}
+    if not cambios:
+        return {"actualizado": False, "motivo": "no se especificó ningún cambio"}
+    # POST hace upsert (ver UserProfileService.create): si el usuario aún no tiene
+    # fila de perfil, la crea con solo estas metas en vez de fallar con un 404.
+    return nest.post("/user-profiles", {"user_id": user_id, **cambios})
+
+
 # ============================================================
 # DIVISIÓN 5 — Diario de Entrenamiento
 # ============================================================
@@ -307,12 +390,21 @@ registrar_sesion_decl = types.FunctionDeclaration(
             "tipo_entrenamiento": types.Schema(type="STRING", description="Solo uno de: 'fuerza', 'cardio', 'flexibilidad'"),
             "ejercicios": types.Schema(type="ARRAY", items=types.Schema(type="OBJECT")),
             "estado": types.Schema(type="STRING", description="'pendiente' | 'completado'"),
+            "duracion_minutos": types.Schema(type="INTEGER", description="Cuánto duró la sesión, si lo mencionó."),
+            "calorias_kcal": types.Schema(type="INTEGER", description="Calorías quemadas, si lo mencionó o lo trae su reloj."),
+            "frecuencia_cardiaca_media": types.Schema(type="INTEGER", description="FC media de la sesión en ppm, si la mencionó."),
+            "frecuencia_cardiaca_max": types.Schema(type="INTEGER", description="FC máxima de la sesión en ppm, si la mencionó."),
+            "distancia_km": types.Schema(type="NUMBER", description="Solo para cardio con distancia (correr, ciclismo…)."),
         },
         required=["fecha_programada", "tipo_entrenamiento", "ejercicios"],
     ),
 )
 
 def registrar_sesion_entrenamiento(user_id: str, **kwargs) -> dict:
+    # `origen` no viaja en el schema: esta tool es siempre lo que el usuario
+    # CONTÓ en el chat, nunca una medición, así que el backend la guarda con el
+    # 'manual' por defecto de la entidad. Mezclar aquí el origen de la sesión en
+    # vivo (banda BLE) o de Health Connect confundiría al modelo sobre cuál usar.
     return nest.post("/training-sessions", {"userId": user_id, **kwargs})
 
 
@@ -505,7 +597,7 @@ TOOLS_BY_MODE = {
     ],
     "sueno_recuperacion": [guardar_recuperacion_decl, historial_recuperacion_decl, buscar_medicamento_decl],
     "nutricion": [
-        estimar_comida_decl, registrar_comida_decl, resumen_diario_decl,
+        estimar_comida_decl, registrar_comida_decl, resumen_diario_decl, ajustar_metas_decl,
         buscar_producto_off_decl, buscar_alimento_usda_decl, estimar_macros_edamam_decl, calcular_metricas_decl,
     ],
     "entrenamiento": [registrar_sesion_decl],
@@ -522,6 +614,7 @@ EXECUTORS = {
     "registrar_comida": registrar_comida,
     "estimar_comida": estimar_comida,
     "obtener_resumen_diario": obtener_resumen_diario,
+    "ajustar_metas_nutricionales": ajustar_metas_nutricionales,
     "registrar_sesion_entrenamiento": registrar_sesion_entrenamiento,
     "guardar_analisis_fisico": guardar_analisis_fisico,
     # APIs externas (División 7)
@@ -557,12 +650,12 @@ BASE_GUIDELINES = (
     "directamente que no lo sabés con certeza.\n"
     "- No cites referencias concretas salvo que estés seguro de que existen; es preferible "
     "decir 'la evidencia actual apunta a...' que fabricar una fuente.\n"
-    "- Los datos del usuario (Health Connect, su rutina, sus comidas, su análisis del físico "
-    "y sus analíticas clínicas) son la fuente de verdad sobre él. No los contradigas con "
-    "supuestos ni rellenes con cifras inventadas lo que no esté en el contexto.\n"
-    "- Cuando tengas esos datos, ÚSALOS y citálos al justificar lo que recomendás. Si no los "
-    "tenés, decilo abiertamente y pedile que los rellene, en vez de dar por personalizado un "
-    "consejo genérico.\n"
+    # El bloque de perfil (ai_profile.bloque_prompt) va justo después de esto y ya
+    # dice, con más detalle y con la jerarquía entre fuentes, que esos datos son la
+    # verdad sobre el usuario y que hay que citarlos. Repetirlo aquí eran ~90 tokens
+    # en cada una de las peticiones, compitiendo por el mismo presupuesto de 8000 TPM.
+    "- No inventes datos del usuario que no estén en el contexto: si te faltan, pedíselos "
+    "en vez de dar por personalizado un consejo genérico.\n"
     "- No hacés diagnósticos médicos. Ante señales de lesión, dolor persistente, "
     "trastornos alimentarios o cualquier cuadro clínico, derivá a un profesional.\n"
 )
@@ -688,7 +781,15 @@ SYSTEM_PROMPTS = {
         "triglicéridos altos, ferritina o vitamina D bajas, función renal reducida), ajustá la "
         "recomendación en consecuencia y decí por qué — pero sin diagnosticar: eso lo valora "
         "un profesional. Con la función renal reducida en particular, no propongas ingestas "
-        "proteicas altas sin remitir a un médico."
+        "proteicas altas sin remitir a un médico.\n"
+        "Las metas de calorías/macros del perfil (meta_kcal, meta_proteinas_g, "
+        "meta_carbohidratos_g, meta_grasas_g) NO son fijas: son la última cifra que alguien "
+        "calculó, y pueden quedar desactualizadas. Usá ajustar_metas_nutricionales cada vez "
+        "que, con lo que sabés ahora del usuario (composición corporal más reciente, peso "
+        "actual, objetivo declarado), calcules unas metas distintas a las que tiene guardadas "
+        "— no hace falta que te lo pida explícitamente, es parte de mantener su plan al día. "
+        "Nunca lo hagas en silencio: decile en la respuesta qué metas quedaron y en qué te "
+        "basaste para el cambio, para que pueda corregirte si no está de acuerdo."
     ),
     "entrenamiento": (
         "Eres el Diario de Entrenamiento. Cuando el usuario te cuente lo que hizo o vaya a "
@@ -696,7 +797,11 @@ SYSTEM_PROMPTS = {
         "solo puede ser 'fuerza', 'cardio' o 'flexibilidad' — si no encaja claramente, "
         "preguntá antes de guardar.\n"
         "Registrá lo que el usuario efectivamente dijo: no completes series, repeticiones "
-        "ni cargas que no mencionó. Si un dato falta y es relevante, preguntáselo."
+        "ni cargas que no mencionó. Si un dato falta y es relevante, preguntáselo.\n"
+        "Si menciona duración, calorías, frecuencia cardíaca (media o máxima) o distancia "
+        "recorrida, incluilas siempre en la llamada: son las que después permiten comparar "
+        "esta sesión con el resto de las suyas. No las inventes ni las estimes si no las "
+        "dijo — quedan vacías antes que adivinadas."
     ),
     "analisis_fisico": (
         "Eres el Analista de Condición Física de Personal TrAIner. Tu función es evaluar la "

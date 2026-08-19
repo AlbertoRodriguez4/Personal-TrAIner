@@ -53,6 +53,18 @@ GROQ_TOKENS_MARGEN = 600        # colchón para el error de la estimación de en
 GROQ_MAX_COMPLETION_TOKENS = 5000   # suficiente para una rutina de 6 días / 42 ejercicios
 GROQ_MIN_COMPLETION_TOKENS = 1200   # por debajo de esto la respuesta sale truncada igual
 
+# ── Recortes para que la conversación quepa en el presupuesto ──
+# El historial que manda la app es la conversación ENTERA, y las respuestas de
+# los modos de rutina son largas por diseño (el prompt exige justificar ejercicio
+# por ejercicio). Sin tope, crear una rutina y pedir que la revisen a continuación
+# ya se pasa de las 8000 TPM. Seis turnos son de sobra para el hilo de una
+# consulta; lo anterior lo aporta el perfil, que va aparte y siempre completo.
+MAX_TURNOS_HISTORIAL = 6
+MAX_CHARS_TURNO_HISTORIAL = 1500
+# Resultados de tools: el catálogo de ejercicios o una rutina de 6 días ocupan
+# más que todo el resto junto si se reenvían crudos.
+MAX_CHARS_RESULTADO_TOOL = 3500
+
 # Grounding con Google Search, apagado por defecto.
 # Verificado contra la API real: la búsqueda tiene su propia cuota, aparte de la de
 # generate_content, y con la key actual devuelve 429 RESOURCE_EXHAUSTED tanto sola como
@@ -256,23 +268,86 @@ def _run_chat_gemini(
 
 
 def _history_to_groq_messages(history: list[dict]) -> list[dict]:
+    """Historial de la app → mensajes de Groq, quedándose solo con los últimos
+    turnos y recortando los muy largos.
+
+    La app manda la conversación entera en cada turno. Sin este recorte, el
+    historial crece sin techo dentro de la misma sesión de chat y acaba comiéndose
+    el presupuesto de 8000 TPM él solo."""
+    recientes = history[-MAX_TURNOS_HISTORIAL:]
     return [
-        {"role": "assistant" if turn["role"] == "model" else turn["role"], "content": turn["text"]}
-        for turn in history
+        {
+            "role": "assistant" if turn["role"] == "model" else turn["role"],
+            "content": _recortar(turn["text"], MAX_CHARS_TURNO_HISTORIAL),
+        }
+        for turn in recientes
     ]
 
 
-def _presupuesto_completion(messages: list[dict], tools_groq: list[dict] | None) -> int:
-    """max_completion_tokens que cabe bajo GROQ_TPM_LIMIT, porque Groq cuenta entrada +
-    reserva de salida en el mismo presupuesto. Si se manda un valor fijo (p. ej. 5000) y
-    la conversación ya creció con resultados de tools, la suma supera el límite y Groq
-    devuelve 413 sin generar nada — de ahí que se calcule por llamada."""
+def _recortar(texto: str, limite: int) -> str:
+    if len(texto) <= limite:
+        return texto
+    return texto[:limite] + "\n[...recortado por longitud]"
+
+
+def _tokens_aprox(messages: list[dict], tools_groq: list[dict] | None) -> int:
+    """~4 caracteres por token: no es exacto, pero para decidir qué recortar
+    sobra, y el margen de GROQ_TOKENS_MARGEN absorbe el error."""
     payload = json.dumps(messages, ensure_ascii=False)
     if tools_groq:
         payload += json.dumps(tools_groq, ensure_ascii=False)
-    entrada_aprox = len(payload) // 4      # ~4 chars por token, suficiente para dimensionar
-    disponible = GROQ_TPM_LIMIT - entrada_aprox - GROQ_TOKENS_MARGEN
-    return max(GROQ_MIN_COMPLETION_TOKENS, min(GROQ_MAX_COMPLETION_TOKENS, disponible))
+    return len(payload) // 4
+
+
+def _es_descartable(msg: dict) -> bool:
+    """Un mensaje de conversación suelta (texto de usuario o del modelo), sin
+    tool_calls asociados.
+
+    Los que NO lo son hay que dejarlos: Groq exige que cada mensaje `tool` vaya
+    precedido de su `assistant` con el `tool_call_id` que le corresponde, así
+    que descartar uno de los dos por separado devuelve un 400."""
+    return msg.get("role") in ("user", "assistant") and not msg.get("tool_calls")
+
+
+def _ajustar_a_presupuesto(
+    messages: list[dict], tools_groq: list[dict] | None
+) -> tuple[list[dict], int]:
+    """Recorta la conversación hasta que quepa, y devuelve (mensajes, max_completion).
+
+    Antes esto solo calculaba el `max_completion_tokens` y aplicaba un suelo de
+    GROQ_MIN_COMPLETION_TOKENS. Ese suelo era justo el bug: con una entrada de más
+    de ~6800 tokens, reservar 1200 de salida da >8000 y Groq responde 413 sin
+    generar nada. Pasaba al crear o revisar una rutina, porque el argumento de la
+    tool lleva el plan entero y encima el historial venía completo.
+
+    Ahora, si no entra, se van descartando los mensajes de conversación más
+    antiguos (nunca el system, nunca el último mensaje, nunca un bloque de
+    tool-calls a medias). Perder contexto viejo degrada la respuesta; un 413 la
+    deja sin responder."""
+    trabajo = list(messages)
+
+    while True:
+        disponible = GROQ_TPM_LIMIT - _tokens_aprox(trabajo, tools_groq) - GROQ_TOKENS_MARGEN
+        if disponible >= GROQ_MIN_COMPLETION_TOKENS:
+            return trabajo, min(GROQ_MAX_COMPLETION_TOKENS, disponible)
+
+        # Se descarta el más antiguo que se pueda soltar sin romper el pareado
+        # assistant/tool. El índice 0 es el system y el último es el turno que
+        # se está respondiendo: ninguno de los dos se toca.
+        indice = next(
+            (i for i, m in enumerate(trabajo[1:-1], start=1) if _es_descartable(m)),
+            None,
+        )
+        if indice is None:
+            # Ya no queda nada suelto que soltar: lo que ocupa es el system, las
+            # tools y el turno en curso. Mejor un mensaje claro que un 413 crudo.
+            if disponible < GROQ_MIN_COMPLETION_TOKENS // 2:
+                raise RespuestaDemasiadoGrandeError(
+                    f"La consulta no cabe en el presupuesto de {GROQ_TPM_LIMIT} tokens "
+                    f"del tier actual (faltan {GROQ_MIN_COMPLETION_TOKENS - disponible})."
+                )
+            return trabajo, max(disponible, 256)
+        trabajo.pop(indice)
 
 
 def _es_tool_use_failed(exc: GroqBadRequestError) -> bool:
@@ -295,10 +370,11 @@ def _create_groq_completion_with_retry(messages: list[dict], tools_groq: list[di
     "pensamiento" que compiten con el JSON de salida dentro del mismo presupuesto de
     8000 TPM. Medido: ahorra ~600 tokens por llamada sin degradar el resultado en tareas
     estructuradas como estas (rellenar el schema de una tool)."""
+    messages, max_completion = _ajustar_a_presupuesto(messages, tools_groq)
     kwargs = {"model": GROQ_MODEL, "messages": messages, "reasoning_effort": "low"}
     if tools_groq:
         kwargs["tools"] = tools_groq
-    kwargs["max_completion_tokens"] = _presupuesto_completion(messages, tools_groq)
+    kwargs["max_completion_tokens"] = max_completion
 
     last_exc = None
     ya_pedimos_concision = False
@@ -389,10 +465,17 @@ def _run_chat_groq(
                 args = {}
 
             result = _execute_tool(user_id, tc.function.name, args, actions_taken)
+            # El resultado va recortado hacia el modelo, pero `actions_taken` ya
+            # guarda el original entero: la app sigue recibiendo el dato completo
+            # (lo necesita para pintar la estimación de una comida, por ejemplo),
+            # el recorte es solo para lo que se reenvía en el siguiente turno.
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": json.dumps({"result": result}),
+                "content": _recortar(
+                    json.dumps({"result": result}, ensure_ascii=False),
+                    MAX_CHARS_RESULTADO_TOOL,
+                ),
             })
 
     # Agotadas las iteraciones: última pasada SIN tools (el modelo ya no puede pedir
