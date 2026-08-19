@@ -75,4 +75,25 @@ export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   notas_adicionales?: string;
+
+  // ===== Metas diarias =====
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_kcal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_proteinas_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_carbohidratos_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_grasas_g?: number;
 }

@@ -74,4 +74,28 @@ export class CreateUserProfileDto {
   @IsOptional()
   @IsString()
   notas_adicionales?: string;
+
+  // ===== Metas diarias =====
+  // Las columnas existían y las leen `daily_summary`, `nutrition` y
+  // `ai_context`, pero no había forma de escribirlas: faltaban en el DTO, así
+  // que la pantalla de metas no podía guardar nada.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_kcal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_proteinas_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_carbohidratos_g?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  meta_grasas_g?: number;
 }

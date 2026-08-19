@@ -5,17 +5,22 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/theme/design_tokens.dart';
 
-/// Tour de bienvenida de 3 pasos, previo al registro.
+/// Tour de bienvenida de 3 pasos. No recoge ningún dato: solo explica qué hace
+/// la app.
 ///
-/// No confundir con `OnboardingPage`: aquélla es el asistente que RECOGE datos
-/// del perfil una vez ya hay cuenta. Éste solo explica qué hace la app antes de
-/// pedir nada, y termina llevando a la pantalla de login/registro.
+/// Sale en dos sitios: como penúltimo paso del registro (entre los permisos de
+/// Health Connect y la creación de la cuenta), y suelto desde el login. El
+/// `onFinish` es lo que distingue un caso del otro.
 ///
 /// Vive en claro siempre, ignorando el tema del sistema: es una pantalla de
 /// presentación con fondo ilustrado propio, y en oscuro las ilustraciones
 /// (orbes difuminados, rejilla tenue) pierden todo el contraste.
 class TourPage extends StatefulWidget {
-  const TourPage({super.key});
+  const TourPage({super.key, this.onFinish});
+
+  /// Qué hacer al terminar el tour. Si es nulo, vuelve al login (el tour como
+  /// pantalla suelta). El registro por pasos lo usa para continuar su flujo.
+  final VoidCallback? onFinish;
 
   @override
   State<TourPage> createState() => _TourPageState();
@@ -79,8 +84,17 @@ class _TourPageState extends State<TourPage> {
     ),
   ];
 
-  void _goToAuth() =>
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+  /// Al acabar: si quien abrió el tour le pasó un `onFinish` (el registro por
+  /// pasos, que lo enseña entre los permisos y la creación de la cuenta), manda
+  /// ese callback. Sin él, el tour es una pantalla suelta y devuelve al login.
+  void _goToAuth() {
+    final onFinish = widget.onFinish;
+    if (onFinish != null) {
+      onFinish();
+      return;
+    }
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+  }
 
   void _next() {
     if (_step < _steps.length - 1) {
