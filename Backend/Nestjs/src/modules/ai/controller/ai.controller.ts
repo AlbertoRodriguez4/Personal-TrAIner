@@ -5,6 +5,8 @@ import {
   BodyCompositionDto,
   ClinicalDocumentDto,
   ClinicalManualDto,
+  FoodEstimateDto,
+  FoodSuggestionsDto,
   PhysiqueAnalysisDto,
 } from '../dto/analysis.dto';
 import { AiService } from '../service/ai.service';
@@ -45,5 +47,20 @@ export class AiController {
   @Post('physique-analysis')
   analyzePhysique(@Body() dto: PhysiqueAnalysisDto) {
     return this.aiService.analyzePhysique(dto);
+  }
+
+  /// Registro manual de comida (nutricion, sin foto): nombre + cantidad
+  /// (gramos o referencia) -> macros escalados. No pasa por ningún modelo ni
+  /// guarda nada, igual que body-composition — ver AiService.estimateFood.
+  @Post('nutrition/food-estimate')
+  estimateFood(@Body() dto: FoodEstimateDto) {
+    return this.aiService.estimateFood(dto);
+  }
+
+  /// Autocompletado del catálogo local mientras el usuario escribe el nombre
+  /// del alimento en el registro manual.
+  @Post('nutrition/food-suggestions')
+  suggestFoods(@Body() dto: FoodSuggestionsDto) {
+    return this.aiService.suggestFoods(dto);
   }
 }

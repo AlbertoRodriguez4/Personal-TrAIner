@@ -13,10 +13,11 @@ import 'features/devices/presentation/screens/devices_page.dart';
 import 'features/recovery/presentation/screens/recovery_page.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/screens/auth_page.dart';
+import 'features/auth/presentation/screens/register_flow_page.dart';
 import 'features/clinic/presentation/screens/clinic_import_page.dart';
 import 'features/home/presentation/screens/home_page.dart';
-import 'features/onboarding/presentation/screens/onboarding_page.dart';
 import 'features/physique/presentation/screens/physique_page.dart';
+import 'features/profile/presentation/screens/profile_setup_page.dart';
 import 'features/onboarding/presentation/screens/tour_page.dart';
 import 'features/permissions/presentation/permissions_gate_page.dart';
 import 'services/api_service.dart';
@@ -74,8 +75,16 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
                 : AuthPage(onLoginSuccess: _handleLogin),
             routes: {
               '/login': (context) => AuthPage(onLoginSuccess: _handleLogin),
+              '/register': (context) =>
+                  RegisterFlowPage(onRegistered: _handleLogin),
               '/home': (context) => HomePage(onSessionClosed: _handleLogout),
-              '/onboarding': (context) => const OnboardingPage(),
+              // El configurador es también donde aterriza quien entra sin
+              // perfil (cuentas antiguas, Google Sign-In): sustituye al
+              // onboarding, que preguntaba lo mismo en otra pantalla.
+              '/profile': (context) => ProfileSetupPage(
+                    onBack: () => Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/home', (r) => false),
+                  ),
               '/tour': (context) => const TourPage(),
               '/progress': (context) => ProgressRoute(
                     onBack: () => Navigator.pop(context),

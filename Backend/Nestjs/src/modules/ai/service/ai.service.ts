@@ -5,6 +5,8 @@ import {
   BodyCompositionDto,
   ClinicalDocumentDto,
   ClinicalManualDto,
+  FoodEstimateDto,
+  FoodSuggestionsDto,
   PhysiqueAnalysisDto,
 } from '../dto/analysis.dto';
 
@@ -117,5 +119,27 @@ export class AiService {
       })),
       notas: payload.notas ?? null,
     });
+  }
+
+  /// Timeout corto a propósito, igual que registerBodyComposition: es una
+  /// búsqueda en catálogo + una regla de tres, no una llamada a un modelo.
+  async estimateFood(payload: FoodEstimateDto) {
+    return this.post(
+      '/api/ia/nutrition/food-estimate',
+      {
+        user_id: payload.userId,
+        nombre_alimento: payload.nombreAlimento,
+        cantidad_g: payload.cantidadG ?? null,
+        referencia_unidad: payload.referenciaUnidad ?? null,
+        referencia_cantidad: payload.referenciaCantidad ?? null,
+      },
+      15_000,
+    );
+  }
+
+  /// Timeout corto: solo filtra el catálogo local en memoria, nunca sale a
+  /// USDA/Open Food Facts — si tarda más de eso, algo va mal.
+  async suggestFoods(payload: FoodSuggestionsDto) {
+    return this.post('/api/ia/nutrition/food-suggestions', { query: payload.query }, 5_000);
   }
 }

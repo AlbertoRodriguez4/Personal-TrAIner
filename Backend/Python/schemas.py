@@ -322,3 +322,25 @@ class PhysiqueAnalysisRequest(BaseModel):
     photos: conlist(PhysiquePhotoInput, min_length=1) = Field(..., description="Entre 1 y 5 fotos del físico")
     notas: Optional[str] = Field(None, description="Contexto libre que escriba el usuario")
 
+
+class FoodEstimateRequest(BaseModel):
+    """Registro manual de comida (nutricion, sin foto): un nombre + una cantidad.
+    La cantidad es SIEMPRE una de las dos formas, nunca ambas — el cliente elige
+    entre pestaña 'Gramos' o 'Referencias' y solo manda el campo de esa pestaña."""
+    user_id: str = Field(..., description="UUID del usuario")
+    nombre_alimento: str = Field(..., min_length=1, description="Ej. 'Pechuga de pollo'")
+    cantidad_g: Optional[float] = Field(None, gt=0, description="Modo Gramos")
+    referencia_unidad: Optional[str] = Field(
+        None,
+        description="Modo Referencias: 'palma' | 'puno' | 'punado' | 'pulgar' | 'vaso' | "
+        "'cuarto_plato' | 'media_plato' | 'plato_completo'",
+    )
+    referencia_cantidad: Optional[float] = Field(1.0, gt=0, description="Ej. 2 para '2 puños'")
+
+
+class FoodSuggestionsRequest(BaseModel):
+    """Autocompletado del catálogo local mientras el usuario escribe — ver
+    food_lookup.sugerir. No toca USDA/Open Food Facts, solo el catálogo
+    propio, así que responde lo bastante rápido para llamarse en cada tecla."""
+    query: str = Field(..., min_length=1)
+

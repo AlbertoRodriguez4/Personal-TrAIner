@@ -85,6 +85,7 @@ async def chat(request: ChatRequest):
 
 import body_composition
 import clinical_analysis
+import food_lookup
 import physique_analysis
 from gemini_client import RespuestaJsonInvalidaError
 from nest_client import NestApiError
@@ -92,6 +93,8 @@ from schemas import (
     BodyCompositionRequest,
     ClinicalManualRequest,
     ClinicalReportRequest,
+    FoodEstimateRequest,
+    FoodSuggestionsRequest,
     PhysiqueAnalysisRequest,
 )
 
@@ -189,3 +192,34 @@ async def analyze_physique(request: PhysiqueAnalysisRequest):
         )
     except Exception as e:
         raise _traducir_error_analisis(e)
+
+
+@app.post("/api/ia/nutrition/food-estimate")
+async def estimate_food(request: FoodEstimateRequest):
+    """Registro manual de comida (nutricion, sin foto): busca el alimento por
+    nombre y escala sus macros a la cantidad pedida. No guarda nada — igual que
+    estimar_comida en el chat, es la app la que llama a /nutrition-logs cuando
+    el usuario confirma."""
+    try:
+        return food_lookup.estimar(
+            nombre_alimento=request.nombre_alimento,
+            cantidad_g=request.cantidad_g,
+            referencia_unidad=request.referencia_unidad,
+            referencia_cantidad=request.referencia_cantidad or 1.0,
+        )
+    except food_lookup.AlimentoNoEncontradoError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No encontramos '{e}' en ninguna fuente nutricional. Probá con otro nombre o usa gramos con un alimento parecido.",
+        )
+    except food_lookup.ReferenciaNoDisponibleError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ia/nutrition/food-suggestions")
+async def suggest_foods(request: FoodSuggestionsRequest):
+    return {"sugerencias": food_lookup.sugerir(request.query)}

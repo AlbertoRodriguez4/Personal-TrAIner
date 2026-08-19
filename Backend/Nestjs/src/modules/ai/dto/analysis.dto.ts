@@ -63,3 +63,20 @@ export class PhysiqueAnalysisDto {
   /// Contexto libre que escriba el usuario ("vengo de 8 semanas de déficit").
   notas?: string;
 }
+
+/// Registro manual de comida (nutricion, sin foto): nombre + cantidad, en
+/// gramos o en una referencia corporal/de plato. Solo uno de los dos campos
+/// de cantidad viaja según qué pestaña esté activa en la app.
+export class FoodEstimateDto {
+  userId: string;
+  nombreAlimento: string;
+  cantidadG?: number;
+  /// 'palma' | 'puno' | 'punado' | 'pulgar' | 'vaso' | 'botella' | 'cuarto_plato' | 'media_plato' | 'plato_completo'
+  referenciaUnidad?: string;
+  referenciaCantidad?: number;
+}
+
+/// Autocompletado del catálogo local de alimentos mientras el usuario escribe.
+export class FoodSuggestionsDto {
+  query: string;
+}
