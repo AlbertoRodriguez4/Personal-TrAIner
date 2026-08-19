@@ -141,12 +141,70 @@ Two things about that block are load-bearing:
   complete one the user never fills in. With minimums but no composition, the block still
   forbids assuming body-fat % or lean mass.
 
+**Nutrition targets aren't fixed once set.** `ajustar_metas_nutricionales` (nutrition mode's tool set,
+`chat_tools.py`) lets Pulso rewrite `meta_kcal`/`meta_proteinas_g`/`meta_carbohidratos_g`/`meta_grasas_g`
+on its own initiative whenever newer data (a fresh composition measurement, a stated goal change)
+makes the stored targets stale — it's not gated behind the user asking first, unlike routine changes
+in `revisor_rutina`. It POSTs to `/user-profiles` (upsert), not PUT, so it also works for a user with
+no profile row yet. The system prompt requires Pulso to always say what changed and why in the same
+turn — silently rewriting a number the user's diary is measured against would be confusing.
+
 **Never use `simple-array` for AI-written sentences.** TypeORM serializes it to one comma-joined
 `text` column, so any element containing a comma comes back split into several. Confirmed in
 production data. Use `jsonb` (see migration `1787000000001-ArraysTextoLibreAJsonb`). It's still
 fine for enum-ish word lists (`angulos_fotos`, `grupos_musculares_*`).
 
-**No auth middleware yet.** There's no JWT guard / session layer — `userId` is passed explicitly as a
+**Registration and the profile screen.** Sign-up is `register_flow_page.dart`, five steps:
+account → weight/height/birthdate → recommended extras → Health Connect → tour → create. **The
+account is created at the last step, not the first** — abandoning halfway leaves nothing behind.
+The trade-off is that a duplicate email only surfaces at the end. `auth_card.dart` is login-only;
+it pushes the flow.
+
+`profile_setup_page.dart` (reached from the Home avatar) is the one place to edit everything that
+isn't a measurement, and it *reuses the same fields* via
+`features/profile/presentation/widgets/profile_fields.dart` — keep the option lists there, in
+`ProfileOptions`, or sign-up and editing drift apart. Body composition shows read-only with a link
+to Clinic; the progress ring is driven by `completitud.recomendados` from `/ai-context/:userId`,
+matched **by the exact backend strings** (`_recomendados` in that file). Change a string in
+`ai_context.service.ts` and the checkmark silently stops lighting up.
+
+`PUT /users/:id` takes `UpdateUserDto`, which deliberately **omits the password**: `update()`
+writes the DTO straight to the table, so a password arriving here would be stored unhashed next
+to the bcrypt hashes from registration.
+
+**Clinic adds data, Salud (Home tab) shows it.** `clinic_import_page.dart` is only entry points
+(register composition, upload a document, manual blood values) — it has no history view. The combined
+history (composition measurements + blood reports, with delete) is
+`features/health/presentation/widgets/health_records_history.dart`, embedded in Home's Salud tab
+alongside real composition/posture cards sourced from `/dexa-scans` and `/body-analysis`. Don't add a
+second history view inside Clinic; extend the shared widget instead.
+
+**Auth: JWT global, con comprobación de pertenencia.** `JwtAuthGuard` está
+registrada como `APP_GUARD`, así que **una ruta nueva nace protegida** — sin token
+devuelve 401. Solo `@Public()` la exime (registro, login, google-login, y nada más).
+La guarda hace además lo que ningún servicio hacía de forma consistente: compara el
+`userId` que venga en params/query/body —y el `:id` de `/users/:id`, que se llama
+distinto y es el que más se olvida— contra el `sub` del token, y devuelve 403 si no
+coinciden. Un token válido no basta para leer los datos de otro.
+
+El servicio Python no tiene el token del usuario (NestJS solo le pasa el `user_id`),
+así que se identifica con `INTERNAL_API_KEY` y se salta la comprobación de
+pertenencia. **Eso es seguro solo mientras su puerto no esté publicado**: en
+`docker-compose.yml` usa `expose`, no `ports`, y lo mismo Postgres.
+
+`JWT_SECRET` no tiene valor por defecto a propósito: si falta, el arranque falla en
+vez de quedarse firmando tokens con un secreto conocido.
+
+**Despliegue:** ver [DESPLIEGUE.md](DESPLIEGUE.md). Docker Compose con Caddy
+delante (HTTPS obligatorio: Android bloquea el HTTP en claro). La URL del backend
+en Flutter se fija al compilar con `--dart-define=API_BASE_URL=...`; sin él queda la
+IP de la LAN de desarrollo. `Image.network` no pasa por `ApiService._request`, así
+que necesita `ApiService.imageHeaders` a mano o las fotos dan 401. Las migraciones
+en producción van con `migration:run:prod` (contra `dist/`): `ts-node` es
+devDependency y no está en la imagen final.
+
+**Ownership pattern (pre-JWT, aún vigente en los servicios).** Además de la guarda global, los
+servicios siguen recibiendo el `userId` explícito como
 query/body param on every request (e.g. `GET /routine/user/:userId`, `PATCH /routine/:id?userId=...`) and
 services verify ownership by comparing it against the row's `userId` before mutating. When adding a new
 user-scoped endpoint, follow this exact pattern (explicit `userId` param + ownership check in the
@@ -165,6 +223,51 @@ sharp edges:
   specifically, not any other activity.
 - If workout records come back empty, check in this order: `WORKOUT_ROUTE` missing from `_types`,
   `hasPermissions` false-positive short-circuiting `requestAuthorization`, missing rationale intent-filter.
+- Deduping sleep records must collapse **per overlapping cluster**, never the whole list to one
+  record. Mi Fitness resyncs the whole night on every watch sync, leaving several overlapping copies
+  per stage — but the stages themselves (`SLEEP_DEEP`/`SLEEP_REM`/`SLEEP_LIGHT`) are legitimately
+  several *non-overlapping* segments spread across the night. `_collapseOverlapping()` sorts by
+  `dateFrom` and merges only records whose windows actually intersect, keeping the latest `dateTo` per
+  cluster. An earlier version (`_latestRecordOnly`) kept a single record for the *entire* list — it
+  fixed the resync duplication but silently broke sleep detection, since it discarded almost every
+  real stage segment and left detected sleep at a few minutes.
+
+**Training sessions carry real metrics, not just the plan.** `TrainingSession` (`Sesiones_Entrenamiento`)
+has `duracion_minutos`, `calorias_kcal`, `frecuencia_cardiaca_media/max`, `distancia_km`, and `origen`
+(`manual` narrated in chat, `app` tracked live via the BLE band in `workout_session_page.dart`,
+`health_connect` synced from a device-recorded workout). `origen_id` (the workout's `dateFrom` ISO
+string, for `health_connect`) is what makes `HealthService.syncWorkoutsToBackend()` idempotent — it
+runs on every Inicio load and skips whatever's already synced. `GET /training-sessions/:id/analysis`
+compares a session's metrics against the mean of *all* the user's completed sessions regardless of
+type or origin — trying to segment "cardio vs. cardio" would leave that mean computed over 1-2 rows
+almost always.
+
+**Groq's 8000 TPM is a hard ceiling on the whole conversation.** It counts input +
+`max_completion_tokens` *reserved* in the same request, so an oversized request is rejected with
+413 before generating anything. `_ajustar_a_presupuesto()` (`chat_engine.py`) is what keeps that
+from happening: it trims the oldest droppable messages until the request fits, and only then picks
+the completion budget. **Never reintroduce a fixed floor on `max_completion_tokens`** — the previous
+version did `max(1200, ...)`, which mathematically guarantees a 413 once input passes ~6800 tokens.
+That's what broke routine creation/review, where the tool-call argument carries the whole plan.
+Three things feed that budget and each has its own cap:
+- The app sends the **entire** chat history every turn. `_history_to_groq_messages` keeps only the
+  last `MAX_TURNOS_HISTORIAL` turns, truncated — routine replies are long by design (the prompt
+  demands a per-exercise justification), so an uncapped history alone blows the budget.
+- Tool results are truncated to `MAX_CHARS_RESULTADO_TOOL` on the way *back to the model only* —
+  `actions_taken` still carries the full result to the app, which needs it to render.
+- The tools themselves return slimmed payloads: `buscar_ejercicios_catalogo` drops UUIDs and
+  descriptions, `obtener_rutina_activa` drops per-day/per-exercise UUIDs and timestamps (keeping
+  `routine_id`, which `aplicar_cambios_rutina` needs). Measured: 878→417 and 1581→829 tokens.
+Anything added to `BASE_GUIDELINES` or a system prompt is paid on *every* request in every mode —
+check it isn't already said by `ai_profile.bloque_prompt`, which is appended right after.
+
+**Camera needs a `<queries>` entry, not a permission.** `AndroidManifest.xml` must declare the
+`android.media.action.IMAGE_CAPTURE` intent under `<queries>`. Android 11+ package-visibility
+filtering otherwise hides every camera app, `startActivityForResult` throws
+`ActivityNotFoundException`, and image_picker reports `no_available_camera` — gallery keeps working,
+which makes it look like a permissions problem when it isn't. `image_picker_android` does **not**
+declare it in its own manifest. Do not add `android.permission.CAMERA`: declaring it would force a
+runtime permission request the plugin doesn't otherwise need.
 
 **AI service:** Two LLM providers, split strictly by mode — never mixed within a turn. Image modes
 (`nutricion`, `analisis_fisico`) always go to Gemini (`google-genai`, default model
