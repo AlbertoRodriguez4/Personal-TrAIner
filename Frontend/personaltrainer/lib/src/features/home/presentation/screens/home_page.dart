@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -13,20 +14,25 @@ import '../../../../core/providers/routine_provider.dart';
 import '../../../../core/providers/daily_summary_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/ai_animations.dart';
+import '../../../../core/ui/analysis_report.dart';
 import '../../../../core/ui/ai_gradient_text.dart';
 import '../../../../core/ui/glass_card.dart';
 import '../../../../services/api_service.dart';
 import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
 import '../../../nutrition/presentation/widgets/hydration_card.dart';
+import '../../../nutrition/presentation/widgets/manual_food_entry_card.dart';
 import '../../../nutrition/presentation/widgets/supplements_card.dart';
+import '../../../nutrition/presentation/widgets/todays_meals_card.dart';
 import '../../../routine/models/exercise.dart';
 import '../../../routine/presentation/screens/quick_add_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
 import '../../../routine/presentation/screens/routine_view_page.dart';
 import '../../../routine/presentation/screens/workout_session_page.dart';
+import '../../../profile/presentation/screens/profile_setup_page.dart';
 import '../../../../core/route_loaders.dart';
 import 'backend_features_page.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
+import '../../../health/presentation/widgets/health_records_history.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.onSessionClosed});
@@ -207,21 +213,21 @@ class _Header extends StatelessWidget {
                 ),
                 color: fg,
               ),
+              // La foto de perfil abre el configurador directamente, sin menú
+              // intermedio: era un desplegable con una sola opción. Cerrar
+              // sesión se ha mudado dentro del configurador, que es la pantalla
+              // de "tu cuenta".
               if (onLogout != null)
-                PopupMenuButton<void>(
+                IconButton(
+                  tooltip: 'Tu perfil',
                   icon: Icon(LucideIcons.userCircle2, color: fg),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      onTap: () => onLogout!(context),
-                      child: const Row(
-                        children: [
-                          Icon(LucideIcons.logOut, size: 18),
-                          SizedBox(width: 10),
-                          Text('Cerrar sesión'),
-                        ],
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProfileSetupPage(
+                        onLogout: onLogout,
                       ),
                     ),
-                  ],
+                  ),
                 ),
             ],
           ),
@@ -259,11 +265,25 @@ class _LiveSync extends StatefulWidget {
 class _LiveSyncState extends State<_LiveSync> {
   int? _hr;
   bool _loading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // El punto verde pulsa como si fuera en vivo, así que tiene que serlo:
+    // una sola lectura al montar se queda pegada en "--" toda la sesión si
+    // Health Connect todavía no tenía nada sincronizado en ese momento (p.
+    // ej. justo tras abrir la app), aunque el dato aparezca segundos después
+    // — que es exactamente lo que hace verlo sí en Dispositivos, que lee lo
+    // mismo pero más tarde.
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -452,6 +472,15 @@ class _DashboardScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _PredictiveAlert(),
           const SizedBox(height: 16),
+          _NavTile(
+            tile: (
+              icon: LucideIcons.activity,
+              title: 'Dispositivos',
+              sub: 'Sync Center',
+              onTap: () => Navigator.pushNamed(context, '/devices'),
+            ),
+          ),
+          const SizedBox(height: 16),
           const _RecentWorkoutsSection(),
         ],
       ),
@@ -494,6 +523,12 @@ class _RecentWorkoutsSectionState extends State<_RecentWorkoutsSection> {
       _workouts = valid.take(3).toList();
       _isLoading = false;
     });
+
+    // Fire-and-forget: guarda en el backend los entrenamientos de Health
+    // Connect que todavía no tenía, con FC real. No bloquea esta pantalla —
+    // es idempotente (dedupe por fecha de inicio) y se reintenta solo la
+    // próxima vez que se abra Inicio si esta vez falla por red.
+    unawaited(HealthService.syncWorkoutsToBackend());
   }
 
   @override
@@ -1370,6 +1405,9 @@ class _ModuleShortcut extends StatelessWidget {
 
 /* ───────────────── HealthHubGrid (reemplazo de NewSectionsRow) ───────────────── */
 
+/// 'Dispositivos' vivía aquí y se mudó a Inicio (entre la alerta de sueño/
+/// readiness y los entrenamientos recientes): es donde tiene sentido revisar
+/// la conexión con el reloj antes de entrenar, no en la pestaña de Salud.
 class _HealthHubGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -1379,12 +1417,6 @@ class _HealthHubGrid extends StatelessWidget {
         title: 'Recuperación',
         sub: 'Sueño & VFC IA',
         onTap: () => Navigator.pushNamed(context, '/recovery'),
-      ),
-      (
-        icon: LucideIcons.activity,
-        title: 'Dispositivos',
-        sub: 'Sync Center',
-        onTap: () => Navigator.pushNamed(context, '/devices'),
       ),
       (
         icon: LucideIcons.upload,
@@ -1410,13 +1442,7 @@ class _HealthHubGrid extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _NavTile(tile: tiles[2])),
-            const SizedBox(width: 12),
-            Expanded(child: _NavTile(tile: tiles[3])),
-          ],
-        ),
+        _NavTile(tile: tiles[2]),
       ],
     );
   }
@@ -1706,11 +1732,24 @@ class _TodaySummaryStatsState extends State<_TodaySummaryStats> {
   bool _isLoading = true;
   HealthDataPoint? _todayWorkout;
   String _bpm = '--';
+  int? _kcal;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // El entrenamiento de hoy es el que más probablemente siga sincronizando
+    // (FC granular, calorías) aunque la sesión ya aparezca en Health Connect
+    // — igual que el pulso del header, una sola consulta al montar se queda
+    // pegada en "--" el resto de la sesión si llega demasiado pronto.
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -1743,13 +1782,36 @@ class _TodaySummaryStatsState extends State<_TodaySummaryStats> {
       w.dateTo,
     );
     final hrData = details['heart_rate'] ?? [];
-    if (hrData.isNotEmpty) {
-      final values = hrData
-          .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
-          .toList();
-      final avg = values.reduce((a, b) => a + b) / values.length;
-      if (mounted) setState(() => _bpm = avg.round().toString());
-    }
+    final calData = details['calories'] ?? [];
+    if (!mounted) return;
+    setState(() {
+      if (hrData.isNotEmpty) {
+        final values = hrData
+            .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
+            .toList();
+        final avg = values.reduce((a, b) => a + b) / values.length;
+        _bpm = avg.round().toString();
+      }
+
+      // `totalEnergyBurned` sale de TOTAL_CALORIES_BURNED en Health Connect;
+      // Mi Fitness solo escribe la variante "activa" para estas sesiones —
+      // mismo respaldo que ya usa workout_detail_page.dart, reaprovechando
+      // `calData` (ya viene en la misma llamada, sin consulta extra).
+      int? kcal;
+      if (w.value is WorkoutHealthValue) {
+        kcal = (w.value as WorkoutHealthValue).totalEnergyBurned;
+      }
+      if ((kcal == null || kcal <= 0) && calData.isNotEmpty) {
+        final suma = calData
+            .where((p) => p.value is NumericHealthValue)
+            .fold<double>(
+              0,
+              (s, p) => s + (p.value as NumericHealthValue).numericValue.toDouble(),
+            );
+        if (suma > 0) kcal = suma.round();
+      }
+      _kcal = kcal;
+    });
   }
 
   @override
@@ -1762,10 +1824,7 @@ class _TodaySummaryStatsState extends State<_TodaySummaryStats> {
     final surface1 = DesignTokens.surface1(b);
     final w = _todayWorkout!;
     final min = w.dateTo.difference(w.dateFrom).inMinutes;
-    int kcal = 0;
-    if (w.value is WorkoutHealthValue) {
-      kcal = ((w.value as WorkoutHealthValue).totalEnergyBurned ?? 0).toInt();
-    }
+    final kcal = _kcal ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -2077,7 +2136,8 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
     _fetchData();
   }
 
-  Map<String, String> _workoutBpms = {};
+  final Map<String, String> _workoutBpms = {};
+  final Map<String, int> _workoutKcal = {};
 
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
@@ -2100,23 +2160,47 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
       });
     }
 
-    // Load BPMs async
+    // Load BPMs (y respaldo de calorías) async
     for (var w in validWorkouts.take(4)) {
       final details = await HealthService.fetchWorkoutDetails(
         w.dateFrom,
         w.dateTo,
       );
       final hrData = details['heart_rate'] ?? [];
+      final calData = details['calories'] ?? [];
+
+      String? bpm;
       if (hrData.isNotEmpty) {
         final hrValues = hrData
             .map((e) => (e.value as NumericHealthValue).numericValue.toDouble())
             .toList();
         final avg = hrValues.reduce((a, b) => a + b) / hrValues.length;
-        if (mounted) {
-          setState(() {
-            _workoutBpms[w.dateFrom.toIso8601String()] = avg.round().toString();
-          });
-        }
+        bpm = avg.round().toString();
+      }
+
+      // `totalEnergyBurned` sale de TOTAL_CALORIES_BURNED; Mi Fitness solo
+      // escribe la variante "activa" para estas sesiones — mismo respaldo
+      // que en `_TodaySummaryStats` y workout_detail_page.dart.
+      int? kcalTotal = (w.value is WorkoutHealthValue)
+          ? (w.value as WorkoutHealthValue).totalEnergyBurned
+          : null;
+      if ((kcalTotal == null || kcalTotal <= 0) && calData.isNotEmpty) {
+        final suma = calData
+            .where((p) => p.value is NumericHealthValue)
+            .fold<double>(
+              0,
+              (s, p) => s + (p.value as NumericHealthValue).numericValue.toDouble(),
+            );
+        if (suma > 0) kcalTotal = suma.round();
+      }
+
+      final bpmFinal = bpm;
+      final kcalFinal = kcalTotal;
+      if (mounted && (bpmFinal != null || kcalFinal != null)) {
+        setState(() {
+          if (bpmFinal != null) _workoutBpms[w.dateFrom.toIso8601String()] = bpmFinal;
+          if (kcalFinal != null) _workoutKcal[w.dateFrom.toIso8601String()] = kcalFinal;
+        });
       }
     }
   }
@@ -2302,18 +2386,17 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
               final duration = w.dateTo.difference(w.dateFrom);
               final min = duration.inMinutes;
 
-              int kcal = 0;
               double dist = 0.0;
               String typeName = 'Entrenamiento';
 
               if (w.value is WorkoutHealthValue) {
                 final workout = w.value as WorkoutHealthValue;
-                kcal = (workout.totalEnergyBurned ?? 0).toInt();
                 dist = (workout.totalDistance ?? 0) / 1000;
                 typeName = HealthService.translateWorkoutActivityType(
                   workout.workoutActivityType,
                 );
               }
+              final kcal = _workoutKcal[w.dateFrom.toIso8601String()] ?? 0;
 
               String desc =
                   '${w.dateFrom.day}/${w.dateFrom.month} · ${w.dateFrom.hour}:${w.dateFrom.minute.toString().padLeft(2, '0')} · $min min';
@@ -2384,6 +2467,8 @@ class _WorkoutRow extends StatelessWidget {
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -2391,7 +2476,12 @@ class _WorkoutRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(desc, style: TextStyle(fontSize: 12, color: mutedFg)),
+              Text(
+                desc,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: mutedFg),
+              ),
             ],
           ),
         ),
@@ -2451,8 +2541,30 @@ class _NutritionScreenState extends State<_NutritionScreen> {
   }
 
   Future<void> _takePhoto() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.camera);
+    // Dentro del try y con reescalado, igual que en Clínica y Físico: una foto
+    // de cámara sin comprimir son varios MB, y en base64 crece otro 33 % sin
+    // que el modelo lea mejor el plato. Fuera del try, un fallo de cámara
+    // (`no_available_camera`) se perdía sin que el usuario viera nada.
+    final XFile? file;
+    try {
+      file = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('no_available_camera')
+                ? 'No se ha podido abrir la cámara en este dispositivo.'
+                : 'No se ha podido tomar la foto: $e',
+          ),
+        ),
+      );
+      return;
+    }
     if (file == null) return;
 
     if (!mounted) return;
@@ -2550,12 +2662,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         grasasG: (scan['grasas_g'] as num?)?.toDouble() ?? 0.0,
         notas: scan['notas']?.toString(),
         tipoComida: scan['tipo_comida']?.toString(),
+        nombreAlimento: scan['nombre_alimento']?.toString(),
       );
       if (!mounted) return;
       setState(() {
-        // El endpoint no devuelve nombre_alimento (no es columna en BD):
-        // conservamos el de la estimación para que la tarjeta no lo pierda.
-        _lastScan = {...saved, 'food_name': scan['nombre_alimento']};
+        _lastScan = saved;
         _pendingScan = null;
       });
       await context.read<DailySummaryProvider>().load();
@@ -2590,6 +2701,10 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _MacrosOverview(),
+          const SizedBox(height: 16),
+          const ManualFoodEntryCard(),
+          const SizedBox(height: 16),
+          const TodaysMealsCard(),
           const SizedBox(height: 16),
           const HydrationCard(),
           const SizedBox(height: 16),
@@ -3115,9 +3230,7 @@ class _ScanResultCard extends StatelessWidget {
     final muted = DesignTokens.muted(b);
 
     final foodName =
-        (scanResult?['food_name'] ?? scanResult?['nombre_alimento'])
-            ?.toString() ??
-        'Análisis completado';
+        scanResult?['nombre_alimento']?.toString() ?? 'Análisis completado';
     final notas = scanResult?['notas']?.toString() ?? '';
     final p = (scanResult?['proteinas_g'] as num?)?.toDouble() ?? 0.0;
     final c = (scanResult?['carbohidratos_g'] as num?)?.toDouble() ?? 0.0;
@@ -3330,321 +3443,386 @@ class _HealthScreen extends StatelessWidget {
         children: [
           _HealthHubGrid(),
           const SizedBox(height: 24),
-          _CompositionChart(),
+          const _ComposicionSalud(),
           const SizedBox(height: 16),
-          _PostureMesh(),
+          const _PosturaSalud(),
+          const SizedBox(height: 16),
+          _SeccionCard(child: HealthRecordsHistory()),
         ],
       ),
     );
   }
 }
 
-class _CompositionChart extends StatelessWidget {
+/// Envoltorio visual común (tarjeta blanca + sombra) para las secciones de
+/// Salud que no lo traen ya incluido en su propio widget.
+class _SeccionCard extends StatelessWidget {
+  const _SeccionCard({required this.child});
+  final Widget child;
+
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    final lean = [40, 42, 43, 45, 46, 48, 49];
-    final fat = [28, 27, 26, 25, 24, 22, 21];
-    const min = 15, max = 55;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: card,
+        color: DesignTokens.card(b),
         borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
         boxShadow: DesignTokens.shadowCard(b),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'COMPOSICIÓN · 6 MESES',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.4,
-              color: mutedFg,
-            ),
-          ),
-          const SizedBox(height: 4),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: fg,
-              ),
-              children: [
-                const TextSpan(text: 'Grasa visceral '),
-                TextSpan(
-                  text: 'vs.',
-                  style: TextStyle(color: mutedFg),
-                ),
-                const TextSpan(text: ' masa magra'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 110,
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: _CompPainter(lean: lean, fat: fat, min: min, max: max),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  gradient: DesignTokens.aiGradient,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text('Masa magra', style: TextStyle(fontSize: 12, color: fg)),
-              const SizedBox(width: 4),
-              const Icon(
-                LucideIcons.trendingUp,
-                size: 14,
-                color: Color(0xFF059669),
-              ),
-              const Spacer(),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFB923C),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Grasa visceral',
-                style: TextStyle(fontSize: 12, color: mutedFg),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                LucideIcons.trendingDown,
-                size: 14,
-                color: Color(0xFF059669),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: child,
     );
   }
 }
 
-class _CompPainter extends CustomPainter {
-  const _CompPainter({
-    required this.lean,
-    required this.fat,
-    required this.min,
-    required this.max,
-  });
-  final List<int> lean;
-  final List<int> fat;
-  final int min;
-  final int max;
+/// Composición corporal real, de las mediciones que el usuario registró en
+/// Clínica (báscula, DEXA, bioimpedancia…). Antes esta tarjeta enseñaba una
+/// curva de 6 meses inventada (`lean`/`fat` con valores fijos en el código):
+/// aquí va la evolución real de porcentaje de grasa, con los datos que de
+/// verdad hay.
+class _ComposicionSalud extends StatefulWidget {
+  const _ComposicionSalud();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    Path path(List<int> arr) {
-      final p = Path();
-      for (int i = 0; i < arr.length; i++) {
-        final x = (i / (arr.length - 1)) * w;
-        final y = h - ((arr[i] - min) / (max - min)) * h;
-        if (i == 0)
-          p.moveTo(x, y);
-        else
-          p.lineTo(x, y);
-      }
-      return p;
-    }
-
-    // lean fill
-    final leanPath = path(lean);
-    final fillPath = Path.from(leanPath)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-    final rect = Offset.zero & size;
-    final grad = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        DesignTokens.aiVia.withOpacity(0.35),
-        DesignTokens.aiVia.withOpacity(0),
-      ],
-    ).createShader(rect);
-    canvas.drawPath(
-      fillPath,
-      Paint()
-        ..shader = grad
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawPath(
-      leanPath,
-      Paint()
-        ..color = DesignTokens.aiVia
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round,
-    );
-    // fat dashed
-    final fatPath = path(fat);
-    _drawDashed(canvas, fatPath, const Color(0xFFFB923C), 2.5);
-  }
-
-  void _drawDashed(Canvas canvas, Path p, Color color, double width) {
-    final metrics = p.computeMetrics();
-    final dashLen = 4.0, gapLen = 4.0;
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = width
-      ..strokeCap = StrokeCap.round;
-    for (final m in metrics) {
-      double dist = 0;
-      while (dist < m.length) {
-        final next = (dist + dashLen).clamp(0.0, m.length);
-        canvas.drawPath(m.extractPath(dist, next), paint);
-        dist = next + gapLen;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CompPainter old) =>
-      old.lean != lean || old.fat != fat;
+  State<_ComposicionSalud> createState() => _ComposicionSaludState();
 }
 
-class _PostureMesh extends StatefulWidget {
-  @override
-  State<_PostureMesh> createState() => _PostureMeshState();
-}
-
-class _PostureMeshState extends State<_PostureMesh> {
-  late Future<List<Map<String, dynamic>>> _capturesFuture;
+class _ComposicionSaludState extends State<_ComposicionSalud> {
+  List<Map<String, dynamic>>? _mediciones;
 
   @override
   void initState() {
     super.initState();
-    _capturesFuture = _load();
+    _cargar();
   }
 
-  Future<List<Map<String, dynamic>>> _load() async {
+  Future<void> _cargar() async {
     final userId = ApiService.getCurrentUserId();
-    if (userId == null) return const [];
+    if (userId == null) return;
     try {
-      final list = await ApiService.getPostureEvaluationsByUser(userId);
-      // Más reciente primero: el historial se lee de arriba abajo.
-      list.sort(
-        (a, b) => (b['fecha_evaluacion']?.toString() ?? '').compareTo(
-          a['fecha_evaluacion']?.toString() ?? '',
-        ),
-      );
-      return list;
+      final lista = await ApiService.getDexaScansByUser(userId);
+      if (!mounted) return;
+      setState(() => _mediciones = lista);
     } catch (_) {
-      return const [];
+      if (!mounted) return;
+      setState(() => _mediciones = []);
     }
   }
 
-  Future<void> _newCapture() async {
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final mediciones = _mediciones;
+
+    if (mediciones == null) {
+      return const _SeccionCard(
+        child: SizedBox(
+          height: 80,
+          child: Center(
+            child: SizedBox(
+                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.2)),
+          ),
+        ),
+      );
+    }
+
+    if (mediciones.isEmpty) {
+      return _SeccionCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('COMPOSICIÓN CORPORAL',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: DesignTokens.mutedForeground(b))),
+            const SizedBox(height: 8),
+            Text(
+              'Todavía no hay ninguna medición registrada. Es el dato que más '
+              'usa la IA para calcular calorías y macros.',
+              style: TextStyle(fontSize: 13, color: DesignTokens.mutedForeground(b)),
+            ),
+            const SizedBox(height: 14),
+            _BotonIrAClinica(label: 'Registrar composición'),
+          ],
+        ),
+      );
+    }
+
+    // Más reciente primero desde el backend: se invierte para dibujar la
+    // curva en orden cronológico.
+    final cronologico = mediciones.reversed.toList();
+    final ultima = mediciones.first;
+    final grasaSerie = [
+      for (final m in cronologico)
+        if (m['porcentaje_grasa'] != null) (num.parse('${m['porcentaje_grasa']}')).toDouble(),
+    ];
+
+    return _SeccionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('COMPOSICIÓN CORPORAL',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                        color: DesignTokens.mutedForeground(b))),
+              ),
+              Text(readableDate(ultima['fecha_escaneo']),
+                  style: TextStyle(fontSize: 11, color: DesignTokens.mutedForeground(b))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final celda in <(String, String)>[
+                ('Peso', _cifra(ultima['peso_kg'], 'kg')),
+                ('IMC', _cifra(ultima['imc'], '')),
+                ('Grasa', _cifra(ultima['porcentaje_grasa'], '%')),
+                ('M. magra', _cifra(ultima['masa_magra_kg'], 'kg')),
+              ])
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(celda.$2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: DesignTokens.foreground(b))),
+                      const SizedBox(height: 2),
+                      Text(celda.$1,
+                          style: TextStyle(
+                              fontSize: 10, color: DesignTokens.mutedForeground(b))),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          if (grasaSerie.length >= 2) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 70,
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _TendenciaPainter(valores: grasaSerie, color: DesignTokens.aiVia),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text('% de grasa · últimas ${grasaSerie.length} mediciones',
+                style: TextStyle(fontSize: 10.5, color: DesignTokens.mutedForeground(b))),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _cifra(dynamic valor, String unidad) {
+  if (valor == null) return '—';
+  final n = valor is num ? valor : num.tryParse('$valor');
+  if (n == null) return '—';
+  final texto = n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(1);
+  return unidad.isEmpty ? texto : '$texto$unidad';
+}
+
+class _BotonIrAClinica extends StatelessWidget {
+  const _BotonIrAClinica({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => Navigator.pushNamed(context, '/clinic/import'),
+        icon: const Icon(LucideIcons.plus, size: 16),
+        label: Text(label),
+      ),
+    );
+  }
+}
+
+/// Línea simple con relleno degradado, a partir de datos reales — sustituye a
+/// `_CompPainter`, que dibujaba dos curvas con valores fijos en el código
+/// (`[40, 42, 43, 45, 46, 48, 49]`) sin relación con el usuario que las veía.
+class _TendenciaPainter extends CustomPainter {
+  const _TendenciaPainter({required this.valores, required this.color});
+  final List<double> valores;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final min = valores.reduce((a, b) => a < b ? a : b);
+    final max = valores.reduce((a, b) => a > b ? a : b);
+    // Rango con un margen del 15% para que la línea no toque los bordes; si
+    // todos los valores son iguales, un rango de 1 evita dividir por 0.
+    final rango = (max - min) <= 0 ? 1.0 : (max - min) * 1.15;
+    final base = (max + min) / 2 - rango / 2;
+
+    final w = size.width, h = size.height;
+    Path trazo() {
+      final p = Path();
+      for (var i = 0; i < valores.length; i++) {
+        final x = valores.length == 1 ? 0.0 : (i / (valores.length - 1)) * w;
+        final y = h - ((valores[i] - base) / rango) * h;
+        if (i == 0) {
+          p.moveTo(x, y);
+        } else {
+          p.lineTo(x, y);
+        }
+      }
+      return p;
+    }
+
+    final linea = trazo();
+    final relleno = Path.from(linea)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    final grad = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [color.withOpacity(0.30), color.withOpacity(0)],
+    ).createShader(Offset.zero & size);
+    canvas.drawPath(relleno, Paint()..shader = grad..style = PaintingStyle.fill);
+    canvas.drawPath(
+      linea,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TendenciaPainter old) =>
+      old.valores != valores || old.color != color;
+}
+
+/// Postura real: lo que la IA observó en las fotos que subió el usuario al
+/// apartado Físico, no una malla 3D decorativa con un "-38%" fijo en el
+/// código. `postura_observaciones` es texto libre (no hay un score numérico
+/// de asimetría en el pipeline real), así que se enseña como texto, con el
+/// histórico real de capturas debajo.
+class _PosturaSalud extends StatefulWidget {
+  const _PosturaSalud();
+
+  @override
+  State<_PosturaSalud> createState() => _PosturaSaludState();
+}
+
+class _PosturaSaludState extends State<_PosturaSalud> {
+  List<Map<String, dynamic>>? _registros;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+    try {
+      final lista = await ApiService.getBodyAnalysisRecords(userId);
+      lista.sort((a, b) => (b['fecha_analisis']?.toString() ?? '')
+          .compareTo(a['fecha_analisis']?.toString() ?? ''));
+      if (!mounted) return;
+      setState(() => _registros = lista);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _registros = []);
+    }
+  }
+
+  Future<void> _nuevaCaptura() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const AiCoachPage(initialMode: ChatMode.analisisFisico),
       ),
     );
     if (!mounted) return;
-    setState(() => _capturesFuture = _load());
+    _cargar();
   }
 
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
-    final mutedFg = DesignTokens.mutedForeground(b);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
-        boxShadow: DesignTokens.shadowCard(b),
-      ),
+    final registros = _registros;
+
+    if (registros == null) {
+      return const _SeccionCard(
+        child: SizedBox(
+          height: 80,
+          child: Center(
+            child: SizedBox(
+                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.2)),
+          ),
+        ),
+      );
+    }
+
+    final ultimo = registros.isNotEmpty ? registros.first : null;
+    final observaciones = reportText(ultimo?['postura_observaciones']);
+    final prioridad = reportText(ultimo?['prioridad_entrenamiento']);
+
+    return _SeccionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'POSTURA 3D · HISTÓRICO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.4,
-                        color: mutedFg,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Asimetría corregida',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: fg,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  '−38%',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF047857),
+          Text('POSTURA · ANÁLISIS POR FOTOS',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.4,
+                  color: DesignTokens.mutedForeground(b))),
+          const SizedBox(height: 8),
+          if (ultimo == null)
+            Text(
+              'Todavía no hay ningún análisis del físico. Sube fotos para que '
+              'la IA describa tu postura y la vaya siguiendo en el tiempo.',
+              style: TextStyle(fontSize: 13, color: DesignTokens.mutedForeground(b)),
+            )
+          else ...[
+            Text(
+              observaciones.isEmpty
+                  ? 'Sin observaciones de postura en el último análisis '
+                      '(${readableDate(ultimo['fecha_analisis'])}).'
+                  : observaciones,
+              style: TextStyle(
+                  fontSize: 13.5, height: 1.4, color: DesignTokens.foreground(b)),
+            ),
+            if (prioridad.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(LucideIcons.target, size: 15, color: DesignTokens.aiVia),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(prioridad,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: DesignTokens.foreground(b))),
                   ),
-                ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _MeshFigure(label: 'Ene', tilt: -8, muted: true)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MeshFigure(label: 'Hoy', tilt: -1, muted: false),
-              ),
-            ],
-          ),
+          ],
           const SizedBox(height: 16),
           Material(
             type: MaterialType.transparency,
             child: InkWell(
-              onTap: _newCapture,
+              onTap: _nuevaCaptura,
               borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
               child: Ink(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3657,98 +3835,59 @@ class _PostureMeshState extends State<_PostureMesh> {
                   children: [
                     Icon(LucideIcons.camera, size: 17, color: Colors.white),
                     SizedBox(width: 8),
-                    Text(
-                      'Tomar nueva imagen',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14.5,
-                      ),
-                    ),
+                    Text('Tomar nueva imagen',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.5)),
                   ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'CALENDARIO DE CAPTURAS',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.4,
-              color: mutedFg,
-            ),
-          ),
-          const SizedBox(height: 10),
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: _capturesFuture,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final captures = snap.data ?? const [];
-              if (captures.isEmpty) {
-                // Sin capturas reales no se inventa un historial: se explica
-                // qué hace falta para que aparezca.
-                return Text(
-                  'Todavía no hay capturas guardadas. Toma una imagen para '
-                  'empezar tu histórico de postura.',
-                  style: TextStyle(fontSize: 12.5, color: mutedFg, height: 1.4),
-                );
-              }
-              return Column(
-                children: [
-                  for (var i = 0; i < captures.length && i < 6; i++) ...[
-                    if (i > 0) const SizedBox(height: 8),
-                    _CaptureRow(capture: captures[i], isCurrent: i == 0),
-                  ],
-                ],
-              );
-            },
-          ),
+          if (registros.length > 1) ...[
+            const SizedBox(height: 20),
+            Text('HISTÓRICO DE CAPTURAS',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: DesignTokens.mutedForeground(b))),
+            const SizedBox(height: 10),
+            for (var i = 0; i < registros.length && i < 6; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              _CapturaRow(registro: registros[i], esActual: i == 0),
+            ],
+          ],
         ],
       ),
     );
   }
 }
 
-/// Fila del historial de capturas de postura.
-class _CaptureRow extends StatelessWidget {
-  const _CaptureRow({required this.capture, required this.isCurrent});
-  final Map<String, dynamic> capture;
-  final bool isCurrent;
+/// Fila del histórico real de análisis del físico.
+class _CapturaRow extends StatelessWidget {
+  const _CapturaRow({required this.registro, required this.esActual});
+  final Map<String, dynamic> registro;
+  final bool esActual;
 
   static const _meses = [
-    'Ene',
-    'Feb',
-    'Mar',
-    'Abr',
-    'May',
-    'Jun',
-    'Jul',
-    'Ago',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dic',
+    'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+    'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
   ];
 
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    final fecha = DateTime.tryParse(
-      capture['fecha_evaluacion']?.toString() ?? '',
-    );
+    final fecha = DateTime.tryParse(registro['fecha_analisis']?.toString() ?? '');
     final mes = fecha != null ? _meses[fecha.month - 1] : '—';
     final dia = fecha != null ? fecha.day.toString().padLeft(2, '0') : '—';
-    final score = capture['puntuacion_postura'];
-    final scoreLabel = score is num
-        ? 'Puntuación ${score.toStringAsFixed(0)} · malla 3D'
-        : 'Malla 3D';
+    final numFotos = registro['num_fotos'];
+    final detalle = reportText(registro['postura_observaciones']).isNotEmpty
+        ? reportText(registro['postura_observaciones'])
+        : (numFotos is num && numFotos > 0
+            ? '${numFotos.toStringAsFixed(0)} foto(s) analizadas'
+            : 'Sin observaciones de postura');
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -3769,23 +3908,17 @@ class _CaptureRow extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  mes,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: DesignTokens.mutedForeground(b),
-                  ),
-                ),
-                Text(
-                  dia,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
-                    color: DesignTokens.foreground(b),
-                  ),
-                ),
+                Text(mes,
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: DesignTokens.mutedForeground(b))),
+                Text(dia,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                        color: DesignTokens.foreground(b))),
               ],
             ),
           ),
@@ -3794,139 +3927,37 @@ class _CaptureRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Captura $mes',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: DesignTokens.foreground(b),
-                  ),
-                ),
-                Text(
-                  scoreLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: DesignTokens.mutedForeground(b),
-                  ),
-                ),
+                Text('Análisis $mes',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: DesignTokens.foreground(b))),
+                Text(detalle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: DesignTokens.mutedForeground(b))),
               ],
             ),
           ),
-          if (isCurrent)
+          if (esActual)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: DesignTokens.success(b).withOpacity(0.14),
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Text(
-                'Actual',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: DesignTokens.success(b),
-                ),
-              ),
+              child: Text('Actual',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: DesignTokens.success(b))),
             )
           else
-            Icon(
-              LucideIcons.chevronRight,
-              size: 16,
-              color: DesignTokens.mutedForeground(b),
-            ),
+            Icon(LucideIcons.chevronRight, size: 16, color: DesignTokens.mutedForeground(b)),
         ],
       ),
     );
   }
-}
-
-class _MeshFigure extends StatelessWidget {
-  const _MeshFigure({
-    required this.label,
-    required this.tilt,
-    required this.muted,
-  });
-  final String label;
-  final double tilt;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    final fg = DesignTokens.foreground(b);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, -0.3),
-                  colors: [DesignTokens.surface1(b), DesignTokens.muted(b)],
-                ),
-              ),
-            ),
-            Center(
-              child: Transform.rotate(
-                angle: tilt * 3.1416 / 180,
-                child: Icon(
-                  LucideIcons.user,
-                  size: 96,
-                  color: muted ? fg.withOpacity(0.3) : fg.withOpacity(0.7),
-                ),
-              ),
-            ),
-            CustomPaint(size: Size.infinite, painter: _GridPainter()),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.85),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B1B20),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withOpacity(0.15)
-      ..strokeWidth = 0.4;
-    final rows = 8;
-    final cols = 7;
-    for (int i = 1; i < rows; i++) {
-      final y = (i / rows) * size.height;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-    for (int i = 1; i < cols; i++) {
-      final x = (i / cols) * size.width;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 /* ============================== BOTTOM NAV ============================== */

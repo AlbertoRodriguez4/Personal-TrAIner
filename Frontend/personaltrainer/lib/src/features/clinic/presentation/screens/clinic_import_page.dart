@@ -34,7 +34,7 @@ class ClinicImportPage extends StatefulWidget {
   State<ClinicImportPage> createState() => _ClinicImportPageState();
 }
 
-enum ClinicImportMode { menu, composicion, pdf, image, manual, historial }
+enum ClinicImportMode { menu, composicion, pdf, image, manual }
 
 /// Archivo ya leído en memoria. Se guardan los bytes, no un `File`: el picker
 /// ya los devuelve y así el mismo código sirve en móvil y en web.
@@ -66,10 +66,6 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
   /// Última medición guardada, para que el menú abra enseñando en qué punto
   /// está el usuario en vez de una lista de botones.
   Map<String, dynamic>? _composicionActual;
-
-  List<Map<String, dynamic>>? _historial;
-  List<Map<String, dynamic>>? _historialComposicion;
-  bool _cargandoHistorial = false;
 
   String? get _userId => ApiService.getCurrentUserId();
 
@@ -226,7 +222,6 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
       if (!mounted) return;
       setState(() {
         _resultado = res;
-        _historial = null; // el historial cambió, se recarga al abrirlo
         // Si el documento era un DEXA/InBody, ya se ha guardado su composición:
         // el resumen del menú tiene que reflejarlo sin recargar la pantalla.
         final medicion =
@@ -263,95 +258,12 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
         fecha: fecha,
       );
       if (!mounted) return;
-      setState(() {
-        _resultado = res;
-        _historial = null;
-      });
+      setState(() => _resultado = res);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = analysisErrorMessage(e));
     } finally {
       if (mounted) setState(() => _analizando = false);
-    }
-  }
-
-  Future<void> _cargarHistorial() async {
-    final userId = _userId;
-    if (userId == null) return;
-    setState(() => _cargandoHistorial = true);
-    try {
-      // Las dos listas a la vez: el historial enseña mediciones e informes
-      // juntos, y cargarlas en serie hacía parpadear media pantalla.
-      final resultados = await Future.wait([
-        ApiService.getClinicalReports(userId),
-        ApiService.getDexaScansByUser(userId),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _historial = resultados[0];
-        _historialComposicion = resultados[1];
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _historial = [];
-        _historialComposicion = [];
-        _error = analysisErrorMessage(e);
-      });
-    } finally {
-      if (mounted) setState(() => _cargandoHistorial = false);
-    }
-  }
-
-  /// Borra de verdad: la fila desaparece de la base de datos y con ella de todo
-  /// lo que Pulso lee. Por eso se confirma antes — es irreversible y el usuario
-  /// puede estar tocando el único registro que tenía.
-  Future<void> _borrar({
-    required String id,
-    required String titulo,
-    required String detalle,
-    required Future<void> Function(String id, String userId) borrarEnApi,
-  }) async {
-    final userId = _userId;
-    if (userId == null) return;
-
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(titulo),
-        content: Text(detalle),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: DesignTokens.destructive(
-                  Theme.of(context).brightness),
-            ),
-            child: const Text('Borrar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmado != true) return;
-
-    try {
-      await borrarEnApi(id, userId);
-      if (!mounted) return;
-      await _cargarHistorial();
-      // La tarjeta del menú puede estar enseñando justo lo que se acaba de
-      // borrar, así que se relee en vez de dejarla mintiendo.
-      await _cargarComposicionActual();
-      if (!mounted) return;
-      setState(() {
-        if (_historialComposicion?.isEmpty ?? false) _composicionActual = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = analysisErrorMessage(e));
     }
   }
 
@@ -379,7 +291,6 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
                           : switch (_mode) {
                               ClinicImportMode.composicion =>
                                 'Composición corporal',
-                              ClinicImportMode.historial => 'Historial clínico',
                               ClinicImportMode.manual => 'Analítica a mano',
                               ClinicImportMode.menu => 'Salud y composición',
                               _ => 'Subir informe',
@@ -452,9 +363,6 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
                     _archivo = null;
                     _error = null;
                   });
-                  if (m == ClinicImportMode.historial && _historial == null) {
-                    _cargarHistorial();
-                  }
                 },
               ),
             ClinicImportMode.composicion => _ComposicionForm(
@@ -481,31 +389,6 @@ class _ClinicImportPageState extends State<ClinicImportPage> {
                 onAnalyze: _analizarArchivo,
               ),
             ClinicImportMode.manual => _ManualForm(onSave: _guardarManual),
-            ClinicImportMode.historial => _HistorialView(
-                informes: _historial,
-                mediciones: _historialComposicion,
-                cargando: _cargandoHistorial,
-                onRefrescar: _cargarHistorial,
-                onAbrir: (informe) => setState(() {
-                  _resultado = {'informe': informe, 'desde_historial': true};
-                }),
-                onBorrarInforme: (informe) => _borrar(
-                  id: reportText(informe['id']),
-                  titulo: '¿Borrar esta analítica?',
-                  detalle:
-                      'Se borrará el informe y todos sus biomarcadores. La IA dejará de '
-                      'tenerlos en cuenta. No se puede deshacer.',
-                  borrarEnApi: ApiService.deleteClinicalReport,
-                ),
-                onBorrarMedicion: (medicion) => _borrar(
-                  id: reportText(medicion['id']),
-                  titulo: '¿Borrar esta medición?',
-                  detalle:
-                      'Se borrarán el peso, la grasa y el resto de valores de esta fecha. '
-                      'La IA dejará de tenerlos en cuenta. No se puede deshacer.',
-                  borrarEnApi: ApiService.deleteDexaScan,
-                ),
-              ),
           },
         ),
       ],
@@ -603,12 +486,6 @@ class _Menu extends StatelessWidget {
         'Analítica de sangre a mano',
         'Colesterol, glucosa, ferritina…'
       ),
-      (
-        ClinicImportMode.historial,
-        LucideIcons.history,
-        'Ver historial',
-        'Informes y biomarcadores guardados'
-      ),
     ];
 
     return ListView(
@@ -628,6 +505,15 @@ class _Menu extends StatelessWidget {
           _MenuOption(icon: o.$2, title: o.$3, sub: o.$4, onTap: () => onPick(o.$1)),
           const SizedBox(height: 12),
         ],
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'El historial completo (mediciones y analíticas) está en '
+            'Inicio → Salud.',
+            style: DesignTokens.bodyFont(
+                fontSize: 11.5, color: DesignTokens.mutedForeground(b)),
+          ),
+        ),
       ],
     );
   }
@@ -1720,220 +1606,6 @@ class _FilaMarcador extends StatelessWidget {
                       color: DesignTokens.mutedForeground(b))),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/* ─────────────────────── Historial ─────────────────────── */
-
-class _HistorialView extends StatelessWidget {
-  const _HistorialView({
-    required this.informes,
-    required this.mediciones,
-    required this.cargando,
-    required this.onRefrescar,
-    required this.onAbrir,
-    required this.onBorrarInforme,
-    required this.onBorrarMedicion,
-  });
-  final List<Map<String, dynamic>>? informes;
-  final List<Map<String, dynamic>>? mediciones;
-  final bool cargando;
-  final VoidCallback onRefrescar;
-  final void Function(Map<String, dynamic>) onAbrir;
-  final void Function(Map<String, dynamic>) onBorrarInforme;
-  final void Function(Map<String, dynamic>) onBorrarMedicion;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    if (cargando || informes == null || mediciones == null) {
-      return const Center(
-        child: SizedBox(
-            width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2.4)),
-      );
-    }
-    if (informes!.isEmpty && mediciones!.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.fileSearch,
-                  size: 34, color: DesignTokens.mutedForeground(b)),
-              const SizedBox(height: 14),
-              Text('Todavía no has guardado nada',
-                  textAlign: TextAlign.center,
-                  style: DesignTokens.titleFont(
-                      fontSize: 15,
-                      color: DesignTokens.foreground(b),
-                      weight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              Text(
-                'Cuando registres una medición o subas una analítica, aquí verás el '
-                'historial y podrás seguir tu evolución.',
-                textAlign: TextAlign.center,
-                style: DesignTokens.bodyFont(
-                    fontSize: 12.5, color: DesignTokens.mutedForeground(b)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async => onRefrescar(),
-      child: ListView(
-        children: [
-          if (mediciones!.isNotEmpty) ...[
-            _TituloSeccion(
-                texto: 'COMPOSICIÓN CORPORAL · ${mediciones!.length}'),
-            for (final medicion in mediciones!) ...[
-              _FilaHistorial(
-                titulo: _nombreMetodo(medicion['metodo']),
-                fecha: readableDate(medicion['fecha_escaneo']),
-                detalle: _resumenMedicion(medicion),
-                onBorrar: () => onBorrarMedicion(medicion),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ],
-          if (informes!.isNotEmpty) ...[
-            if (mediciones!.isNotEmpty) const SizedBox(height: 8),
-            _TituloSeccion(texto: 'ANALÍTICAS DE SANGRE · ${informes!.length}'),
-            for (final informe in informes!) ...[
-              _FilaHistorial(
-                titulo: reportText(informe['tipo_documento']),
-                fecha: readableDate(
-                    informe['fecha_informe'] ?? informe['fecha_subida']),
-                detalle: reportText(informe['resumen_ia']),
-                alerta: reportList(informe['banderas_rojas']).isNotEmpty,
-                onAbrir: () => onAbrir(informe),
-                onBorrar: () => onBorrarInforme(informe),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Línea de resumen de una medición: solo lo que tenga valor, para que una
-/// pesada de báscula no se enseñe como una fila llena de guiones.
-String _resumenMedicion(Map<String, dynamic> medicion) {
-  final partes = <String>[
-    for (final campo in const [
-      ('peso_kg', 'kg'),
-      ('porcentaje_grasa', '% grasa'),
-      ('masa_magra_kg', 'kg magra'),
-      ('masa_muscular_kg', 'kg músculo'),
-    ])
-      if (medicion[campo.$1] != null)
-        '${reportNumber(medicion[campo.$1])} ${campo.$2}',
-  ];
-  return partes.isEmpty ? 'Sin valores' : partes.join(' · ');
-}
-
-class _TituloSeccion extends StatelessWidget {
-  const _TituloSeccion({required this.texto});
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 10),
-      child: Text(texto,
-          style: DesignTokens.labelSmall(
-              color: DesignTokens.mutedForeground(b))),
-    );
-  }
-}
-
-class _FilaHistorial extends StatelessWidget {
-  const _FilaHistorial({
-    required this.titulo,
-    required this.fecha,
-    required this.detalle,
-    required this.onBorrar,
-    this.onAbrir,
-    this.alerta = false,
-  });
-  final String titulo, fecha, detalle;
-  final VoidCallback onBorrar;
-
-  /// Nulo en las mediciones: no hay informe redactado que abrir, la fila ya
-  /// enseña todo lo que hay.
-  final VoidCallback? onAbrir;
-  final bool alerta;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onAbrir,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
-        decoration: BoxDecoration(
-          color: DesignTokens.card(b),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: DesignTokens.shadowSoft(b),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(fecha,
-                          style: DesignTokens.bodyFont(
-                              fontSize: 12,
-                              weight: FontWeight.w700,
-                              color: DesignTokens.foreground(b))),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(titulo,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesignTokens.labelSmall(
-                                color: DesignTokens.mutedForeground(b),
-                                fontSize: 10)),
-                      ),
-                      if (alerta) ...[
-                        const SizedBox(width: 6),
-                        Icon(LucideIcons.alertTriangle,
-                            size: 15, color: DesignTokens.warning(b)),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(detalle,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesignTokens.bodyFont(
-                          fontSize: 12.5,
-                          color: DesignTokens.mutedForeground(b))),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: onBorrar,
-              tooltip: 'Borrar',
-              visualDensity: VisualDensity.compact,
-              icon: Icon(LucideIcons.trash2,
-                  size: 17, color: DesignTokens.mutedForeground(b)),
-            ),
-          ],
-        ),
       ),
     );
   }
