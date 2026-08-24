@@ -8,9 +8,11 @@ NEST_BASE_URL = os.environ.get("NEST_BASE_URL", "http://localhost:3000")
 # solo nos pasa el `user_id`. Así que se identifica con una clave interna
 # compartida, y NestJS le permite operar sobre el usuario que le indiquen.
 #
-# Esto es seguro SOLO mientras este servicio no esté expuesto a internet: en el
-# despliegue vive en la red interna de Docker y únicamente NestJS le habla. Si
-# algún día se publica su puerto, esta clave pasa a ser una llave maestra.
+# La misma clave protege la dirección inversa: main.py exige este header en
+# TODAS sus rutas salvo /health (ver verificar_clave_interna). Eso es lo que
+# hace seguro publicar el puerto de este servicio (Hugging Face Spaces, etc.)
+# en vez de depender de que viva solo en la red interna de Docker — sin esa
+# clave, cualquiera que encuentre la URL podría actuar como cualquier usuario.
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 

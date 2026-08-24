@@ -25,11 +25,20 @@ export class AiService {
   private async post<T>(path: string, body: unknown, timeoutMs = 120_000): Promise<T> {
     const endpoint = new URL(path, this.pythonBaseUrl).toString();
 
+    // Cuando Python vive en un host propio (no en la red interna de Docker),
+    // su puerto queda público: sin esta clave, cualquiera que encuentre la URL
+    // podría llamar a sus endpoints directamente con el user_id que quisiera.
+    // Python la exige en todas sus rutas salvo /health (ver main.py).
+    const claveInterna = this.configService.get<string>('INTERNAL_API_KEY');
+
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(claveInterna ? { 'X-Internal-Key': claveInterna } : {}),
+        },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });

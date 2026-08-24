@@ -2,8 +2,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from nest_client import INTERNAL_API_KEY
 from schemas import SetTelemetryInput
 from skills import analyze_failure
 # Inicializamos la API
@@ -17,6 +19,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Cuando este servicio corre en un host propio (Hugging Face Spaces, etc.) en
+# vez de en la red interna de Docker, su puerto queda público: sin este check,
+# cualquiera que encuentre la URL podría llamar a estos endpoints con el
+# user_id que quisiera y leer o escribir los datos de cualquier usuario (ver
+# el aviso en nest_client.py, escrito para exactamente este escenario).
+# /health se deja fuera a propósito: lo llama un monitor externo (UptimeRobot/
+# cron-job.org) sin credenciales, y no expone nada sensible.
+@app.middleware("http")
+async def verificar_clave_interna(request: Request, call_next):
+    if request.url.path == "/health":
+        return await call_next(request)
+    if not INTERNAL_API_KEY or request.headers.get("x-internal-key") != INTERNAL_API_KEY:
+        return JSONResponse(status_code=401, content={"detail": "No autorizado"})
+    return await call_next(request)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.post("/ai/analyze-set")

@@ -57,6 +57,7 @@ import { Supplement } from './modules/supplements/entities/supplement.entity';
 import { SupplementLog } from './modules/supplements/entities/supplement_log.entity';
 import { SupplementController } from './modules/supplements/controller/supplement.controller';
 import { SupplementService } from './modules/supplements/service/supplement.service';
+import { HealthController } from './modules/health/health.controller';
 
 @Module({
   imports: [
@@ -69,12 +70,17 @@ import { SupplementService } from './modules/supplements/service/supplement.serv
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
+      // Neon (y la mayoría de Postgres gestionados) exige TLS y no acepta el
+      // certificado autofirmado por defecto sin este flag. En local/Docker no
+      // hay TLS delante, así que queda apagado salvo que DB_SSL=true.
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
       entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog, ClinicalReport, ClinicalMarker, PhysiquePhoto],
       synchronize: false,
     }),
     TypeOrmModule.forFeature([User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog, ClinicalReport, ClinicalMarker, PhysiquePhoto]),
   ],
   controllers: [
+    HealthController,
     UserController,
     DexaScanController,
     ClinicalReportController,

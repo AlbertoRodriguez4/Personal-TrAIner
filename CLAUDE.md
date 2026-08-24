@@ -189,8 +189,14 @@ coinciden. Un token válido no basta para leer los datos de otro.
 
 El servicio Python no tiene el token del usuario (NestJS solo le pasa el `user_id`),
 así que se identifica con `INTERNAL_API_KEY` y se salta la comprobación de
-pertenencia. **Eso es seguro solo mientras su puerto no esté publicado**: en
-`docker-compose.yml` usa `expose`, no `ports`, y lo mismo Postgres.
+pertenencia. En el despliegue de una sola VM (`docker-compose.yml`, ver
+[DESPLIEGUE.md](DESPLIEGUE.md)) eso es seguro porque su puerto no se publica
+(`expose`, no `ports`; igual con Postgres). Si Python vive en un host propio
+en vez de la red interna de Docker (ver [DESPLIEGUE_HIBRIDO.md](DESPLIEGUE_HIBRIDO.md),
+p. ej. Hugging Face Spaces), lo que lo protege es que `main.py` exige la
+misma `INTERNAL_API_KEY` como header en todas sus rutas salvo `/health`
+(middleware `verificar_clave_interna`) — sin eso, publicar su puerto
+convierte la clave en una llave maestra para cualquiera que la vea.
 
 `JWT_SECRET` no tiene valor por defecto a propósito: si falta, el arranque falla en
 vez de quedarse firmando tokens con un secreto conocido.

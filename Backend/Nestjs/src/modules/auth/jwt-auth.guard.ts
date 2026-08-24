@@ -23,8 +23,12 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 ///
 /// El servicio Python entra por la puerta de al lado: llama a NestJS en nombre
 /// del usuario (`nest_client`) y no tiene su token, así que se identifica con
-/// una clave interna compartida. No está expuesto a internet — solo NestJS le
-/// habla —, y por eso se le permite saltarse la comprobación de pertenencia.
+/// una clave interna compartida, y por eso se le permite saltarse la
+/// comprobación de pertenencia. Si Python vive en la red interna de Docker
+/// eso ya bastaba; si vive en un host propio (Hugging Face Spaces, etc.), lo
+/// que lo protege es que Python exige esta misma clave en sus propias rutas
+/// (ver verificar_clave_interna en main.py) — sin eso, publicar su puerto
+/// convertiría esta clave en una llave maestra para cualquiera que la vea.
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
