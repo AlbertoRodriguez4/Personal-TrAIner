@@ -203,8 +203,11 @@ vez de quedarse firmando tokens con un secreto conocido.
 
 **Despliegue:** ver [DESPLIEGUE.md](DESPLIEGUE.md). Docker Compose con Caddy
 delante (HTTPS obligatorio: Android bloquea el HTTP en claro). La URL del backend
-en Flutter se fija al compilar con `--dart-define=API_BASE_URL=...`; sin él queda la
-IP de la LAN de desarrollo. `Image.network` no pasa por `ApiService._request`, así
+en Flutter se fija al compilar con `--dart-define=API_BASE_URL=...`; sin él, el
+default depende de `kReleaseMode` — release apunta al backend desplegado y debug a
+la IP de la LAN. El reparto es deliberado: un default equivocado en release falla en
+el móvil de quien instala la APK, sin logs y lejos; en debug falla en tu portátil.
+`Image.network` no pasa por `ApiService._request`, así
 que necesita `ApiService.imageHeaders` a mano o las fotos dan 401. Las migraciones
 en producción van con `migration:run:prod` (contra `dist/`): `ts-node` es
 devDependency y no está en la imagen final.

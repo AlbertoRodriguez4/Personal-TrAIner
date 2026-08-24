@@ -1,18 +1,31 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  /// URL del backend, fijada al compilar:
+  /// Backend desplegado. Es el valor por defecto de las compilaciones en
+  /// release, para que una APK hecha sin `--dart-define` apunte a algo que
+  /// existe en vez de a una IP de la wifi de casa.
+  static const String _backendProduccion =
+      'https://personal-trainer-1-p3jr.onrender.com';
+
+  /// Backend de desarrollo: la IP del portátil en la LAN. Sigue siendo el
+  /// valor por defecto en debug, así `flutter run` no escribe en la base de
+  /// datos de producción por descuido.
+  static const String _backendDesarrollo = 'http://192.168.1.111:3000';
+
+  /// URL del backend. Se puede fijar al compilar, y eso manda sobre todo lo
+  /// demás:
   ///     flutter build apk --release --dart-define=API_BASE_URL=https://tu-backend
   ///
-  /// El valor por defecto es la IP del portátil en la red local, que es lo que
-  /// sirve mientras se desarrolla. Ojo: al ser de la LAN, una APK compilada sin
-  /// `--dart-define` solo funciona en esa misma wifi, y deja de funcionar en
-  /// cuanto el router le asigna otra IP al equipo.
+  /// Sin `--dart-define` decide el modo de compilación. El reparto no es
+  /// simetría por gusto: los dos defaults posibles fallan, pero uno falla en
+  /// el móvil de quien instala la APK, lejos y sin logs, y el otro falla en tu
+  /// portátil mientras desarrollas. El segundo se arregla en un minuto.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.1.111:3000',
+    defaultValue: kReleaseMode ? _backendProduccion : _backendDesarrollo,
   );
   static const String _sessionKey = 'pt_session_user';
 
