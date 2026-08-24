@@ -248,6 +248,31 @@ compares a session's metrics against the mean of *all* the user's completed sess
 type or origin — trying to segment "cardio vs. cardio" would leave that mean computed over 1-2 rows
 almost always.
 
+**Mapa muscular (pestaña Entrenar).** `GET /training-sessions/user/:userId/muscle-load?dias=N`
+reparte las sesiones **completadas** del rango entre 16 grupos musculares y devuelve volumen,
+intensidad y fatiga de una vez; la tarjeta (`routine/presentation/widgets/muscle_heatmap_card.dart`)
+pinta las vistas anterior y posterior con la rampa de esfuerzo ya existente. Puntos que no se ven
+en el código:
+- **El vocabulario de músculos está escrito dos veces**: `MUSCULOS` en
+  `training_sessions/muscle_map.ts` y las claves de `body_map_paths.dart`. No hay nada que las
+  ate — un id que solo exista en un lado se pinta siempre en gris, sin error.
+- **El reparto va en tres escalones**: nombre del ejercicio (patrones) → `grupo_muscular` del
+  catálogo → `tipo_entrenamiento`. Los patrones casan por **palabra completa** sobre el nombre sin
+  tildes, y gana el que case con más claves: así "curl femoral" son isquios y no bíceps. Con
+  `includes` a secas volvería el problema de `clinical_reference.normalizar_codigo`.
+- **Una sesión rastreada en vivo guarda una fila por serie** (`serie: 3`), no `series: 4`. Detectar
+  "no declara series" mirando solo `series > 1` daba por estimable una sesión de 12 series contadas
+  y la sustituía por las 7,5 que salen de su duración — de ahí `declaraSeries()`, que acepta las dos
+  formas.
+- **El color se normaliza contra el volumen semanal recomendado** (`SERIES_SEMANA`, Schoenfeld),
+  no contra el máximo del propio usuario: escalar contra uno mismo pinta igual una semana floja
+  y una brutal, porque el máximo baja con ella.
+- **La fatiga usa vida media por músculo** (`VIDA_MEDIA_HORAS`, 24-60 h). Es lo único que la
+  distingue del volumen: sin decaimiento serían la misma columna con otro nombre.
+- **`intensidad` es nullable y viaja con `cobertura_intensidad`.** Solo hay señal de esfuerzo si la
+  sesión trae RIR (rastreada en vivo) o FC media + fecha de nacimiento. Sin señal se pinta gris, no
+  frío: quien no lleva pulsómetro no ha entrenado suave.
+
 **Groq's 8000 TPM is a hard ceiling on the whole conversation.** It counts input +
 `max_completion_tokens` *reserved* in the same request, so an oversized request is rejected with
 413 before generating anything. `_ajustar_a_presupuesto()` (`chat_engine.py`) is what keeps that

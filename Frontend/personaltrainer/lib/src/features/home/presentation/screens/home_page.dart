@@ -28,6 +28,7 @@ import '../../../routine/presentation/screens/quick_add_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
 import '../../../routine/presentation/screens/routine_view_page.dart';
 import '../../../routine/presentation/screens/workout_session_page.dart';
+import '../../../routine/presentation/widgets/muscle_heatmap_card.dart';
 import '../../../profile/presentation/screens/profile_setup_page.dart';
 import '../../../../core/route_loaders.dart';
 import 'backend_features_page.dart';
@@ -1530,6 +1531,8 @@ class _CoachScreen extends StatelessWidget {
           const _TodayRoutineHero(),
           const SizedBox(height: 16),
           const _TodaySummaryStats(),
+          const SizedBox(height: 16),
+          const MuscleHeatmapCard(),
           const SizedBox(height: 16),
           _RagBubble(),
           const SizedBox(height: 16),

@@ -17,6 +17,16 @@ export class TrainingSessionController {
     return this.trainingSessionService.findByUser(userId);
   }
 
+  /// Volumen, intensidad y fatiga acumulada por grupo muscular en los últimos
+  /// `dias` días — lo que pinta el mapa corporal de la pantalla de entrenar.
+  /// Cuelga de `user/:userId` y no de la raíz para que la guarda global
+  /// compruebe la pertenencia por el parámetro de ruta, igual que el resto de
+  /// rutas por usuario.
+  @Get('user/:userId/muscle-load')
+  getMuscleLoad(@Param('userId') userId: string, @Query('dias') dias?: string) {
+    return this.trainingSessionService.getMuscleLoad(userId, Number(dias) || 7);
+  }
+
   /// Sesión + media del usuario en cada métrica + cuánto se desvía esta
   /// sesión de esa media. Antes de `:id` en las rutas para que Nest no lo
   /// confunda con `findOne(':id')`.

@@ -878,6 +878,22 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
+  /// Volumen, intensidad y fatiga por grupo muscular en los últimos [dias]
+  /// días — lo que colorea el mapa corporal de la pestaña Entrenar. Las tres
+  /// métricas vienen en la misma respuesta a propósito: cambiar de métrica en
+  /// la tarjeta no debe costar una petición.
+  static Future<Map<String, dynamic>> getMuscleLoad(
+    String userId, {
+    int dias = 7,
+  }) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/training-sessions/user/$userId/muscle-load',
+      queryParams: {'dias': '$dias'},
+    );
+    return _toMap(decoded) ?? {};
+  }
+
   /// Sesión + la media del usuario en cada métrica + cuánto se desvía esta
   /// sesión de esa media, para poder enseñar "vs. tu media" en vez de solo el
   /// número suelto.
