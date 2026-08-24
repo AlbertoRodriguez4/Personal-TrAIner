@@ -13,6 +13,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // `flutter_local_notifications` usa APIs de java.time, que en Android
+        // no existen por debajo de API 26. El desugaring las reescribe a una
+        // implementación propia al compilar. Sin esto el build de release falla
+        // en seco ("requires core library desugaring to be enabled"), y solo en
+        // release: `flutter run` en debug no lo pide y el fallo aparece justo
+        // cuando vas a generar la APK que ibas a instalar.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -40,4 +47,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // La biblioteca que aporta las clases reescritas por el desugaring de
+    // arriba. Va junta con `isCoreLibraryDesugaringEnabled`: activar el flag
+    // sin declarar esta dependencia falla igual, solo que con otro mensaje.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
