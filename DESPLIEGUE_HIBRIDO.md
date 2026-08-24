@@ -76,7 +76,8 @@ se corren una vez desde tu PC apuntando a Neon, en el paso 3.
 3. Variables de entorno (Koyeb las llama "Environment variables" en el
    formulario del servicio):
    - `DB_HOST`, `DB_PORT=5432`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` → de Neon
-   - `DB_SSL=true` → **obligatorio** contra Neon, si no la conexión falla
+   - `DB_SSL` → no hace falta ponerla: al no ser el host local, el backend
+     activa TLS solo (ver `infrastructure/postgres/db-ssl.ts`)
    - `JWT_SECRET` → `openssl rand -base64 48`
    - `JWT_EXPIRES_IN=30d`
    - `INTERNAL_API_KEY` → la misma que pusiste en el Space de HF
@@ -92,13 +93,13 @@ se corren una vez desde tu PC apuntando a Neon, en el paso 3.
 
 Mismos datos, formulario equivalente: **New → Web Service**, conecta el repo,
 **Root Directory: `Backend/Nestjs`**, Render detecta el Dockerfile solo. El
-resto (variables de entorno, `DB_SSL=true`, la URL resultante) es idéntico.
+resto (variables de entorno, la URL resultante) es idéntico.
 
 ---
 
 ## 4. Migraciones (una vez, desde tu PC)
 
-Con las credenciales de Neon en `Backend/Nestjs/.env` (`DB_SSL=true` incluido):
+Con las credenciales de Neon en `Backend/Nestjs/.env`:
 
 ```bash
 cd Backend/Nestjs
@@ -138,7 +139,7 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<tu-app>.koyeb.ap
 
 | Síntoma | Causa habitual |
 |---|---|
-| NestJS no arranca / error de conexión a BD | Falta `DB_SSL=true`, o la cadena de Neon cambió (revisa el dashboard) |
+| NestJS no arranca / error de conexión a BD | La cadena de Neon cambió (revisa el dashboard). Si el error dice `connection is insecure`, tienes `DB_SSL=false` puesta a mano: quítala |
 | Python responde 401 a todo | `INTERNAL_API_KEY` no coincide entre el Space y Koyeb — tiene que ser carácter por carácter la misma |
 | La primera petición del día tarda ~30-60s | Cold start — confirma que los monitores de UptimeRobot/cron-job.org están activos y en verde |
 | El Space de HF no arranca | Revisa los "Logs" del Space — el error más común es una var de entorno que falta (`GEMINI_API_KEY`/`GROQ_API_KEY`) |

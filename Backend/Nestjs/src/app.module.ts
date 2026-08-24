@@ -58,6 +58,7 @@ import { SupplementLog } from './modules/supplements/entities/supplement_log.ent
 import { SupplementController } from './modules/supplements/controller/supplement.controller';
 import { SupplementService } from './modules/supplements/service/supplement.service';
 import { HealthController } from './modules/health/health.controller';
+import { sslPostgres } from './infrastructure/postgres/db-ssl';
 
 @Module({
   imports: [
@@ -70,10 +71,10 @@ import { HealthController } from './modules/health/health.controller';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      // Neon (y la mayoría de Postgres gestionados) exige TLS y no acepta el
-      // certificado autofirmado por defecto sin este flag. En local/Docker no
-      // hay TLS delante, así que queda apagado salvo que DB_SSL=true.
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      // TLS sí o no según el host, con `DB_SSL` como override. Ver db-ssl.ts:
+      // el modo que falla en silencio hasta producción es no pedir TLS, así
+      // que el valor por defecto es pedirlo.
+      ssl: sslPostgres(),
       entities: [User, DexaScan, PostureEvaluation, NutritionLog, TrainingSession, Subscription, UserProfile, BodyAnalysisRecord, Routine, RoutineDay, Exercise, ExerciseCatalog, RecoveryLog, Supplement, SupplementLog, ClinicalReport, ClinicalMarker, PhysiquePhoto],
       synchronize: false,
     }),

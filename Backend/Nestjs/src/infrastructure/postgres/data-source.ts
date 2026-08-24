@@ -1,6 +1,7 @@
 import "dotenv/config";
 import "reflect-metadata";
 import { DataSource } from "typeorm";
+import { sslPostgres } from "./db-ssl";
 import { User } from "../../modules/identity/entities/user.entity";
 import { NutritionLog } from "../../modules/nutrition/entities/nutrition_log.entity";
 import { Subscription } from "../../modules/billing/entities/subscription.entity";
@@ -27,8 +28,10 @@ export const AppDataSource = new DataSource({
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE,
-    // Misma condición que en app.module.ts: Neon exige TLS, local/Docker no lo tiene.
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    // Misma decisión que la app, y desde el mismo sitio: si esto y app.module
+    // discrepan, las migraciones corren contra una conexión que la app no
+    // puede abrir (o al revés) y el fallo aparece a destiempo.
+    ssl: sslPostgres(),
     synchronize: false,
     logging: true,
     entities: [
