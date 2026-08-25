@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { BadGatewayException, HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiChatDto } from '../dto/chat.dto';
 import {
@@ -12,6 +12,14 @@ import {
 
 @Injectable()
 export class AiService {
+  /// Esperas entre reintentos ante un 429, en ms; su longitud fija cuántos hay.
+  /// Escalonadas y cortas: el limitador que las provoca es de ventana corta, y
+  /// al otro lado hay un usuario mirando una pantalla de carga con la foto ya
+  /// hecha, así que el turno de chat ya se lleva lo suyo. Dos reintentos es el
+  /// techo razonable — a partir de ahí se tarda más en insistir que en que el
+  /// usuario le dé otra vez al botón.
+  private static readonly ESPERAS_429_MS = [1_500, 4_000];
+
   constructor(private readonly configService: ConfigService) {}
 
   private get pythonBaseUrl(): string {
@@ -31,9 +39,8 @@ export class AiService {
     // Python la exige en todas sus rutas salvo /health (ver main.py).
     const claveInterna = this.configService.get<string>('INTERNAL_API_KEY');
 
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
+    const peticion = (): Promise<Response> =>
+      fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,21 +49,88 @@ export class AiService {
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch (error) {
-      const detalle = error instanceof Error ? error.message : String(error);
-      throw new BadGatewayException(
-        `No se pudo contactar con el servicio Python de IA: ${detalle}`,
-      );
+
+    let response: Response;
+    // Un 429 aquí no lo escribe FastAPI: el servicio Python no emite ese código
+    // en ninguna ruta (la cuota agotada de Gemini/Groq se traduce a 503 en
+    // main.py). Lo escribe el proxy que hay delante cuando esta llamada sale a
+    // la red pública, y el limitador va por IP de origen — que en Render es una
+    // IP de salida COMPARTIDA con otros clientes (74.220.48.0/20, registrada a
+    // Render en ARIN). O sea: podemos comernos un 429 por tráfico que no es
+    // nuestro. Reintentar es seguro justamente porque el 429 significa que la
+    // petición nunca llegó a la app: no hay medio análisis hecho ni nada escrito
+    // en base de datos que se pudiera duplicar.
+    //
+    // Esto es una tirita, no el arreglo: la solución es que AI_PYTHON_URL
+    // apunte a la dirección interna del servicio Python (como ya hace
+    // docker-compose.yml con http://ia:8000) para no pasar por el proxy.
+    for (let intento = 0; ; intento++) {
+      try {
+        response = await peticion();
+      } catch (error) {
+        const detalle = error instanceof Error ? error.message : String(error);
+        throw new BadGatewayException(
+          `No se pudo contactar con el servicio Python de IA: ${detalle}`,
+        );
+      }
+      const espera = AiService.ESPERAS_429_MS[intento];
+      if (response.status !== 429 || espera === undefined) break;
+      await new Promise((listo) => setTimeout(listo, espera));
     }
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new BadGatewayException(
-        `Error al comunicarse con el servicio Python (${response.status}): ${errorBody}`,
-      );
+      throw AiService.traducirFallo(response.status, await response.text());
     }
 
     return response.json() as Promise<T>;
+  }
+
+
+  /// El texto que salga de aquí acaba tal cual en un SnackBar del móvil: la app
+  /// hace `throw Exception(<mensaje del backend>)` y lo pinta. Volcar el cuerpo
+  /// crudo de la respuesta le enseñaba al usuario cosas como
+  /// "Error al comunicarse con el servicio Python (429): Too Many Requests",
+  /// que además atribuye a nuestro servicio un 429 que en realidad emite el
+  /// proxy (Render/Cloudflare) que hay delante de Python, antes de que la
+  /// petición llegue a FastAPI: nuestro código nunca devuelve 429 — la cuota
+  /// agotada de Gemini/Groq se traduce a 503 en main.py.
+  ///
+  /// Python ya redacta mensajes pensados para el usuario en `detail`; lo que
+  /// faltaba es sacarlos de ahí y conservar el significado del código de estado
+  /// en vez de aplastarlo todo a 502.
+  private static traducirFallo(status: number, cuerpo: string): HttpException {
+    const detalle = AiService.extraerDetalle(cuerpo);
+
+    // 429 (rate limit del proxy) y 503 (cuota de LLM agotada) son lo mismo para
+    // quien está delante del móvil: transitorio, se arregla esperando.
+    if (status === 429 || status === 503) {
+      return new HttpException(
+        detalle ??
+          'El servicio de IA está saturado ahora mismo. Prueba de nuevo en un par de minutos.',
+        503,
+      );
+    }
+
+    // 400 (petición inválida) y 413 (no cabe en el presupuesto de tokens) traen
+    // instrucciones concretas escritas en Python; reintentar no las arregla.
+    if (status === 400 || status === 413) {
+      return new HttpException(detalle ?? 'La petición no se pudo procesar.', status);
+    }
+
+    return new BadGatewayException(detalle ?? `El servicio de IA falló (${status}).`);
+  }
+
+  /// FastAPI empaqueta sus errores como {"detail": "..."}; el proxy que hay
+  /// delante responde texto plano ("Too Many Requests"), que no aporta nada.
+  private static extraerDetalle(cuerpo: string): string | null {
+    try {
+      const json: unknown = JSON.parse(cuerpo);
+      const detail = (json as { detail?: unknown } | null)?.detail;
+      if (typeof detail === 'string' && detail.trim()) return detail.trim();
+    } catch {
+      // No era JSON: el cuerpo lo escribió el proxy, no la app.
+    }
+    return null;
   }
 
   async chat(payload: AiChatDto): Promise<{ reply: string; actions_taken: unknown[] }> {
