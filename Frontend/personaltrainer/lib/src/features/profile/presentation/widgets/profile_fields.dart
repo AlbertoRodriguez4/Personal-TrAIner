@@ -556,27 +556,34 @@ class BodyTypeGrid extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(
                 bottom: i + 2 < ProfileOptions.tiposCuerpo.length ? 10 : 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                    child: _TarjetaTipo(
-                        tipo: ProfileOptions.tiposCuerpo[i],
-                        activo: seleccionado == ProfileOptions.tiposCuerpo[i].valor,
-                        onTap: () =>
-                            onSelect(ProfileOptions.tiposCuerpo[i].valor))),
-                const SizedBox(width: 10),
-                if (i + 1 < ProfileOptions.tiposCuerpo.length)
+            // `IntrinsicHeight` es necesario porque este `Row` vive dentro de un
+            // `ListView` (altura no acotada): sin él, `stretch` intenta estirar
+            // las tarjetas a una altura infinita y el layout revienta en release
+            // (las aserciones que lo detectarían en debug se compilan fuera),
+            // dejando un hueco en blanco donde debería ir la fila.
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   Expanded(
                       child: _TarjetaTipo(
-                          tipo: ProfileOptions.tiposCuerpo[i + 1],
-                          activo: seleccionado ==
-                              ProfileOptions.tiposCuerpo[i + 1].valor,
-                          onTap: () => onSelect(
-                              ProfileOptions.tiposCuerpo[i + 1].valor)))
-                else
-                  const Expanded(child: SizedBox()),
-              ],
+                          tipo: ProfileOptions.tiposCuerpo[i],
+                          activo: seleccionado == ProfileOptions.tiposCuerpo[i].valor,
+                          onTap: () =>
+                              onSelect(ProfileOptions.tiposCuerpo[i].valor))),
+                  const SizedBox(width: 10),
+                  if (i + 1 < ProfileOptions.tiposCuerpo.length)
+                    Expanded(
+                        child: _TarjetaTipo(
+                            tipo: ProfileOptions.tiposCuerpo[i + 1],
+                            activo: seleccionado ==
+                                ProfileOptions.tiposCuerpo[i + 1].valor,
+                            onTap: () => onSelect(
+                                ProfileOptions.tiposCuerpo[i + 1].valor)))
+                  else
+                    const Expanded(child: SizedBox()),
+                ],
+              ),
             ),
           ),
       ],

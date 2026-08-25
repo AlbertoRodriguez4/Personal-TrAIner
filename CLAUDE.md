@@ -207,6 +207,15 @@ en Flutter se fija al compilar con `--dart-define=API_BASE_URL=...`; sin él, el
 default depende de `kReleaseMode` — release apunta al backend desplegado y debug a
 la IP de la LAN. El reparto es deliberado: un default equivocado en release falla en
 el móvil de quien instala la APK, sin logs y lejos; en debug falla en tu portátil.
+**El manifest de release necesita `INTERNET` escrito a mano.** Flutter solo lo declara
+en `android/app/src/debug/` y `profile/`, que no entran en la APK final: en debug todo
+va y en release falla cada petición, así que el fallo aparece justo al instalar la APK,
+lejos y sin logs. Igual de invisible: **nada de lo que hay antes de `runApp` puede
+lanzar**. Sin primer frame el sistema deja a la vista el fondo de `NormalTheme`
+(`values-night/styles.xml` → `Theme.Black.NoTitleBar`), que es negro liso — idéntico a
+un móvil que no arranca. Por eso `main.dart` envuelve cada paso de inicialización y
+sustituye `ErrorWidget.builder`, que en release es un rectángulo gris sin texto.
+
 `Image.network` no pasa por `ApiService._request`, así
 que necesita `ApiService.imageHeaders` a mano o las fotos dan 401. Las migraciones
 en producción van con `migration:run:prod` (contra `dist/`): `ts-node` es
