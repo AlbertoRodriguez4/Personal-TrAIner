@@ -1047,6 +1047,14 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
+  /// Catálogo de ejercicios. No lleva `userId`: es una tabla global, pero la
+  /// guarda de autenticación es global también, así que necesita el token igual
+  /// que el resto — de ahí que pase por `_request` y no por un `http.get` suelto.
+  static Future<List<Map<String, dynamic>>> getExercisesCatalog() async {
+    final decoded = await _request(method: 'GET', path: '/exercises-catalog');
+    return _toMapList(decoded);
+  }
+
   static Future<List<Map<String, dynamic>>> getRoutines(String userId) async {
     final decoded = await _request(method: 'GET', path: '/api/routines/user/$userId');
     return _toMapList(decoded);

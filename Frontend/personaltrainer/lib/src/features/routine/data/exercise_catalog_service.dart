@@ -1,29 +1,17 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../../../services/api_service.dart';
 import '../models/exercise_catalog.dart';
 
 class ExerciseCatalogService {
+  /// Va por `ApiService` y no por un `http.get` propio a propósito: la guarda
+  /// de autenticación de NestJS es global, así que esta ruta —aunque el
+  /// catálogo sea una tabla global sin `userId`— también exige el Bearer. Con
+  /// un `http.get` suelto faltaba esa cabecera y el catálogo respondía 401
+  /// siempre, que en pantalla se veía como "no se pudo cargar" y parecía un
+  /// problema de red.
   Future<List<ExerciseGroup>> getExerciseCatalog() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${ApiService.baseUrl}/exercises-catalog'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        final List<ExerciseCatalog> catalog = data
-            .map((item) => ExerciseCatalog.fromJson(item))
-            .toList();
-
-        return _groupExercises(catalog);
-      } else {
-        throw Exception('Failed to load exercise catalog: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    final data = await ApiService.getExercisesCatalog();
+    final catalog = data.map(ExerciseCatalog.fromJson).toList();
+    return _groupExercises(catalog);
   }
 
   List<ExerciseGroup> _groupExercises(List<ExerciseCatalog> catalog) {

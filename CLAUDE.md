@@ -216,8 +216,14 @@ lanzar**. Sin primer frame el sistema deja a la vista el fondo de `NormalTheme`
 un móvil que no arranca. Por eso `main.dart` envuelve cada paso de inicialización y
 sustituye `ErrorWidget.builder`, que en release es un rectángulo gris sin texto.
 
-`Image.network` no pasa por `ApiService._request`, así
-que necesita `ApiService.imageHeaders` a mano o las fotos dan 401. Las migraciones
+**Toda petición al backend va por `ApiService._request`**, que es lo único que pone el
+`Authorization: Bearer`. Como la guarda de NestJS es global, un `http.get`/`http.post`
+suelto responde **401 siempre**, incluso contra una tabla global sin `userId` — le pasó
+al catálogo de ejercicios, que traía su propio `http.get` con solo `Content-Type` y
+además envolvía el fallo en un `Exception('Network error: …')`, así que en pantalla se
+veía "no se pudo cargar el catálogo" y parecía un problema de red. La excepción es
+`Image.network`, que no puede pasar por `_request` y necesita `ApiService.imageHeaders`
+a mano o las fotos dan 401. Las migraciones
 en producción van con `migration:run:prod` (contra `dist/`): `ts-node` es
 devDependency y no está en la imagen final.
 
