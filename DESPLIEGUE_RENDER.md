@@ -90,10 +90,17 @@ curl https://<tu-servicio>.onrender.com/health     # -> {"status":"ok"}
 ```
 
 Y la mitad de Python, desde la *Shell* del servicio (desde fuera no se llega, que
-es el punto):
+es el punto). **Sin `curl`**: la imagen no lo lleva —ni `curl` ni `wget`— y en la
+Shell de Render estás dentro del contenedor, así que el comando de toda la vida
+falla con `curl: not found` y parece que la IA no responde cuando lo que falta es
+la herramienta. Se usa el Python que ya está instalado:
 
 ```bash
-curl http://127.0.0.1:8000/health                  # -> {"status":"ok"}
+python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=10).read().decode())"
+```
+
+```
+{"status":"ok"}
 ```
 
 Y en los logs del servicio, al arrancar, tienen que salir las dos mitades:
