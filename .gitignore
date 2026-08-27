@@ -13,6 +13,14 @@ dist/
 __pycache__/
 **/__pycache__/
 .env
+# Cualquier variante con secretos dentro: `.env.local` para probar la imagen en
+# local, `.env.produccion`, etc. Solo `.env` estaba cubierto, y `.env.local`
+# —que lleva las credenciales de Neon— aparecia como untracked, a un `git add
+# -A` de acabar en el repo. Ya paso una vez con Backend/Nestjs/.env, que sigue
+# en el historial.
+.env.*
+# Las plantillas sin secretos si se versionan.
+!.env*.example
 
 # Modelo de MediaPipe descargado en runtime (pose_analysis.py) — binario, no
 # se versiona, se descarga solo en el primer uso.
