@@ -8,7 +8,7 @@ class ApiService {
   /// release, para que una APK hecha sin `--dart-define` apunte a algo que
   /// existe en vez de a una IP de la wifi de casa.
   static const String _backendProduccion =
-      'https://personal-trainer-1-p3jr.onrender.com';
+      'https://personal-trainer-xanv.onrender.com';
 
   /// Backend de desarrollo: la IP del portátil en la LAN. Sigue siendo el
   /// valor por defecto en debug, así `flutter run` no escribe en la base de

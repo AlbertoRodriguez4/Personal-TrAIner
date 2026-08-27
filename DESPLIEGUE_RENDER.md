@@ -55,9 +55,29 @@ INTERNAL_API_KEY=<openssl rand -base64 32>
 GEMINI_API_KEY=<...>
 GROQ_API_KEY=<...>
 GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL_FALLBACK=gemini-3.5-flash
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_TPM_LIMIT=8000
+OPENFOODFACTS_USER_AGENT=PersonalTrAIner/1.0 (tu-email)
+USDA_FDC_API_KEY=<...>
+RAPIDAPI_KEY=<...>
+OPENFDA_API_KEY=<...>
 ```
+
+**Las cinco últimas no son opcionales de verdad**, aunque el contenedor arranque
+sin ellas. Ninguna revienta: degradan en silencio, que se diagnostica mucho peor
+que un fallo.
+
+| Si falta | Qué pasa |
+|---|---|
+| `GEMINI_MODEL_FALLBACK` | Al agotar la cuota de flash-lite el usuario recibe un 503, en vez del segundo intento contra el modelo de respaldo (`gemini_client.generate`). |
+| `RAPIDAPI_KEY` | Edamam se desactiva y `nutricion` pierde el análisis de platos en texto libre. |
+| `USDA_FDC_API_KEY` | Cae a `DEMO_KEY`, con un límite que se agota enseguida. |
+| `OPENFDA_API_KEY` | Funciona, pero baja de 120.000 a 1.000 req/día. |
+| `OPENFOODFACTS_USER_AGENT` | Manda `sin-contacto-configurado`, que es justo lo que la API pide no hacer. |
+
+`AI_PYTHON_NUTRITION_PATH` sale en `Backend/Nestjs/.env.example` pero **el código
+no la lee** en ningún sitio: es residuo, no la pongas.
 
 El TLS contra Neon se activa solo mirando el host (`db-ssl.ts`); solo hace falta
 `DB_SSL` si alguna vez hay que forzarlo a mano.
