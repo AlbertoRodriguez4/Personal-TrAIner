@@ -151,11 +151,141 @@ class MuscleLoadMap {
   );
 }
 
+/// Carga *planificada* de un grupo muscular: lo que la rutina activa escribe,
+/// no lo que se ha entrenado.
+///
+/// No reutiliza [MuscleLoad] a propósito. Ese modelo exige `fatiga` e
+/// `intensidad`, y un plan no tiene ninguna de las dos: no hay esfuerzo que
+/// medir ni recuperación que decaer en un ejercicio que todavía no se ha hecho.
+/// Forzarlo con ceros haría que la pantalla no pudiera distinguir "planificado
+/// y descansado" de "entrenado suave".
+class RoutineMuscleLoad {
+  const RoutineMuscleLoad({
+    required this.id,
+    required this.nombre,
+    required this.seriesSemana,
+    required this.objetivoMin,
+    required this.objetivoMax,
+    required this.estado,
+    required this.volumen,
+  });
+
+  final String id;
+  final String nombre;
+  final double seriesSemana;
+  final int objetivoMin;
+  final int objetivoMax;
+  final MuscleStatus estado;
+
+  /// 0-1 contra el máximo semanal recomendado, igual que en [MuscleLoad]. Nunca
+  /// es `null`: un músculo que la rutina no toca son 0 series escritas, un dato
+  /// que sí se tiene, no un hueco. Por eso se pinta frío y no gris.
+  final double volumen;
+
+  factory RoutineMuscleLoad.fromJson(Map<String, dynamic> json) {
+    final objetivo = json['objetivo'] as Map<String, dynamic>? ?? const {};
+    return RoutineMuscleLoad(
+      id: json['id']?.toString() ?? '',
+      nombre: json['nombre']?.toString() ?? '',
+      seriesSemana: _double(json['series_semana']) ?? 0,
+      objetivoMin: (_double(objetivo['min']) ?? 0).round(),
+      objetivoMax: (_double(objetivo['max']) ?? 0).round(),
+      estado: switch (json['estado']) {
+        'bajo' => MuscleStatus.bajo,
+        'en_rango' => MuscleStatus.enRango,
+        'alto' => MuscleStatus.alto,
+        _ => MuscleStatus.sinTrabajo,
+      },
+      volumen: _double(json['volumen']) ?? 0,
+    );
+  }
+}
+
+/// Respuesta de `GET /api/routines/user/:id/active/muscle-load`.
+class RoutineMuscleLoadMap {
+  const RoutineMuscleLoadMap({
+    required this.activa,
+    required this.routineId,
+    required this.nombre,
+    required this.dias,
+    required this.seriesTotales,
+    required this.seriesSinDeclarar,
+    required this.avisoCiclo,
+    required this.sinClasificar,
+    required this.musculos,
+  });
+
+  /// `false` cuando el usuario no tiene rutina activa. No es un error: la
+  /// pantalla lo pinta como estado vacío con la acción de crear una.
+  final bool activa;
+
+  final String? routineId;
+  final String? nombre;
+  final int dias;
+  final double seriesTotales;
+
+  /// Parte de [seriesTotales] que sale de suponer 3 series a un ejercicio que
+  /// no las declara. Cuando pesa, la pantalla lo dice: un plan hecho de
+  /// defaults no mide la rutina.
+  final double seriesSinDeclarar;
+
+  /// Presente solo si la rutina tiene más de 7 días y su ciclo ya no es
+  /// semanal, con lo que la comparación con lo hecho deja de ser exacta.
+  final String? avisoCiclo;
+
+  /// Ejercicios de la rutina que no casaron con ningún músculo. Si están todos
+  /// aquí el mapa sale vacío, y eso es un hueco de `muscle_map.ts`, no algo que
+  /// el usuario haya hecho mal.
+  final List<String> sinClasificar;
+
+  final List<RoutineMuscleLoad> musculos;
+
+  /// Hay rutina y series escritas, pero ni un ejercicio cayó en un músculo.
+  /// Distinto de no tener rutina, y hay que decirlo distinto: aquí el usuario
+  /// ya ha hecho su parte.
+  bool get nadaClasificado =>
+      activa && seriesTotales > 0 && musculos.every((m) => m.seriesSemana == 0);
+
+  Map<String, RoutineMuscleLoad> get porId => {for (final m in musculos) m.id: m};
+
+  /// Valor 0-1 por músculo, como lo consume el painter. Sin `null` a propósito:
+  /// en el plan todo músculo tiene dato, aunque sea 0.
+  Map<String, double?> get valores => {for (final m in musculos) m.id: m.volumen};
+
+  factory RoutineMuscleLoadMap.fromJson(Map<String, dynamic> json) =>
+      RoutineMuscleLoadMap(
+        activa: json['activa'] == true,
+        routineId: json['routine_id']?.toString(),
+        nombre: json['nombre']?.toString(),
+        dias: (_double(json['dias']) ?? 0).round(),
+        seriesTotales: _double(json['series_totales']) ?? 0,
+        seriesSinDeclarar: _double(json['series_sin_declarar']) ?? 0,
+        avisoCiclo: json['aviso_ciclo']?.toString(),
+        sinClasificar: (json['sin_clasificar'] as List? ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        musculos: (json['musculos'] as List? ?? const [])
+            .whereType<Map>()
+            .map((m) => RoutineMuscleLoad.fromJson(Map<String, dynamic>.from(m)))
+            .toList(),
+      );
+}
+
 double? _double(dynamic valor) {
   if (valor == null) return null;
   if (valor is num) return valor.toDouble();
   return double.tryParse(valor.toString());
 }
+
+/// Sin decimal cuando no aporta: "12 series" se lee mejor que "12.0 series", y
+/// "12.5" hace falta porque una serie puede repartirse entre dos músculos.
+///
+/// Vive aquí y no en cada pantalla por lo mismo que `colorCarga`: la tarjeta de
+/// Entrenar y el mapa a pantalla completa tienen que escribir el mismo número
+/// igual, o la misma cifra se lee distinta en dos sitios.
+String seriesTexto(double valor) => valor == valor.roundToDouble()
+    ? valor.round().toString()
+    : valor.toStringAsFixed(1);
 
 /// Rampa cromática del mapa: la misma azul→verde→ámbar→naranja→rojo que ya
 /// usan las zonas de FC y las bandas de intensidad de la sesión en vivo. Que

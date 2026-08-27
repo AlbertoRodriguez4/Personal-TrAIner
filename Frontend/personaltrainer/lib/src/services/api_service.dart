@@ -907,6 +907,21 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
+  /// Volumen semanal *planificado* por grupo muscular: la otra mitad del mapa
+  /// muscular. `getMuscleLoad` mide lo entrenado y solo cuenta sesiones
+  /// completadas; esto cuenta lo que la rutina activa tiene escrito, para poder
+  /// contrastar plan contra realidad en la misma pantalla.
+  ///
+  /// Sin rutina activa la respuesta trae `activa: false`, no un error: no tener
+  /// rutina es un estado normal que la pantalla pinta como hueco.
+  static Future<Map<String, dynamic>> getRoutineMuscleLoad(String userId) async {
+    final decoded = await _request(
+      method: 'GET',
+      path: '/api/routines/user/$userId/active/muscle-load',
+    );
+    return _toMap(decoded) ?? {};
+  }
+
   /// Sesión + la media del usuario en cada métrica + cuánto se desvía esta
   /// sesión de esa media, para poder enseñar "vs. tu media" en vez de solo el
   /// número suelto.

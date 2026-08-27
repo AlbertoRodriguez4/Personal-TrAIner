@@ -10,13 +10,10 @@ import {
   IDS_MUSCULOS,
   MUSCULOS,
   MuscleId,
-  Reparto,
   SERIES_SEMANA,
   VIDA_MEDIA_HORAS,
   normalizar,
-  repartoPorGrupo,
-  repartoPorNombre,
-  repartoPorTipo,
+  repartoEjercicio,
 } from '../muscle_map';
 
 /// Campos numéricos que entran en la media del usuario para el análisis de una
@@ -279,31 +276,6 @@ export class TrainingSessionService {
     return Math.max(0, Math.min(1, (pct - min) / (max - min)));
   }
 
-  /// A qué músculos va la carga de un ejercicio, en orden de confianza:
-  /// nombre reconocido → grupo del catálogo → tipo de sesión. El último nunca
-  /// falla, así que toda sesión pinta algo; `sin_clasificar` recoge los
-  /// nombres que llegaron hasta ahí, para poder ampliar la tabla después con
-  /// lo que de verdad entrena la gente en vez de a ciegas.
-  private repartoEjercicio(
-    nombre: string | null,
-    tipoSesion: string,
-    catalogo: Map<string, string>,
-    sinClasificar: Set<string>,
-  ): Reparto {
-    if (nombre) {
-      const porNombre = repartoPorNombre(nombre);
-      if (porNombre) return porNombre;
-
-      const grupo = catalogo.get(normalizar(nombre));
-      if (grupo) {
-        const porGrupo = repartoPorGrupo(grupo);
-        if (porGrupo) return porGrupo;
-      }
-      sinClasificar.add(nombre);
-    }
-    return repartoPorTipo(tipoSesion);
-  }
-
   /// Volumen, intensidad y fatiga acumulada por grupo muscular en una ventana
   /// de N días. Las tres salen del mismo recorrido porque comparten el reparto
   /// por músculo; separarlas en tres endpoints obligaría a releer y
@@ -388,7 +360,7 @@ export class TrainingSessionService {
       const intensidadSesion = this.intensidadPorFc(sesion, edad);
 
       for (const item of items) {
-        const reparto = this.repartoEjercicio(
+        const reparto = repartoEjercicio(
           item.nombre,
           sesion.tipo_entrenamiento,
           catalogo,
@@ -397,6 +369,11 @@ export class TrainingSessionService {
         const intensidad = item.intensidad ?? intensidadSesion;
         seriesTotales += item.series;
         if (estimada) seriesEstimadas += item.series;
+
+        // Inalcanzable con una sesión: `tipo_entrenamiento` no es nullable y
+        // `repartoPorTipo` siempre reparte. Está por el tipo de retorno, que es
+        // opcional para el caso de la rutina, donde no hay tipo del que tirar.
+        if (!reparto) continue;
 
         for (const [musculo, peso] of Object.entries(reparto) as [MuscleId, number][]) {
           const aporte = item.series * peso;

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/design_tokens.dart';
@@ -60,6 +62,18 @@ class _BodyHeatmapState extends State<BodyHeatmap>
     super.dispose();
   }
 
+  /// Radio de perdón alrededor del dedo, en dp de pantalla (no en unidades del
+  /// lienzo: lo que tiene que cumplir el mínimo táctil es el dedo, y el lienzo
+  /// se escala).
+  ///
+  /// Existe porque los músculos se dibujan a tamaño real y varios no llegan de
+  /// lejos a los 48 dp de Material: los gemelos ocupan unos 13x27 dp en la
+  /// silueta grande. Agrandarlos no es opción — son adyacentes, y estirar uno se
+  /// come al vecino. Lo que se agranda es el área de toque: con 18 dp de radio
+  /// el músculo más pequeño pasa de 48 dp en las dos dimensiones, y quien gana
+  /// sigue siendo el de encima, porque se busca en el mismo orden inverso.
+  static const double _radioTactilDp = 18;
+
   /// Del punto tocado al músculo, deshaciendo la escala del lienzo. Se recorre
   /// en orden inverso al pintado para que gane el que está encima, igual que
   /// haría el ojo.
@@ -68,20 +82,53 @@ class _BodyHeatmapState extends State<BodyHeatmap>
     if (onSeleccionar == null) return;
 
     final escala = _escalaPara(size);
+    if (escala <= 0) return;
     final desplazamiento = _desplazamientoPara(size, escala);
     final punto = Offset(
       (local.dx - desplazamiento.dx) / escala,
       (local.dy - desplazamiento.dy) / escala,
     );
 
-    final entradas = widget.vista.musculos.entries.toList().reversed;
-    for (final entrada in entradas) {
-      if (entrada.value.contains(punto)) {
-        onSeleccionar(entrada.key == widget.seleccionado ? null : entrada.key);
-        return;
+    final tocado = _musculoEn(punto) ?? _musculoCerca(punto, escala);
+    // Fuera del radio de perdón de cualquier músculo sí es un toque en vacío, y
+    // sigue deseleccionando: es la forma de cerrar la ficha sin buscar la x.
+    if (tocado == null) {
+      onSeleccionar(null);
+      return;
+    }
+    onSeleccionar(tocado == widget.seleccionado ? null : tocado);
+  }
+
+  /// El músculo que contiene el punto, si alguno. Orden inverso al pintado.
+  String? _musculoEn(Offset punto) {
+    for (final entrada in widget.vista.musculos.entries.toList().reversed) {
+      if (entrada.value.contains(punto)) return entrada.key;
+    }
+    return null;
+  }
+
+  /// El músculo más cercano dentro del radio de perdón. Se muestrea en anillos
+  /// crecientes y gana el primero que se toque, así que el resultado sale del
+  /// contorno real y no de una caja: la caja de un brazo en diagonal se traga
+  /// medio torso y robaría toques que no le pertenecen.
+  String? _musculoCerca(Offset punto, double escala) {
+    final radioMaximo = _radioTactilDp / escala;
+    const pasos = 3;
+    const direcciones = 12;
+
+    for (var paso = 1; paso <= pasos; paso++) {
+      final radio = radioMaximo * paso / pasos;
+      for (var i = 0; i < direcciones; i++) {
+        final angulo = 2 * math.pi * i / direcciones;
+        final sonda = Offset(
+          punto.dx + radio * math.cos(angulo),
+          punto.dy + radio * math.sin(angulo),
+        );
+        final encontrado = _musculoEn(sonda);
+        if (encontrado != null) return encontrado;
       }
     }
-    onSeleccionar(null);
+    return null;
   }
 
   static double _escalaPara(Size size) =>
@@ -98,23 +145,27 @@ class _BodyHeatmapState extends State<BodyHeatmap>
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final cuerpo = AnimatedBuilder(
+          animation: _controlador,
+          builder: (context, _) => CustomPaint(
+            size: size,
+            painter: _BodyPainter(
+              vista: widget.vista,
+              valores: widget.valores,
+              anteriores: _anteriores,
+              progreso: _controlador.value,
+              seleccionado: widget.seleccionado,
+              brillo: b,
+            ),
+          ),
+        );
+
+        if (widget.onSeleccionar == null) return cuerpo;
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (detalle) => _tocar(detalle.localPosition, size),
-          child: AnimatedBuilder(
-            animation: _controlador,
-            builder: (context, _) => CustomPaint(
-              size: size,
-              painter: _BodyPainter(
-                vista: widget.vista,
-                valores: widget.valores,
-                anteriores: _anteriores,
-                progreso: _controlador.value,
-                seleccionado: widget.seleccionado,
-                brillo: b,
-              ),
-            ),
-          ),
+          child: cuerpo,
         );
       },
     );
@@ -151,7 +202,7 @@ class _BodyPainter extends CustomPainter {
     final silueta = siluetaCuerpo();
     canvas.drawPath(
       silueta,
-      Paint()..color = DesignTokens.muted(brillo).withOpacity(0.55),
+      Paint()..color = DesignTokens.muted(brillo).withValues(alpha: 0.55),
     );
     canvas.drawPath(
       silueta,
@@ -169,7 +220,7 @@ class _BodyPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 0.5
-          ..color = DesignTokens.background(brillo).withOpacity(0.45),
+          ..color = DesignTokens.background(brillo).withValues(alpha: 0.45),
       );
     }
 
@@ -207,7 +258,7 @@ class _BodyPainter extends CustomPainter {
       // Medido y en cero: un frío tenue, distinguible del gris de "no hay
       // dato". Un músculo que llevas tres semanas sin tocar es información.
       return Color.alphaBlend(
-        DesignTokens.effortLow.withOpacity(0.20),
+        DesignTokens.effortLow.withValues(alpha: 0.20),
         sinDatos,
       );
     }

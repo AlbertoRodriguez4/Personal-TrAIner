@@ -23,6 +23,16 @@ export class RoutineController {
     return this.routineService.findActiveByUser(userId);
   }
 
+  /// Volumen semanal planificado por músculo, para contrastarlo con el hecho.
+  ///
+  /// La ruta lleva `:userId` a propósito y no el id de la rutina: `JwtAuthGuard`
+  /// es global y compara el `userId` de params contra el `sub` del token, así
+  /// que una ruta `/:id/muscle-load` no le daría nada que comparar.
+  @Get('user/:userId/active/muscle-load')
+  getActiveMuscleLoad(@Param('userId') userId: string) {
+    return this.routineService.getActiveMuscleLoad(userId);
+  }
+
   @Post()
   create(@Body() dto: CreateRoutineDto) {
     return this.routineService.create(dto);

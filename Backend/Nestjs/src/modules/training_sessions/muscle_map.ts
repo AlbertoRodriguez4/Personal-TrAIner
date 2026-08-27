@@ -290,3 +290,52 @@ export function repartoPorTipo(tipo: string): Reparto {
 }
 
 export const IDS_MUSCULOS = Object.keys(MUSCULOS) as MuscleId[];
+
+/// Series que se le suponen a un ejercicio de rutina que no las declara.
+/// `Exercise.sets` es nullable y una rutina escrita a mano o dictada por chat
+/// llega a menudo sin ese número. Tres es el mínimo con el que la literatura
+/// de hipertrofia cuenta un ejercicio como trabajo real, así que erra por
+/// abajo: inflar el plan haría que la pantalla avisara de sobreentrenamiento
+/// que nadie ha escrito. Quien llama debe contar aparte cuánto volumen salió
+/// de aquí — un plan hecho entero de defaults no mide la rutina, mide esto.
+export const SERIES_POR_DEFECTO = 3;
+
+/// A qué músculos va la carga de un ejercicio, en orden de confianza:
+/// nombre reconocido → grupo del catálogo → tipo de sesión. `sin_clasificar`
+/// recoge los nombres que no casaron con ninguna de las dos primeras vías,
+/// para poder ampliar la tabla después con lo que de verdad entrena la gente
+/// en vez de a ciegas.
+///
+/// El último escalón es opcional y ahí está toda la diferencia entre los dos
+/// usos de esta función:
+///
+///  - **Sesión hecha** (`tipoSesion` con valor): `repartoPorTipo` nunca falla,
+///    así que nunca devuelve `null` y toda sesión registrada pinta algo. Una
+///    carrera sin ejercicios nombrados sigue siendo trabajo que existió.
+///  - **Ejercicio planificado** (`tipoSesion` a `null`): devuelve `null` si no
+///    casó nada. Un ejercicio de rutina no tiene "tipo de sesión" del que
+///    tirar, y repartirlo a ojo inventaría volumen que el usuario no ha
+///    escrito — justo lo que la pantalla del plan pretende medir.
+///
+/// Vive aquí y no en `TrainingSessionService` porque el módulo `routine` la
+/// necesita igual, y duplicar los tres escalones dejaría dos definiciones de
+/// "qué músculo trabaja este ejercicio" divergiendo en silencio.
+export function repartoEjercicio(
+  nombre: string | null,
+  tipoSesion: string | null,
+  catalogo: Map<string, string>,
+  sinClasificar: Set<string>,
+): Reparto | null {
+  if (nombre) {
+    const porNombre = repartoPorNombre(nombre);
+    if (porNombre) return porNombre;
+
+    const grupo = catalogo.get(normalizar(nombre));
+    if (grupo) {
+      const porGrupo = repartoPorGrupo(grupo);
+      if (porGrupo) return porGrupo;
+    }
+    sinClasificar.add(nombre);
+  }
+  return tipoSesion === null ? null : repartoPorTipo(tipoSesion);
+}
