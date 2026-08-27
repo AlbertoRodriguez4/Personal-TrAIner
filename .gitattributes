@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Los scripts que se ejecutan DENTRO de un contenedor Linux tienen que llegar
+# con finales de línea LF. Con `text=auto` y el `core.autocrlf=true` que trae
+# Git for Windows por defecto, al hacer checkout aquí se convierten a CRLF y el
+# contenedor muere con `/usr/bin/env: 'bash\r': No such file or directory` —
+# un error que no aparece al desplegar en Render (allí el checkout es en Linux),
+# solo al construir la imagen en local, que es cuando menos se espera.
+*.sh text eol=lf
+Dockerfile text eol=lf

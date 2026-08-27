@@ -1,5 +1,14 @@
 # Desplegar Personal TrAIner en Hugging Face Spaces + Koyeb + Neon
 
+> **OBSOLETO.** Este reparto (Koyeb + Hugging Face) ya no es el que está en
+> pie, y el patrón que describe —las dos mitades del backend en hosts distintos,
+> hablándose por internet— es justo el que provocaba los 429 del proxy y los
+> arranques en frío cruzados. Lo vigente es
+> **[DESPLIEGUE_RENDER.md](DESPLIEGUE_RENDER.md)** (una sola imagen en Render,
+> Postgres en Neon) o [DESPLIEGUE.md](DESPLIEGUE.md) si prefieres servidor
+> propio. Se conserva por el análisis de seguridad de `INTERNAL_API_KEY`, que
+> sigue siendo válido.
+
 Alternativa a [DESPLIEGUE.md](DESPLIEGUE.md) (una sola VM en Oracle): aquí cada
 pieza vive en un proveedor gratuito distinto. Sin servidor propio que
 mantener, pero con un cambio de arquitectura real: **el servicio Python deja

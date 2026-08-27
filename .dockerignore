@@ -1,0 +1,37 @@
+# El contexto de build de la imagen unificada es la raíz del repo, así que sin
+# esto Docker le manda al builder la app Flutter, el mockup de Lovable, el
+# índice de graft y los node_modules — cientos de MB que no entran en la imagen
+# pero que sí se suben y se tardan en subir en cada despliegue.
+
+# Lo que no es backend
+Frontend/
+lovable proyect/
+graft/
+docs/
+test/
+.agents/
+.claude/
+.git/
+.github/
+*.bat
+*.ps1
+Caddyfile
+
+# Dependencias y compilados: se instalan dentro del contenedor
+**/node_modules/
+**/dist/
+**/build/
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+
+# El modelo de pose lo baja el propio Dockerfile
+**/.mediapipe_models/
+
+# Secretos: que no acaben en una capa de la imagen ni por accidente
+**/.env
+**/.env.*
+!**/.env.*.example
+
+*.log

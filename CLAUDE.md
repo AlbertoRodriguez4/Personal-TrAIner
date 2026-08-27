@@ -201,8 +201,24 @@ convierte la clave en una llave maestra para cualquiera que la vea.
 `JWT_SECRET` no tiene valor por defecto a propósito: si falta, el arranque falla en
 vez de quedarse firmando tokens con un secreto conocido.
 
-**Despliegue:** ver [DESPLIEGUE.md](DESPLIEGUE.md). Docker Compose con Caddy
-delante (HTTPS obligatorio: Android bloquea el HTTP en claro). La URL del backend
+**Despliegue: dos formas, y no comparten Dockerfile.** En servidor propio va el
+`docker-compose.yml` con los dos Dockerfile de siempre (ver
+[DESPLIEGUE.md](DESPLIEGUE.md)). En Render va **una sola imagen** con los dos
+procesos dentro (`Dockerfile` de la raíz + `docker-entrypoint.sh`, ver
+[DESPLIEGUE_RENDER.md](DESPLIEGUE_RENDER.md)): en el plan Free un web service
+puede *enviar* peticiones por la red privada pero no *recibirlas*, así que dos
+servicios separados obligan a que NestJS llame a Python por internet — y ahí el
+429 del proxy (IP de salida compartida entre clientes de Render) y el sueño
+independiente de cada servicio a los 15 min convierten cada turno de IA en una
+lotería. Dentro de la imagen unificada Python escucha en `127.0.0.1`, así que el
+`entrypoint` **pisa `AI_PYTHON_URL` y `NEST_BASE_URL`** aunque vengan puestas en
+el panel: respetarlas devolvería la llamada a la red pública. Ese mismo
+entrypoint aborta si falta `INTERNAL_API_KEY` y tumba el contenedor entero si
+cae cualquiera de los dos procesos — si no, el healthcheck sigue en verde
+porque contesta NestJS y solo falla la IA.
+
+Lo común a las dos: HTTPS obligatorio, porque Android bloquea el HTTP en claro — lo
+pone Caddy en el servidor propio y Render por su cuenta. La URL del backend
 en Flutter se fija al compilar con `--dart-define=API_BASE_URL=...`; sin él, el
 default depende de `kReleaseMode` — release apunta al backend desplegado y debug a
 la IP de la LAN. El reparto es deliberado: un default equivocado en release falla en

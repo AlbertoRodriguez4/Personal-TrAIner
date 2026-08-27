@@ -158,6 +158,7 @@ cd Backend/Nestjs && npm run build
 | Documento | Contenido |
 |---|---|
 | [DESPLIEGUE.md](DESPLIEGUE.md) | Desplegar en un servidor propio, paso a paso |
+| [DESPLIEGUE_RENDER.md](DESPLIEGUE_RENDER.md) | Desplegar en Render con una sola imagen (backend entero en un contenedor) |
 | [README_EJECUCION.md](README_EJECUCION.md) | Arrancar los tres servicios en Windows |
 | [CLAUDE.md](CLAUDE.md) | Arquitectura, decisiones de diseño y trampas conocidas |
 | [AGENTS.md](AGENTS.md) | Convenciones para trabajar en el repo |
