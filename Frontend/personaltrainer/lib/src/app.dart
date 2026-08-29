@@ -20,6 +20,7 @@ import 'features/physique/presentation/screens/physique_page.dart';
 import 'features/profile/presentation/screens/profile_setup_page.dart';
 import 'features/onboarding/presentation/screens/tour_page.dart';
 import 'features/permissions/presentation/permissions_gate_page.dart';
+import 'features/routine/presentation/screens/routine_import_page.dart';
 import 'services/api_service.dart';
 
 class PersonalTrainerApp extends StatefulWidget {
@@ -96,6 +97,7 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
                     onBack: () => Navigator.pop(context),
                   ),
               '/clinic/import': (context) => const ClinicImportPage(),
+              '/routine/import': (context) => const RoutineImportPage(),
               '/physique': (context) => const PhysiquePage(),
             },
             onGenerateRoute: (settings) {

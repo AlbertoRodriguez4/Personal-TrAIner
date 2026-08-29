@@ -18,7 +18,7 @@ acotado por modo.
 |---|---|
 | **Composición corporal** | DEXA, bioimpedancia o báscula. Sube el informe y se extrae solo; los campos que faltan se derivan (IMC, masa grasa, masa magra, FFMI) |
 | **Analítica de sangre** | PDF o foto → biomarcadores normalizados y contrastados contra MedlinePlus (NIH) y rangos de referencia citados |
-| **Rutinas** | Creación y revisión con justificación por ejercicio, apoyada en un catálogo real |
+| **Rutinas** | Creación y revisión con justificación por ejercicio, apoyada en un catálogo real. También a mano: importar y exportar la rutina como JSON, sin IA de por medio |
 | **Nutrición** | Foto del plato o entrada manual, con macros de Open Food Facts / USDA / Edamam |
 | **Entrenamientos** | Sincronizados de Health Connect o medidos en vivo con banda BLE, con comparación contra tu media |
 | **Sueño y recuperación** | Fases de sueño, HRV y FC en reposo desde Health Connect |

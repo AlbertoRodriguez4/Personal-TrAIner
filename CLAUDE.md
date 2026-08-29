@@ -282,6 +282,29 @@ compares a session's metrics against the mean of *all* the user's completed sess
 type or origin — trying to segment "cardio vs. cardio" would leave that mean computed over 1-2 rows
 almost always.
 
+**Importar y exportar rutinas en JSON, sin IA.** `RoutineTransfer`
+(`features/routine/data/routine_transfer.dart`) es la vía manual para meter y sacar una rutina:
+`RoutineImportPage` (ruta `/routine/import`, con atajos en el constructor y en la pestaña
+Entrenar) lee el JSON pegado o un `.json`, y `showRoutineExportSheet` lo devuelve para copiar
+o guardar en archivo. Todo pasa en el cliente y se guarda con el `POST /routines` de siempre —
+no hay endpoint, modelo ni prompt detrás, y exportar-editar-importar es además la forma de
+duplicar una rutina o pasársela a alguien. Tres cosas del lector no son cosméticas:
+- **`day_of_week` sale siempre como `Lunes`..`Domingo` exactos**, igual que hace
+  `RoutineService.createFromAiPayload` en el backend y por el mismo motivo: la app cruza ese
+  texto contra su lista fija, así que cualquier otra cosa se guarda pero deja el plan semanal
+  vacío. De ahí que acepte tildes, abreviaturas, inglés y números, pero normalice.
+- **Los `id` que traiga el JSON se tiran** (y `encode` no los escribe). El `ValidationPipe` de
+  NestJS va sin `whitelist`, así que un `id` colado en un ejercicio llegaría hasta
+  `exerciseRepository.create()` y pisaría la fila de otra rutina.
+- **Dos bloques del mismo día se funden en uno.** Guardar dos filas "Lunes" no da error, pero
+  la app solo mira la primera (`days.indexWhere`) y la otra mitad de los ejercicios
+  desaparecería sin decir nada.
+Los textos se recortan antes de guardar (`name` y `focus` son `varchar(255)`; sin recorte, un
+pegado largo es un 500), y la comprobación previa es un paso aparte a propósito: el JSON lo
+escribe una persona, y enseñar qué ha entendido la app antes de guardar evita la rutina a
+medias que luego hay que borrar. Los tests son `test/routine_transfer_test.dart` (Dart puro,
+sin binding).
+
 **Mapa muscular (pestaña Entrenar).** `GET /training-sessions/user/:userId/muscle-load?dias=N`
 reparte las sesiones **completadas** del rango entre 16 grupos musculares y devuelve volumen,
 intensidad y fatiga de una vez; la tarjeta (`routine/presentation/widgets/muscle_heatmap_card.dart`)

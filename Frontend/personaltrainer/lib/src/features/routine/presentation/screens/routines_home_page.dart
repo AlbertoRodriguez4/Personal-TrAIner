@@ -6,7 +6,9 @@ import 'package:shimmer/shimmer.dart';
 import '../../../../core/providers/routine_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../models/routine.dart';
+import '../widgets/routine_export_sheet.dart';
 import 'routine_builder_page.dart';
+import 'routine_import_page.dart';
 import 'workout_session_page.dart';
 
 class RoutinesHomePage extends StatefulWidget {
@@ -102,6 +104,12 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
           onSave: () => context.read<RoutineProvider>().loadRoutines(),
         ),
       ),
+    );
+  }
+
+  void _openImport(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RoutineImportPage()),
     );
   }
 
@@ -245,6 +253,23 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
               ),
             ),
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _openImport(context),
+              icon: const Icon(LucideIcons.fileInput, size: 18),
+              label: const Text('Importar desde JSON'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: DesignTokens.border(b)),
+                foregroundColor: DesignTokens.foreground(b),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -375,6 +400,11 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                     icon: const Icon(LucideIcons.plus),
                     label: const Text('Crear primera rutina'),
                   ),
+                  TextButton.icon(
+                    onPressed: () => _openImport(context),
+                    icon: const Icon(LucideIcons.fileInput, size: 16),
+                    label: const Text('o importar una en JSON'),
+                  ),
                 ],
               ),
             ),
@@ -430,6 +460,16 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            GestureDetector(
+                              onTap: () =>
+                                  showRoutineExportSheet(context, routine),
+                              child: Icon(
+                                LucideIcons.share2,
+                                size: 18,
+                                color: DesignTokens.mutedForeground(b),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
                             GestureDetector(
                               onTap: () => _confirmDelete(routine),
                               child: Icon(

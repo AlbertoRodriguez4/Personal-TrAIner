@@ -26,6 +26,7 @@ import '../../../nutrition/presentation/widgets/todays_meals_card.dart';
 import '../../../routine/models/exercise.dart';
 import '../../../routine/presentation/screens/quick_add_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
+import '../../../routine/presentation/screens/routine_import_page.dart';
 import '../../../routine/presentation/screens/routine_view_page.dart';
 import '../../../routine/presentation/screens/workout_session_page.dart';
 import '../../../routine/presentation/widgets/muscle_heatmap_card.dart';
@@ -2019,6 +2020,19 @@ class _RoutineShortcuts extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        _NavTile(
+          tile: (
+            icon: LucideIcons.fileInput,
+            title: 'Importar rutina',
+            sub: 'Pega o abre un JSON',
+            // No pasa por la IA: `RoutineTransfer` lee el JSON en el propio
+            // móvil y la guarda por el POST de rutinas de siempre.
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RoutineImportPage()),
+            ),
+          ),
         ),
       ],
     );
