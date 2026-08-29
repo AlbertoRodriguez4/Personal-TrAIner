@@ -7,6 +7,11 @@ class Exercise {
   final String? duration;
   final String? notes;
 
+  /// Miniatura del catálogo, copiada al añadir el ejercicio a la rutina. Se
+  /// arrastra con el ejercicio (en vez de volver a buscarla por nombre) porque
+  /// el nombre es editable y puede no existir en el catálogo.
+  final String? imagenUrl;
+
   Exercise({
     this.id,
     required this.name,
@@ -15,6 +20,7 @@ class Exercise {
     this.weight,
     this.duration,
     this.notes,
+    this.imagenUrl,
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
@@ -28,6 +34,7 @@ class Exercise {
           : null,
       duration: json['duration']?.toString(),
       notes: json['notes']?.toString(),
+      imagenUrl: json['imagen_url']?.toString(),
     );
   }
 
@@ -40,6 +47,7 @@ class Exercise {
       if (weight != null) 'weight': weight,
       if (duration != null) 'duration': duration,
       if (notes != null) 'notes': notes,
+      if (imagenUrl != null) 'imagen_url': imagenUrl,
     };
   }
 
@@ -51,6 +59,7 @@ class Exercise {
     double? weight,
     String? duration,
     String? notes,
+    String? imagenUrl,
   }) {
     return Exercise(
       id: id ?? this.id,
@@ -60,6 +69,7 @@ class Exercise {
       weight: weight ?? this.weight,
       duration: duration ?? this.duration,
       notes: notes ?? this.notes,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
     );
   }
 }

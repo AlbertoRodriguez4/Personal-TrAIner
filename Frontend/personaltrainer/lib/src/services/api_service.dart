@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kReleaseMode, ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,6 +28,31 @@ class ApiService {
     defaultValue: kReleaseMode ? _backendProduccion : _backendDesarrollo,
   );
   static const String _sessionKey = 'pt_session_user';
+
+  /// Rutas que el backend marca `@Public()`. Un 401 aquí significa
+  /// "credenciales mal", no "sesión caducada": no hay que cerrar nada.
+  static const Set<String> _rutasPublicas = {
+    '/users/login',
+    '/users/register',
+    '/users/google-login',
+  };
+
+  /// Se pone a `true` cuando el backend rechaza el token guardado.
+  ///
+  /// Hace falta porque la sesión se restaura de `SharedPreferences` sin
+  /// comprobarla contra nadie: si el token ya no vale —caducó, o el backend
+  /// cambió de `JWT_SECRET`, que es lo que pasa al mover el servicio de sitio—
+  /// la app arrancaba directa en Inicio y *todas* las peticiones respondían
+  /// 401. Sin esto no se cerraba la sesión ni se volvía al login, así que el
+  /// resultado en pantalla era una app entera vacía (ni ejercicios, ni rutina,
+  /// ni nada) y parecía que el backend estaba caído.
+  static final ValueNotifier<bool> sesionCaducada = ValueNotifier<bool>(false);
+
+  /// Último error de login/registro, para poder enseñarlo. Los métodos de auth
+  /// devuelven `null` al fallar y se tragaban el motivo: en el móvil eso deja
+  /// un "no se pudo iniciar sesión" que vale igual para una contraseña mal que
+  /// para un backend inalcanzable.
+  static String? ultimoErrorAuth;
 
   static String? _authToken;
   static Map<String, dynamic>? _currentUser;
@@ -141,6 +166,17 @@ class ApiService {
       return _decodeBody(response);
     }
 
+    // Token guardado que el backend ya no acepta: se tira la sesión y se avisa
+    // a la raíz de la app para que vuelva al login. Si no, el usuario se queda
+    // dentro de una app que responde 401 a todo y no tiene forma de salir más
+    // que desinstalando.
+    if (response.statusCode == 401 &&
+        _authToken != null &&
+        !_rutasPublicas.contains(path)) {
+      await logout();
+      sesionCaducada.value = true;
+    }
+
     throw Exception(_extractErrorMessage(response));
   }
 
@@ -158,8 +194,11 @@ class ApiService {
       _currentUser = userData;
       _authToken = userData['access_token']?.toString();
       await _persistSession();
+      sesionCaducada.value = false;
+      ultimoErrorAuth = null;
       return userData;
-    } catch (_) {
+    } catch (e) {
+      ultimoErrorAuth = e.toString().replaceFirst('Exception: ', '');
       return null;
     }
   }
@@ -181,8 +220,11 @@ class ApiService {
       _currentUser = userData;
       _authToken = userData['access_token']?.toString();
       await _persistSession();
+      sesionCaducada.value = false;
+      ultimoErrorAuth = null;
       return userData;
-    } catch (_) {
+    } catch (e) {
+      ultimoErrorAuth = e.toString().replaceFirst('Exception: ', '');
       return null;
     }
   }
@@ -208,8 +250,10 @@ class ApiService {
           'peso_base_kg': peso,
         },
       );
+      ultimoErrorAuth = null;
       return _toMap(decoded);
-    } catch (_) {
+    } catch (e) {
+      ultimoErrorAuth = e.toString().replaceFirst('Exception: ', '');
       return null;
     }
   }

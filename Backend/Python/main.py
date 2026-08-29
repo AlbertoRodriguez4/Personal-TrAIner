@@ -56,6 +56,7 @@ async def analyze_set(data: SetTelemetryInput):
 from chat_engine import (
     run_chat,
     GeminiQuotaExhaustedError,
+    GeminiSobrecargadoError,
     GroqQuotaExhaustedError,
     RespuestaDemasiadoGrandeError,
 )
@@ -87,11 +88,20 @@ async def chat(request: ChatRequest):
             ),
         )
     except GeminiQuotaExhaustedError:
-        # Modos con imagen (nutricion, analisis_fisico): sin fallback a otro modelo,
-        # mensaje explícito de qué no se pudo hacer en vez del genérico de Groq.
+        # Modos de Gemini (nutricion, analisis_fisico): mensaje explícito de qué no se
+        # pudo hacer en vez del genérico de Groq. Ya no dice "la imagen" porque
+        # nutrición también estima comidas descritas por escrito, sin foto ninguna.
         raise HTTPException(
             status_code=503,
-            detail="No pude analizar la imagen ahora mismo (servicio de IA saturado). Probá de nuevo en un par de minutos.",
+            detail="No pude analizarlo ahora mismo: se agotó la cuota del servicio de IA. Probá de nuevo en un par de minutos.",
+        )
+    except GeminiSobrecargadoError:
+        # 503 de Google, no de nuestra cuota: el modelo está saturado. El detalle crudo
+        # que devolvía antes ("503 UNAVAILABLE. {'error': {'code': 503…") acababa
+        # entero en un aviso dentro de la app, sin decirle al usuario qué hacer.
+        raise HTTPException(
+            status_code=503,
+            detail="El modelo de IA está saturado ahora mismo. Vuelve a intentarlo en un minuto.",
         )
     except GroqQuotaExhaustedError:
         raise HTTPException(status_code=503, detail="Servicio de IA saturado, probá de nuevo en unos segundos")
@@ -130,7 +140,7 @@ def _traducir_error_analisis(exc: Exception) -> HTTPException:
         ValueError,
     )):
         return HTTPException(status_code=400, detail=str(exc))
-    if isinstance(exc, GeminiQuotaExhaustedError):
+    if isinstance(exc, (GeminiQuotaExhaustedError, GeminiSobrecargadoError)):
         return HTTPException(
             status_code=503,
             detail="No pude analizarlo ahora mismo (servicio de IA saturado). Probá de nuevo en un par de minutos.",

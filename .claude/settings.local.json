@@ -17,7 +17,16 @@
       "Bash(python -c \"import google.genai.errors as e; import inspect; print\\(inspect.getsource\\(e\\)\\)\")",
       "Bash(python -c ' *)",
       "Bash(python -c \"import groq; print\\(groq.__version__\\)\")",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(git credential *)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(r['id'], r['tag_name'], r['upload_url'], [a['id'] for a in r['assets']]\\) for r in d]\")",
+      "Bash(curl -s -m 40 -X POST https://personal-trainer-1-p3jr.onrender.com/users/login -H \"Content-Type: application/json\" -d '{\"email\":\"probe-noexiste-xyz@example.invalid\",\"password\":\"x\"}' -w \"\\\\nSTATUS:%{http_code}\\\\n\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://personal-trainer-1-p3jr.onrender.com/)",
+      "Bash(curl -s -i https://personal-trainer-1-p3jr.onrender.com/)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "graft"
+  ]
 }

@@ -8,7 +8,9 @@ import '../../../../core/ui/round_icon_button.dart';
 import '../../models/exercise.dart';
 import '../../models/routine.dart';
 import '../../models/routine_day.dart';
+import '../dialogs/confirm_dialog.dart';
 import '../dialogs/exercise_dialog.dart';
+import '../widgets/exercise_thumbnail.dart';
 import 'quick_add_page.dart';
 import 'routine_builder_page.dart';
 
@@ -22,11 +24,12 @@ const _diasSemana = [
   'Domingo',
 ];
 
-/// Vista de solo lectura de la rutina activa completa, día por día — réplica
+/// Vista de la rutina activa completa, día por día — réplica
 /// de `routine-view.tsx` del mockup Lovable (`trainer-mind-flow`, no
 /// sincronizado aún a `lovable proyect/`). Desde cada día expandido se puede
-/// editar (alta rápida) o ajustar series/reps/peso de un ejercicio ya
-/// existente, sin pasar por el constructor completo. Empezar una sesión NO
+/// editar (alta rápida), ajustar series/reps/peso de un ejercicio ya existente
+/// o quitarlo, sin pasar por el constructor completo; y desde la cabecera se
+/// borra la rutina entera. Empezar una sesión NO
 /// vive aquí a propósito — esa acción queda reservada a la tarjeta de "hoy"
 /// dentro de Entrenamiento (`_TodayRoutineHero` en home_page.dart).
 class RoutineViewPage extends StatefulWidget {
@@ -103,6 +106,63 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
     );
   }
 
+  Future<void> _deleteExercise(
+    Routine routine,
+    String dayLabel,
+    Exercise exercise,
+    int exerciseIndex,
+  ) async {
+    final provider = context.read<RoutineProvider>();
+    final confirmado = await confirmarBorrado(
+      context,
+      titulo: 'Quitar ejercicio',
+      mensaje: '¿Quitar "${exercise.name}" del $dayLabel?',
+      textoConfirmar: 'Quitar',
+    );
+    if (!confirmado || !mounted) return;
+
+    final saved = await provider.removeExerciseFromDay(
+      routine,
+      dayLabel,
+      exerciseIndex,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved != null
+              ? 'Ejercicio quitado de $dayLabel.'
+              : 'No se pudo quitar el ejercicio.',
+        ),
+      ),
+    );
+  }
+
+  /// Borra la rutina entera. No hace falta `pop()`: la pantalla pinta
+  /// `routines.first`, así que al desaparecer del provider o aparece la
+  /// siguiente rutina o sale el estado vacío, que ya ofrece crear una.
+  Future<void> _deleteRoutine(Routine routine) async {
+    final provider = context.read<RoutineProvider>();
+    final confirmado = await confirmarBorrado(
+      context,
+      titulo: 'Eliminar rutina',
+      mensaje:
+          '¿Seguro que quieres eliminar "${routine.name}" con todos sus días '
+          'y ejercicios? No se puede deshacer.',
+    );
+    if (!confirmado || !mounted || routine.id == null) return;
+
+    final ok = await provider.deleteRoutine(routine.id!);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Rutina eliminada' : 'Error al eliminar: ${provider.error}',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
@@ -152,6 +212,12 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
                         ),
                       ],
                     ),
+                    const Spacer(),
+                    if (routine != null)
+                      RoundIconButton(
+                        icon: LucideIcons.trash2,
+                        onTap: () => _deleteRoutine(routine),
+                      ),
                   ],
                 ),
               ),
@@ -194,6 +260,13 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
                                     _editDay(routine, _diasSemana[i]),
                                 onEditExercise: (exercise, index) =>
                                     _editExercise(
+                                      routine,
+                                      _diasSemana[i],
+                                      exercise,
+                                      index,
+                                    ),
+                                onDeleteExercise: (exercise, index) =>
+                                    _deleteExercise(
                                       routine,
                                       _diasSemana[i],
                                       exercise,
@@ -358,6 +431,7 @@ class _RoutineDayCard extends StatelessWidget {
     required this.onToggle,
     required this.onEdit,
     required this.onEditExercise,
+    required this.onDeleteExercise,
   });
 
   final String dayLabel;
@@ -367,6 +441,7 @@ class _RoutineDayCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final void Function(Exercise exercise, int index) onEditExercise;
+  final void Function(Exercise exercise, int index) onDeleteExercise;
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +449,16 @@ class _RoutineDayCard extends StatelessWidget {
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final sets = day.exercises.fold<int>(0, (s, e) => s + (e.sets ?? 0));
-    final focus = day.focus?.isNotEmpty == true ? day.focus! : 'Descanso';
+
+    // El nombre del día manda sobre el día de la semana: quien pone "Empuje A"
+    // busca eso en la lista, no "Martes" — que sigue visible en la línea de
+    // abajo para situar la semana. Sin nombre, el título vuelve a ser el día.
+    final nombre = day.focus?.trim() ?? '';
+    final titulo = nombre.isEmpty ? dayLabel : nombre;
+    final resumen = day.exercises.isEmpty
+        ? 'Descanso'
+        : '${day.exercises.length} ej · $sets series';
+    final subtitulo = nombre.isEmpty ? resumen : '$dayLabel · $resumen';
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -419,7 +503,7 @@ class _RoutineDayCard extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  dayLabel,
+                                  titulo,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 14,
@@ -452,7 +536,7 @@ class _RoutineDayCard extends StatelessWidget {
                             ],
                           ),
                           Text(
-                            '$focus · ${day.exercises.length} ej · $sets series',
+                            subtitulo,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: mutedFg),
                           ),
@@ -485,7 +569,7 @@ class _RoutineDayCard extends StatelessWidget {
                 children: [
                   const SizedBox(height: 10),
                   Text(
-                    focus.toUpperCase(),
+                    dayLabel.toUpperCase(),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -540,7 +624,9 @@ class _RoutineDayCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
+          ExerciseThumbnail(url: ex.imagenUrl, size: 36),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,6 +652,11 @@ class _RoutineDayCard extends StatelessWidget {
             icon: const Icon(LucideIcons.pencil, size: 16),
             tooltip: 'Editar ejercicio',
             onPressed: () => onEditExercise(ex, index),
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.trash2, size: 16),
+            tooltip: 'Quitar ejercicio',
+            onPressed: () => onDeleteExercise(ex, index),
           ),
         ],
       ),

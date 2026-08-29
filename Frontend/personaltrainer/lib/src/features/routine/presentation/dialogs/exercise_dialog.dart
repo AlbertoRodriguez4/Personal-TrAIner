@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../models/exercise.dart';
+import '../widgets/exercise_thumbnail.dart';
 
 class ExerciseBottomSheet extends StatefulWidget {
   const ExerciseBottomSheet({
@@ -87,6 +88,9 @@ class _ExerciseBottomSheetState extends State<ExerciseBottomSheet> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      // La miniatura viaja con el ejercicio y no se edita aquí: sin esta línea
+      // el ejercicio perdería la foto en cuanto se le tocara una serie.
+      imagenUrl: widget.exercise?.imagenUrl,
     );
 
     Navigator.of(context).pop(exercise);
@@ -125,6 +129,13 @@ class _ExerciseBottomSheetState extends State<ExerciseBottomSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
+                    if ((widget.exercise?.imagenUrl ?? '').isNotEmpty) ...[
+                      ExerciseThumbnail(
+                        url: widget.exercise!.imagenUrl,
+                        size: 44,
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Text(
                         widget.exercise != null

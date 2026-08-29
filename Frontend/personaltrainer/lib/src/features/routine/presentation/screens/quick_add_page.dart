@@ -5,6 +5,9 @@ import '../../../../core/theme/design_tokens.dart';
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise.dart';
 import '../../models/exercise_catalog.dart';
+import '../../models/exercise_filters.dart';
+import '../widgets/exercise_thumbnail.dart';
+import '../widgets/filter_chips_row.dart';
 
 /// Alta rápida de varios ejercicios para un día concreto de la rutina.
 ///
@@ -38,7 +41,13 @@ class _QuickAddPageState extends State<QuickAddPage> {
   late Future<List<ExerciseGroup>> _catalogFuture;
   List<ExerciseCatalog> _allExercises = const [];
   String _query = '';
-  String _group = 'Todos';
+
+  /// Los tres filtros son independientes y se combinan en `and`. `_subgrupo`
+  /// se reinicia al cambiar de región: "Gemelos" dentro de "Brazos" no
+  /// existe, y dejarlo puesto vaciaba la lista sin que se viera por qué.
+  String _region = filtroTodos;
+  String _subgrupo = filtroTodos;
+  String _equipamiento = filtroTodos;
 
   /// Lista en construcción. No se persiste nada hasta pulsar "Guardar día".
   final List<Exercise> _added = [];
@@ -67,41 +76,69 @@ class _QuickAddPageState extends State<QuickAddPage> {
 
   /// Valores de partida por tipo de actividad: que el usuario ajuste desde algo
   /// razonable en vez de rellenar cuatro campos vacíos por ejercicio.
-  Exercise _withDefaults(String name) {
+  ///
+  /// [imagenUrl] llega solo cuando el ejercicio sale del catálogo; el
+  /// personalizado que escribe el usuario no tiene ninguna y se queda con el
+  /// marcador de `ExerciseThumbnail`.
+  Exercise _withDefaults(String name, String? imagenUrl) {
     switch (widget.activityType) {
       case 'cardio':
-        return Exercise(name: name, duration: '20 min');
+        return Exercise(name: name, duration: '20 min', imagenUrl: imagenUrl);
       case 'yoga':
-        return Exercise(name: name, duration: '30 min');
+        return Exercise(name: name, duration: '30 min', imagenUrl: imagenUrl);
       case 'deportes':
-        return Exercise(name: name, duration: '45 min');
+        return Exercise(name: name, duration: '45 min', imagenUrl: imagenUrl);
       case 'calistenia':
       case 'gym':
       default:
-        return Exercise(name: name, sets: 3, reps: '8-12');
+        return Exercise(
+          name: name,
+          sets: 3,
+          reps: '8-12',
+          imagenUrl: imagenUrl,
+        );
     }
   }
 
-  List<ExerciseCatalog> get _filtered {
-    final q = _query.trim().toLowerCase();
-    return _allExercises.where((e) {
-      final matchesGroup = _group == 'Todos' || e.grupoMuscular == _group;
-      if (!matchesGroup) return false;
-      if (q.isEmpty) return true;
-      return e.nombre.toLowerCase().contains(q) ||
-          e.grupoMuscular.toLowerCase().contains(q) ||
-          (e.equipamiento ?? '').toLowerCase().contains(q);
-    }).toList();
+  List<ExerciseCatalog> get _filtered => filtrarEjercicios(
+    _allExercises,
+    region: _region,
+    subgrupo: _subgrupo,
+    equipamiento: _equipamiento,
+    consulta: _query,
+  );
+
+  /// Cuántos ejercicios dejaría cada opción de una fila **si se pulsara
+  /// ahora**, con los otros dos filtros como están. Cada fila se cuenta a sí
+  /// misma en abierto: si la fila de regiones se contara con la región ya
+  /// aplicada, todas menos la activa marcarían cero.
+  Map<String, int> _contar(
+    List<String> opciones, {
+    required String Function(String) valorRegion,
+    required String Function(String) valorSubgrupo,
+    required String Function(String) valorEquipo,
+  }) {
+    return {
+      for (final o in opciones)
+        o: filtrarEjercicios(
+          _allExercises,
+          region: valorRegion(o),
+          subgrupo: valorSubgrupo(o),
+          equipamiento: valorEquipo(o),
+          consulta: _query,
+        ).length,
+    };
   }
 
-  List<String> get _groupOptions {
-    final groups = _allExercises.map((e) => e.grupoMuscular).toSet().toList()
-      ..sort();
-    return ['Todos', ...groups];
+  void _cambiarRegion(String region) {
+    setState(() {
+      _region = region;
+      _subgrupo = filtroTodos;
+    });
   }
 
-  void _add(String name) {
-    setState(() => _added.add(_withDefaults(name)));
+  void _add(String name, {String? imagenUrl}) {
+    setState(() => _added.add(_withDefaults(name, imagenUrl)));
   }
 
   void _updateAt(int index, Exercise updated) {
@@ -248,116 +285,183 @@ class _QuickAddPageState extends State<QuickAddPage> {
 
   Widget _buildBody(Brightness b) {
     final results = _filtered;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      children: [
-        TextField(
-          controller: _searchController,
-          autofocus: true,
-          onChanged: (v) => setState(() => _query = v),
-          decoration: InputDecoration(
-            hintText: 'Busca ejercicio, grupo o equipo…',
-            prefixIcon: const Icon(LucideIcons.search, size: 18),
-            suffixIcon: _query.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(LucideIcons.x, size: 16),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _query = '');
-                    },
+    final regiones = regionesConEjercicios(_allExercises);
+    final subgrupos = _region == filtroTodos
+        ? const <String>[]
+        : subgruposDe(_region, _allExercises);
+    final equipos = equipamientosDe(_allExercises);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
+    // Lista perezosa, y no un `for` dentro de `ListView(children:)` como
+    // estaba: con 19 ejercicios daba igual, con ~890 se construyen las 890
+    // fichas —y se piden las 890 imágenes— antes de pintar el primer
+    // fotograma.
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: 'Busca ejercicio, grupo o equipo…',
+                    prefixIcon: const Icon(LucideIcons.search, size: 18),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(LucideIcons.x, size: 16),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
                   ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 34,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _groupOptions.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              final g = _groupOptions[i];
-              final active = g == _group;
-              return Material(
-                color: active ? _accent : DesignTokens.surface1(b),
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () => setState(() => _group = g),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    child: Text(
-                      g,
-                      style: DesignTokens.bodyFont(
-                        fontSize: 12.5,
-                        weight: FontWeight.w600,
-                        color: active ? Colors.white : DesignTokens.foreground(b),
-                      ),
+                ),
+                const SizedBox(height: 12),
+                FilterChipsRow(
+                  opciones: regiones,
+                  seleccionada: _region,
+                  onSeleccion: _cambiarRegion,
+                  acento: _accent,
+                  contadores: _contar(
+                    regiones,
+                    valorRegion: (o) => o,
+                    valorSubgrupo: (_) => filtroTodos,
+                    valorEquipo: (_) => _equipamiento,
+                  ),
+                ),
+                // La segunda fila solo existe mientras hay una región elegida
+                // que se subdivida. Pecho o Core no la enseñan: repetiría el
+                // chip de arriba y robaría una fila de pantalla.
+                if (subgrupos.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  FilterChipsRow(
+                    opciones: subgrupos,
+                    seleccionada: _subgrupo,
+                    onSeleccion: (v) => setState(() => _subgrupo = v),
+                    acento: _accent,
+                    alto: 30,
+                    contadores: _contar(
+                      subgrupos,
+                      valorRegion: (_) => _region,
+                      valorSubgrupo: (o) => o,
+                      valorEquipo: (_) => _equipamiento,
                     ),
                   ),
+                ],
+                const SizedBox(height: 8),
+                FilterChipsRow(
+                  opciones: equipos,
+                  seleccionada: _equipamiento,
+                  onSeleccion: (v) => setState(() => _equipamiento = v),
+                  acento: _accent,
+                  alto: 30,
+                  contadores: _contar(
+                    equipos,
+                    valorRegion: (_) => _region,
+                    valorSubgrupo: (_) => _subgrupo,
+                    valorEquipo: (o) => o,
+                  ),
                 ),
-              );
-            },
+                const SizedBox(height: 16),
+                if (_added.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Text('EJERCICIOS DE HOY · ${_added.length}',
+                          style: DesignTokens.labelSmall(color: mutedFg)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _accent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(widget.dayLabel,
+                            style: DesignTokens.bodyFont(
+                                fontSize: 10.5,
+                                weight: FontWeight.w700,
+                                color: _accent)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  for (var i = 0; i < _added.length; i++) ...[
+                    _AddedExerciseCard(
+                      key: ValueKey('${_added[i].name}-$i'),
+                      exercise: _added[i],
+                      index: i,
+                      total: _added.length,
+                      accent: _accent,
+                      showSetsReps: _showSetsReps,
+                      showWeight: _showWeight,
+                      showDuration: _showDuration,
+                      onChanged: (e) => _updateAt(i, e),
+                      onRemove: () => _removeAt(i),
+                      onDuplicate: () => _duplicateAt(i),
+                      onMoveUp: i == 0 ? null : () => _moveAt(i, -1),
+                      onMoveDown:
+                          i == _added.length - 1 ? null : () => _moveAt(i, 1),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Text('CATÁLOGO',
+                        style: DesignTokens.labelSmall(color: mutedFg)),
+                    const Spacer(),
+                    Text(
+                      results.length == _allExercises.length
+                          ? '${results.length}'
+                          : '${results.length} de ${_allExercises.length}',
+                      style: DesignTokens.bodyFont(
+                          fontSize: 11,
+                          weight: FontWeight.w600,
+                          color: mutedFg),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        if (_added.isNotEmpty) ...[
-          Row(
-            children: [
-              Text('EJERCICIOS DE HOY · ${_added.length}',
-                  style: DesignTokens.labelSmall(
-                      color: DesignTokens.mutedForeground(b))),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _accent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(widget.dayLabel,
-                    style: DesignTokens.bodyFont(
-                        fontSize: 10.5, weight: FontWeight.w700, color: _accent)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          for (var i = 0; i < _added.length; i++) ...[
-            _AddedExerciseCard(
-              key: ValueKey('${_added[i].name}-$i'),
-              exercise: _added[i],
-              index: i,
-              total: _added.length,
-              accent: _accent,
-              showSetsReps: _showSetsReps,
-              showWeight: _showWeight,
-              showDuration: _showDuration,
-              onChanged: (e) => _updateAt(i, e),
-              onRemove: () => _removeAt(i),
-              onDuplicate: () => _duplicateAt(i),
-              onMoveUp: i == 0 ? null : () => _moveAt(i, -1),
-              onMoveDown: i == _added.length - 1 ? null : () => _moveAt(i, 1),
-            ),
-            const SizedBox(height: 10),
-          ],
-          const SizedBox(height: 8),
-        ],
-        Text('CATÁLOGO',
-            style: DesignTokens.labelSmall(
-                color: DesignTokens.mutedForeground(b))),
-        const SizedBox(height: 10),
         if (results.isEmpty)
-          _buildEmptyResults(b)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverToBoxAdapter(child: _buildEmptyResults(b)),
+          )
         else
-          for (final e in results) ...[
-            _CatalogTile(exercise: e, onTap: () => _add(e.nombre)),
-            const SizedBox(height: 8),
-          ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _openCustomSheet,
-          icon: const Icon(LucideIcons.sparkles, size: 16),
-          label: const Text('Ejercicio personalizado'),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.separated(
+              itemCount: results.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, i) => _CatalogTile(
+                exercise: results[i],
+                onTap: () => _add(
+                  results[i].nombre,
+                  imagenUrl: results[i].imagenUrl,
+                ),
+              ),
+            ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          sliver: SliverToBoxAdapter(
+            child: OutlinedButton.icon(
+              onPressed: _openCustomSheet,
+              icon: const Icon(LucideIcons.sparkles, size: 16),
+              label: const Text('Ejercicio personalizado'),
+            ),
+          ),
         ),
       ],
     );
@@ -453,9 +557,13 @@ class _CatalogTile extends StatelessWidget {
     final b = Theme.of(context).brightness;
     // El mockup muestra "equipamiento · descripción"; la descripción ya venía
     // del backend pero no se pintaba en ningún sitio.
+    // La descripcion importada ya empieza por categoria y nivel, y repetir el
+    // equipamiento delante deja lineas como "Barra · Fuerza, nivel intermedio
+    // · trabaja pecho · con barra". Con imagen y con chip de equipamiento
+    // arriba, el subtitulo se queda solo con el grupo y el equipo.
     final sub = [
+      exercise.grupoMuscular,
       if ((exercise.equipamiento ?? '').isNotEmpty) exercise.equipamiento!,
-      if ((exercise.descripcion ?? '').isNotEmpty) exercise.descripcion!,
     ].join(' · ');
 
     return Material(
@@ -468,12 +576,14 @@ class _CatalogTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
+              ExerciseThumbnail(url: exercise.imagenUrl, size: 44),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(exercise.nombre,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: DesignTokens.bodyFont(
                             fontSize: 14,
@@ -560,6 +670,8 @@ class _AddedExerciseCard extends StatelessWidget {
                       icon: LucideIcons.chevronDown, onTap: onMoveDown),
                 ],
               ),
+              const SizedBox(width: 10),
+              ExerciseThumbnail(url: exercise.imagenUrl, size: 36),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(exercise.name,

@@ -13,9 +13,10 @@ from groq import (
 from chat_tools import TOOLS_BY_MODE, EXECUTORS, SYSTEM_PROMPTS, BASE_GUIDELINES
 from gemini_client import (
     _env,
-    # GeminiQuotaExhaustedError se reexporta a propósito: main.py la importa
+    # Las dos excepciones de Gemini se reexportan a propósito: main.py las importa
     # desde aquí desde antes de que existiera gemini_client.
     GeminiQuotaExhaustedError,
+    GeminiSobrecargadoError,
     LLMProviderExhaustedError,
     RETRY_ATTEMPTS,
     RETRY_BACKOFF_SECONDS,

@@ -8,6 +8,7 @@ import '../../../../services/api_service.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/exercise.dart';
 import '../../models/routine.dart';
+import '../widgets/exercise_thumbnail.dart';
 import 'routines_home_page.dart';
 
 class WorkoutSessionPage extends StatefulWidget {
@@ -529,24 +530,27 @@ class _ChecklistRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: done
-                  ? DesignTokens.success(b).withOpacity(0.15)
-                  : DesignTokens.card(b),
-              borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+          if (!done && (exercise.imagenUrl ?? '').isNotEmpty)
+            ExerciseThumbnail(url: exercise.imagenUrl, size: 36)
+          else
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: done
+                    ? DesignTokens.success(b).withOpacity(0.15)
+                    : DesignTokens.card(b),
+                borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+              ),
+              child: Icon(
+                done ? LucideIcons.check : LucideIcons.dumbbell,
+                size: 16,
+                color: done
+                    ? DesignTokens.success(b)
+                    : DesignTokens.foreground(b).withOpacity(0.7),
+              ),
             ),
-            child: Icon(
-              done ? LucideIcons.check : LucideIcons.dumbbell,
-              size: 16,
-              color: done
-                  ? DesignTokens.success(b)
-                  : DesignTokens.foreground(b).withOpacity(0.7),
-            ),
-          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1061,18 +1065,21 @@ class _ExerciseCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: DesignTokens.activityGym.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+              if ((ex.imagenUrl ?? '').isNotEmpty)
+                ExerciseThumbnail(url: ex.imagenUrl, size: 52)
+              else
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: DesignTokens.activityGym.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
+                  ),
+                  child: Icon(
+                    LucideIcons.dumbbell,
+                    size: 18,
+                    color: DesignTokens.activityGym,
+                  ),
                 ),
-                child: Icon(
-                  LucideIcons.dumbbell,
-                  size: 18,
-                  color: DesignTokens.activityGym,
-                ),
-              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(

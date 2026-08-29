@@ -34,6 +34,10 @@ export class CreateExerciseDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  imagen_url?: string;
 }
 
 export class CreateRoutineDayDto {

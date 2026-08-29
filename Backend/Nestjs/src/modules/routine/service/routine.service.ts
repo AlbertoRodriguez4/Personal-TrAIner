@@ -31,6 +31,24 @@ export class RoutineService {
     private readonly exerciseCatalogRepository: Repository<ExerciseCatalog>,
   ) {}
 
+  /// Nombre normalizado del catálogo → su miniatura, para rellenar la del
+  /// ejercicio cuando quien escribe no la manda: la rutina que redacta la IA
+  /// (que solo conoce nombres) y las creadas desde clientes viejos. Lo que sí
+  /// venga en el payload gana, porque una rutina importada trae su propia
+  /// imagen y puede referirse a un ejercicio que este catálogo no tiene.
+  private async imagenesCatalogo(): Promise<Map<string, string>> {
+    const filas = await this.exerciseCatalogRepository.find({
+      select: ['nombre', 'imagen_url'],
+    });
+    const mapa = new Map<string, string>();
+    for (const fila of filas) {
+      if (fila.imagen_url) {
+        mapa.set(normalizar(fila.nombre), fila.imagen_url);
+      }
+    }
+    return mapa;
+  }
+
   async findAll(userId?: string) {
     const whereCondition = userId ? { userId } : {};
     return this.routineRepository.find({
@@ -41,6 +59,7 @@ export class RoutineService {
   }
 
   async create(dto: CreateRoutineDto) {
+    const imagenes = await this.imagenesCatalogo();
     const routine = this.routineRepository.create({
       userId: dto.userId, // Esperamos que se pase en el DTO temporalmente o manualmente
       name: dto.name,
@@ -53,7 +72,10 @@ export class RoutineService {
           focus: day.focus,
           exercises:
             day.exercises?.map((ex) =>
-              this.exerciseRepository.create(ex),
+              this.exerciseRepository.create({
+                ...ex,
+                imagen_url: ex.imagen_url ?? imagenes.get(normalizar(ex.name)),
+              }),
             ) ?? [],
         }),
       ),
@@ -70,6 +92,8 @@ export class RoutineService {
   }
 
   async createFromAiPayload(dto: CreateRoutineFromAiDto) {
+    const imagenes = await this.imagenesCatalogo();
+
     if (dto.userId) {
       await this.routineRepository.update(
         { userId: dto.userId },
@@ -107,6 +131,7 @@ export class RoutineService {
             weight: ex.peso_sugerido_kg,
             rest_seconds: ex.descanso_segundos,
             notes: ex.notas,
+            imagen_url: imagenes.get(normalizar(ex.nombre)),
           }),
         ),
       }),
@@ -162,6 +187,7 @@ export class RoutineService {
 
   async update(id: string, userId: string, dto: UpdateRoutineDto) {
     const routine = await this.findOneForUser(id, userId);
+    const imagenes = await this.imagenesCatalogo();
 
     if (dto.name !== undefined) {
       routine.name = dto.name;
@@ -184,7 +210,10 @@ export class RoutineService {
           focus: day.focus,
           exercises:
             day.exercises?.map((ex) =>
-              this.exerciseRepository.create(ex),
+              this.exerciseRepository.create({
+                ...ex,
+                imagen_url: ex.imagen_url ?? imagenes.get(normalizar(ex.name)),
+              }),
             ) ?? [],
         }),
       );
@@ -195,6 +224,7 @@ export class RoutineService {
 
   async updateFromAiPayload(id: string, userId: string, dias_entrenamiento: any[]) {
     const routine = await this.findOneForUser(id, userId);
+    const imagenes = await this.imagenesCatalogo();
 
     if (routine.days && routine.days.length > 0) {
       await this.dayRepository.remove(routine.days);
@@ -212,6 +242,7 @@ export class RoutineService {
             weight: ex.peso_sugerido_kg,
             rest_seconds: ex.descanso_segundos,
             notes: ex.notas,
+            imagen_url: imagenes.get(normalizar(ex.nombre)),
           }),
         ),
       }),

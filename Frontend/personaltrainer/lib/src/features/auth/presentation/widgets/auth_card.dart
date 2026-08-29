@@ -48,7 +48,7 @@ class _AuthCardState extends State<AuthCard> {
       );
       if (!mounted) return;
       if (userData == null) {
-        _showMessage('Credenciales incorrectas.');
+        _showMessage(ApiService.ultimoErrorAuth ?? 'Credenciales incorrectas.');
       } else {
         await _checkProfileAndProceed();
       }
@@ -94,7 +94,8 @@ class _AuthCardState extends State<AuthCard> {
         if (userData != null) {
           await _checkProfileAndProceed();
         } else {
-          _showMessage('No se pudo iniciar sesión con Google.');
+          _showMessage(ApiService.ultimoErrorAuth ??
+              'No se pudo iniciar sesión con Google.');
         }
       }
     } catch (e) {

@@ -9,6 +9,7 @@ import '../../models/routine.dart';
 import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
 import '../widgets/exercise_catalog_sheet.dart';
+import '../widgets/exercise_thumbnail.dart';
 import 'quick_add_page.dart';
 import '../../models/exercise_catalog.dart';
 import '../../../../core/theme/design_tokens.dart';
@@ -228,6 +229,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
   }
 
   void _updateDayFocus(int index, String focus) {
+    if (index < 0 || index >= _days.length) return;
     setState(() {
       _days[index] = _days[index].copyWith(focus: focus);
     });
@@ -260,6 +262,7 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
       templateExercise = Exercise(
         name: catalogItem.nombre,
         notes: catalogItem.descripcion,
+        imagenUrl: catalogItem.imagenUrl,
       );
     }
 
@@ -463,6 +466,10 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
                             ? _days[index]
                             : RoutineDay(dayOfWeek: day);
                         return _DayCard(
+                          // El estado del nombre sigue al día, no a la
+                          // posición: sin esto, quitar un día de en medio le
+                          // pasa su nombre al siguiente.
+                          key: ValueKey(day),
                           day: day,
                           dayData: dayData,
                           activityType: _activityType,
@@ -629,7 +636,7 @@ class _ActivityOption {
   });
 }
 
-class _DayCard extends StatelessWidget {
+class _DayCard extends StatefulWidget {
   final String day;
   final RoutineDay dayData;
   final String activityType;
@@ -642,6 +649,7 @@ class _DayCard extends StatelessWidget {
   final void Function(int) onDeleteExercise;
 
   const _DayCard({
+    super.key,
     required this.day,
     required this.dayData,
     required this.activityType,
@@ -654,13 +662,51 @@ class _DayCard extends StatelessWidget {
     required this.onDeleteExercise,
   });
 
-  Color get _dotColor => DesignTokens.activity(activityType);
+  @override
+  State<_DayCard> createState() => _DayCardState();
+}
 
-  String get _shortDay {
-    return day.substring(0, 2);
+/// Con estado por el campo de nombre: el `TextEditingController` tiene que
+/// sobrevivir a los `setState` del padre (cada tecla actualiza `_days`), y sin
+/// `key: ValueKey(day)` en el padre el estado se emparejaría por posición y el
+/// nombre saltaría de un día a otro al quitar uno de en medio.
+class _DayCardState extends State<_DayCard> {
+  late final TextEditingController _nombreController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nombreController = TextEditingController(text: widget.dayData.focus ?? '');
   }
 
-  bool get _isRest => dayData.focus == 'Descanso';
+  @override
+  void didUpdateWidget(_DayCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Solo cuando el nombre cambia por fuera (elegir una sugerencia, cargar la
+    // rutina): comparar contra el texto actual evita pisar lo que se escribe.
+    final nombre = widget.dayData.focus ?? '';
+    if (nombre != _nombreController.text) {
+      _nombreController.text = nombre;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    super.dispose();
+  }
+
+  Color get _dotColor => DesignTokens.activity(widget.activityType);
+
+  String get _shortDay {
+    return widget.day.substring(0, 2);
+  }
+
+  /// Un día sin ejercicios no es necesariamente descanso (puede estar a
+  /// medio montar), así que sigue mandando lo que ponga el nombre. Ahora se
+  /// escribe a mano, de ahí la comparación sin mayúsculas ni espacios.
+  bool get _isRest =>
+      (widget.dayData.focus ?? '').trim().toLowerCase() == 'descanso';
 
   @override
   Widget build(BuildContext context) {
@@ -705,22 +751,50 @@ class _DayCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: focusOptions.contains(dayData.focus)
-                          ? dayData.focus
-                          : null,
-                      hint: const Text('Selecciona enfoque'),
-                      items: [
-                        ...focusOptions.map((opt) => DropdownMenuItem(
-                              value: opt,
-                              child: Text(opt),
-                            )),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) onFocusChanged(val);
-                      },
+                  child: TextField(
+                    controller: _nombreController,
+                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.done,
+                    onChanged: widget.onFocusChanged,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                        ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Nombre del día. Ej: Empuje A',
+                      hintStyle: TextStyle(color: mutedFg),
+                      // Las sugerencias de siempre siguen a un toque, pero ya
+                      // no son la única forma de nombrar un día: la lista fija
+                      // no cubre "Empuje A" ni "Pierna (rodilla)".
+                      suffixIcon: PopupMenuButton<String>(
+                        tooltip: 'Sugerencias',
+                        icon: Icon(
+                          LucideIcons.chevronDown,
+                          size: 16,
+                          color: mutedFg,
+                        ),
+                        itemBuilder: (_) => widget.focusOptions
+                            .map(
+                              (opt) => PopupMenuItem(
+                                value: opt,
+                                child: Text(opt),
+                              ),
+                            )
+                            .toList(),
+                        onSelected: (val) {
+                          _nombreController.text = val;
+                          widget.onFocusChanged(val);
+                        },
+                      ),
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
                     ),
                   ),
                 ),
@@ -738,7 +812,7 @@ class _DayCard extends StatelessWidget {
                               title: const Text('Quitar día'),
                               onTap: () {
                                 Navigator.pop(context);
-                                onRemove();
+                                widget.onRemove();
                               },
                             ),
                           ],
@@ -773,11 +847,11 @@ class _DayCard extends StatelessWidget {
           else
             Column(
               children: [
-                if (dayData.exercises.isNotEmpty)
+                if (widget.dayData.exercises.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     child: Column(
-                      children: dayData.exercises.asMap().entries.map((entry) {
+                      children: widget.dayData.exercises.asMap().entries.map((entry) {
                         final ex = entry.value;
                         final idx = entry.key;
                         return Container(
@@ -789,14 +863,7 @@ class _DayCard extends StatelessWidget {
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: _dotColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
+                              ExerciseThumbnail(url: ex.imagenUrl, size: 40),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
@@ -847,13 +914,13 @@ class _DayCard extends StatelessWidget {
                                     icon: Icon(LucideIcons.pencil,
                                         size: 18),
                                     onPressed: () =>
-                                        onEditExercise(ex, idx),
+                                        widget.onEditExercise(ex, idx),
                                   ),
                                   IconButton(
                                     icon: Icon(LucideIcons.trash2,
                                         size: 18),
                                     onPressed: () =>
-                                        onDeleteExercise(idx),
+                                        widget.onDeleteExercise(idx),
                                   ),
                                 ],
                               ),
@@ -871,10 +938,10 @@ class _DayCard extends StatelessWidget {
                       // el alta de uno en uno como secundaria: montar un día
                       // entero es lo habitual, retocar un ejercicio suelto no.
                       Material(
-                        color: DesignTokens.activity(activityType),
+                        color: DesignTokens.activity(widget.activityType),
                         borderRadius: BorderRadius.circular(12),
                         child: InkWell(
-                          onTap: onQuickAdd,
+                          onTap: widget.onQuickAdd,
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 13),
@@ -897,7 +964,7 @@ class _DayCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       InkWell(
-                        onTap: onAddExercise,
+                        onTap: widget.onAddExercise,
                         borderRadius: BorderRadius.circular(12),
                         child: DottedBorder(
                           borderType: BorderType.RRect,

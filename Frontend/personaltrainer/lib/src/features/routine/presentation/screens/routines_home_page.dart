@@ -6,6 +6,8 @@ import 'package:shimmer/shimmer.dart';
 import '../../../../core/providers/routine_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../models/routine.dart';
+import '../dialogs/confirm_dialog.dart';
+import '../dialogs/routine_transfer_dialogs.dart';
 import 'routine_builder_page.dart';
 import 'workout_session_page.dart';
 
@@ -55,33 +57,15 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
 
   Future<void> _confirmDelete(Routine routine) async {
     final provider = context.read<RoutineProvider>();
-    final b = Theme.of(context).brightness;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radius3xl),
-        ),
-        title: const Text('Eliminar rutina'),
-        content: Text('¿Seguro que quieres eliminar "${routine.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DesignTokens.destructive(b),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmarBorrado(
+      context,
+      titulo: 'Eliminar rutina',
+      mensaje:
+          '¿Seguro que quieres eliminar "${routine.name}" con todos sus días '
+          'y ejercicios? No se puede deshacer.',
     );
 
-    if (confirmed == true && routine.id != null) {
+    if (confirmed && routine.id != null) {
       final ok = await provider.deleteRoutine(routine.id!);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,6 +76,28 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
         ),
       );
     }
+  }
+
+  /// La rutina importada entra como una más: se crea con el flujo normal, así
+  /// que hereda el `userId` y el paso a activa que hace el provider. No se
+  /// abre el constructor a continuación a propósito — lo importado suele venir
+  /// ya montado, y quien quiera retocarlo lo abre desde la tarjeta.
+  Future<void> _importRoutine() async {
+    final provider = context.read<RoutineProvider>();
+    final rutina = await importarRutinaConUI(context);
+    if (rutina == null || !mounted) return;
+
+    final guardada = await provider.saveRoutine(rutina.toJson());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          guardada != null
+              ? 'Rutina "${guardada.name}" importada.'
+              : 'No se pudo importar: ${provider.error}',
+        ),
+      ),
+    );
   }
 
   void _openBuilder(BuildContext context, {Routine? routine}) {
@@ -157,6 +163,11 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                                 color: DesignTokens.foreground(b),
                               ),
                             ),
+                          ),
+                          IconButton(
+                            onPressed: _importRoutine,
+                            icon: const Icon(LucideIcons.folderInput, size: 20),
+                            tooltip: 'Importar rutina',
                           ),
                           Selector<RoutineProvider, bool>(
                             selector: (_, p) => p.routines.isNotEmpty,
@@ -375,6 +386,12 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                     icon: const Icon(LucideIcons.plus),
                     label: const Text('Crear primera rutina'),
                   ),
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    onPressed: _importRoutine,
+                    icon: const Icon(LucideIcons.folderInput, size: 18),
+                    label: const Text('Importar una rutina'),
+                  ),
                 ],
               ),
             ),
@@ -430,6 +447,15 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            GestureDetector(
+                              onTap: () => exportarRutinaConUI(context, routine),
+                              child: Icon(
+                                LucideIcons.share2,
+                                size: 18,
+                                color: DesignTokens.mutedForeground(b),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
                             GestureDetector(
                               onTap: () => _confirmDelete(routine),
                               child: Icon(

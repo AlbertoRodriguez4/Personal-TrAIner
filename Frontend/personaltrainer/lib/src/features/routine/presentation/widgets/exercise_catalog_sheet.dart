@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise_catalog.dart';
+import 'exercise_thumbnail.dart';
 import '../../../../core/theme/design_tokens.dart';
 
 class ExerciseCatalogSheet extends StatefulWidget {
@@ -195,19 +196,7 @@ class _ExerciseCardTile extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: DesignTokens.activityGym.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    LucideIcons.dumbbell,
-                    color: DesignTokens.activityGym,
-                    size: 24,
-                  ),
-                ),
+                ExerciseThumbnail(url: exercise.imagenUrl, size: 48),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(

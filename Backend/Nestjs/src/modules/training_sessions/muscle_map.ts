@@ -103,6 +103,22 @@ const GRUPO_CATALOGO: Record<string, Reparto> = {
   brazos: { biceps: 1, triceps: 1, antebrazo: 0.4 },
   antebrazo: { antebrazo: 1 },
   cardio: { cuadriceps: 0.8, isquiotibiales: 0.6, gluteos: 0.6, gemelos: 0.8 },
+  // Grupos que llegaron con la importación de free-exercise-db (migración
+  // 1787100000000). El dataset distingue el músculo primario de verdad, no los
+  // siete cajones del catálogo original, así que aquí el reparto puede ser
+  // directo en vez de repartido: si el ejercicio dice "isquiotibiales", son
+  // isquiotibiales. Sin estas entradas el ejercicio no falla — se pinta gris,
+  // que es peor, porque parece que no lo entrenaste.
+  cuadriceps: { cuadriceps: 1, gluteos: 0.3 },
+  isquiotibiales: { isquiotibiales: 1, gluteos: 0.4 },
+  gemelos: { gemelos: 1 },
+  lumbar: { lumbar: 1, gluteos: 0.3 },
+  trapecio: { trapecio: 1, hombro_posterior: 0.3 },
+  aductores: { aductores: 1, isquiotibiales: 0.2 },
+  abductores: { gluteos: 1, aductores: 0.2 },
+  // El cuello no está entre los 16 músculos que pinta el mapa. Se reparte al
+  // trapecio, que es lo más cercano que sí se ve, en vez de dejarlo en nada.
+  cuello: { trapecio: 0.6 },
   'cuerpo completo': {
     cuadriceps: 0.6, gluteos: 0.6, dorsal: 0.6, pecho: 0.5,
     hombro_anterior: 0.4, abdomen: 0.5, isquiotibiales: 0.4,

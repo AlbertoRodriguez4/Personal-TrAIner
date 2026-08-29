@@ -2537,6 +2537,24 @@ class _NutritionScreenState extends State<_NutritionScreen> {
   Map<String, dynamic>? _pendingScan;
   final _msgController = TextEditingController();
 
+  /// Lo que contestó el modelo cuando no llegó a estimar nada: casi siempre una
+  /// repregunta ("¿de cuántos gramos es el scoop?"). Antes salía en un
+  /// `SnackBar`, que se va solo a los cuatro segundos — con la foto daba igual
+  /// porque el mensaje era un error, pero al describir la comida por escrito la
+  /// repregunta es parte del flujo y hay que poder leerla y contestarla.
+  String? _respuestaIa;
+
+  /// Turnos previos de esta estimación, en el formato del chat
+  /// (`role` = user | model). Sin ellos, "son de 30 g" llega sin la pregunta
+  /// que lo motivó y el modelo vuelve a preguntar lo mismo. Se vacía al
+  /// guardar o descartar: la comida siguiente no tiene nada que ver con la
+  /// anterior y arrastrarla solo confunde la estimación.
+  final List<Map<String, String>> _historial = [];
+
+  /// Cuatro idas y vueltas es de sobra para aclarar cantidades, y el modo
+  /// nutrición manda la conversación entera en cada turno.
+  static const int _maxTurnosHistorial = 8;
+
   @override
   void dispose() {
     _msgController.dispose();
@@ -2570,32 +2588,94 @@ class _NutritionScreenState extends State<_NutritionScreen> {
     }
     if (file == null) return;
 
-    if (!mounted) return;
+    final String base64Image;
+    try {
+      base64Image = base64Encode(await file.readAsBytes());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo leer la foto: $e')));
+      return;
+    }
+
+    final contexto = _msgController.text.trim();
+    var prompt =
+        'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
+    if (contexto.isNotEmpty) {
+      prompt +=
+          '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$contexto"';
+    }
+
+    await _analizarComida(
+      prompt: prompt,
+      // Lo que se guarda en el historial es lo que escribió el usuario, no el
+      // prompt de instrucciones: repetirlo en cada turno lo único que hace es
+      // ocupar contexto. La marca de la foto queda para que un turno posterior
+      // ("ponle 50 g más de arroz") se entienda sin volver a mandar la imagen.
+      textoUsuario: contexto.isEmpty
+          ? '[foto de la comida]'
+          : '[foto de la comida] $contexto',
+      images: [
+        {'data': base64Image, 'mimeType': file.mimeType ?? 'image/jpeg'},
+      ],
+    );
+  }
+
+  /// Estimación por descripción escrita, sin foto: "400 ml de leche + 2 scoops
+  /// de proteína". Va por el mismo modo `nutricion` y la misma tool
+  /// (`estimar_comida`), así que acaba en la misma tarjeta de confirmar que el
+  /// escaneo — a diferencia del registro manual de arriba, que resuelve un
+  /// único alimento por nombre y cantidad contra la base de datos.
+  Future<void> _describirComida() async {
+    final descripcion = _msgController.text.trim();
+    if (descripcion.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Escribe qué has comido para que pueda estimarlo.'),
+        ),
+      );
+      return;
+    }
+
+    // Sin foto que mirar, lo único que hay son las cantidades que dé el
+    // usuario: pedir explícitamente que pregunte en vez de rellenar huecos
+    // evita que una estimación inventada acabe sumando en el diario.
+    final prompt =
+        'Estima los macros y las calorías de esta comida a partir de la '
+        'descripción, sin foto: "$descripcion".\n'
+        'Contrasta los alimentos identificables contra las bases de datos '
+        'disponibles antes de estimar de memoria. Si alguna cantidad está en '
+        'una medida casera (scoop, vaso, cucharada, puñado), di qué '
+        'equivalencia en gramos o mililitros estás asumiendo. Si falta algún '
+        'dato que cambie mucho el resultado, pregúntalo en vez de inventarlo.';
+
+    _msgController.clear();
+    await _analizarComida(prompt: prompt, textoUsuario: descripcion);
+  }
+
+  /// Tronco común del escaneo por foto y de la descripción escrita: manda el
+  /// turno, reparte el resultado entre estimación pendiente, comida ya
+  /// guardada o respuesta de texto, y mantiene el historial de la conversación.
+  Future<void> _analizarComida({
+    required String prompt,
+    required String textoUsuario,
+    List<Map<String, String>> images = const [],
+  }) async {
     setState(() {
       _isLoadingAi = true;
       _pendingScan = null;
+      _respuestaIa = null;
     });
 
     try {
-      final bytes = await file.readAsBytes();
-      final base64Image = base64Encode(bytes);
       final userId = ApiService.getCurrentUserId() ?? '';
-      final userMessage = _msgController.text.trim();
-
-      String finalPrompt =
-          'Analiza esta comida de forma semántica y holística. Identifica componentes, estima macros (proteína, carbohidratos, grasas en gramos) y calorías basándote en el volumen visual. Añade en "notas" unas pequeñas conclusiones de MÁXIMO 2 ORACIONES (ej. nivel NOVA o impacto glucémico).';
-      if (userMessage.isNotEmpty) {
-        finalPrompt +=
-            '\n\nMensaje adicional del usuario que debes tener en cuenta al estimar: "$userMessage"';
-      }
-
       final response = await ApiService.sendChatMessage(
         userId: userId,
         mode: 'nutricion',
-        message: finalPrompt,
-        images: [
-          {'data': base64Image, 'mimeType': file.mimeType ?? 'image/jpeg'},
-        ],
+        message: prompt,
+        history: List<Map<String, String>>.from(_historial),
+        images: images,
       );
 
       final actionsTaken = response['actions_taken'] as List<dynamic>? ?? [];
@@ -2610,37 +2690,71 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         }
       }
 
+      final reply = response['reply']?.toString().trim() ?? '';
+      _recordarTurno(textoUsuario, reply);
+
+      if (!mounted) return;
+
       if (savedResult != null) {
         // El modelo guardó directo (turno de confirmación por texto en un chat
         // previo) — ya está en BD, no hace falta pasar por el botón de confirmar.
-        _lastScan = savedResult;
-        if (mounted) {
-          await context.read<DailySummaryProvider>().load();
-        }
+        setState(() {
+          _lastScan = savedResult;
+          _pendingScan = null;
+        });
+        _historial.clear();
+        await context.read<DailySummaryProvider>().load();
       } else if (estimate != null) {
         setState(() => _pendingScan = estimate);
-      } else if (mounted) {
-        final reply = response['reply']?.toString() ?? '';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              reply.isNotEmpty
-                  ? reply
-                  : 'No se pudo identificar la comida en la foto.',
-            ),
-          ),
+      } else {
+        setState(
+          () => _respuestaIa = reply.isNotEmpty
+              ? reply
+              : (images.isEmpty
+                    ? 'No he podido estimar esa comida. Prueba a detallar las cantidades.'
+                    : 'No se pudo identificar la comida en la foto.'),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error procesando imagen: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_mensajeLegible(e)),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Reintentar',
+              onPressed: () => _analizarComida(
+                prompt: prompt,
+                textoUsuario: textoUsuario,
+                images: images,
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
         setState(() => _isLoadingAi = false);
       }
+    }
+  }
+
+  /// El backend ya manda un aviso redactado para el usuario ("El modelo de IA
+  /// está saturado ahora mismo…"), pero `ApiService` lo envuelve en un
+  /// `Exception` y `toString()` le antepone "Exception: ". Enseñado tal cual,
+  /// un mensaje pensado para leerse parecía el volcado de un error de
+  /// programación — que es justo lo que se veía con el 503 de Gemini.
+  String _mensajeLegible(Object error) {
+    final texto = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+    return texto.isEmpty ? 'No se pudo analizar la comida.' : texto;
+  }
+
+  void _recordarTurno(String textoUsuario, String reply) {
+    if (textoUsuario.isEmpty) return;
+    _historial.add({'role': 'user', 'text': textoUsuario});
+    if (reply.isNotEmpty) _historial.add({'role': 'model', 'text': reply});
+    if (_historial.length > _maxTurnosHistorial) {
+      _historial.removeRange(0, _historial.length - _maxTurnosHistorial);
     }
   }
 
@@ -2671,7 +2785,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
       setState(() {
         _lastScan = saved;
         _pendingScan = null;
+        _respuestaIa = null;
       });
+      // La comida siguiente no tiene nada que ver con esta: arrastrar los
+      // turnos anteriores solo confunde la estimación.
+      _historial.clear();
       await context.read<DailySummaryProvider>().load();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -2692,7 +2810,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
   }
 
   void _discardPendingScan() {
-    setState(() => _pendingScan = null);
+    setState(() {
+      _pendingScan = null;
+      _respuestaIa = null;
+    });
+    _historial.clear();
   }
 
   @override
@@ -2713,22 +2835,80 @@ class _NutritionScreenState extends State<_NutritionScreen> {
           const SizedBox(height: 16),
           const SupplementsCard(),
           const SizedBox(height: 16),
-          TextField(
-            controller: _msgController,
-            decoration: InputDecoration(
-              hintText: 'Añadir contexto (ej. "plato grande, mucha salsa")',
-              filled: true,
-              fillColor: DesignTokens.surface2of(b),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          // El mismo campo hace las dos cosas: enviado solo, estima lo que
+          // describa el texto; con una foto detrás, es el contexto de la foto.
+          // Separarlos en dos cajas obligaría a decidir cuál usar antes de
+          // escribir, cuando la diferencia real es si luego se hace foto o no.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _msgController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) {
+                    if (!_isLoadingAi) _describirComida();
+                  },
+                  decoration: InputDecoration(
+                    hintText:
+                        'Describe la comida: "400 ml de leche + 2 scoops de proteína"',
+                    filled: true,
+                    fillColor: DesignTokens.surface2of(b),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  style: TextStyle(color: DesignTokens.foreground(b)),
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
+              const SizedBox(width: 10),
+              // Se escucha al propio controlador en vez de un `setState` por
+              // tecla: esta pantalla reconstruye el resumen de macros entero.
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _msgController,
+                builder: (context, valor, _) {
+                  final activo =
+                      valor.text.trim().isNotEmpty && !_isLoadingAi;
+                  return Material(
+                    color: activo
+                        ? DesignTokens.aiVia
+                        : DesignTokens.surface2of(b),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: activo ? _describirComida : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(13),
+                        child: Icon(
+                          LucideIcons.sparkles,
+                          size: 20,
+                          color: activo
+                              ? Colors.white
+                              : DesignTokens.mutedForeground(b),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Analiza lo que escribas sin necesidad de foto. Si haces una foto, '
+            'el texto se usa como contexto.',
+            style: TextStyle(
+              fontSize: 12,
+              color: DesignTokens.mutedForeground(b),
             ),
-            style: TextStyle(color: DesignTokens.foreground(b)),
           ),
           const SizedBox(height: 16),
           _isLoadingAi
@@ -2765,6 +2945,13 @@ class _NutritionScreenState extends State<_NutritionScreen> {
                 )
               : _CameraViewer(onTap: _takePhoto),
           const SizedBox(height: 16),
+          if (_respuestaIa != null) ...[
+            _RespuestaNutricionCard(
+              texto: _respuestaIa!,
+              onCerrar: () => setState(() => _respuestaIa = null),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (_pendingScan != null)
             _ScanResultCard(
               scanResult: _pendingScan,
@@ -2783,6 +2970,52 @@ class _NutritionScreenState extends State<_NutritionScreen> {
               sub: 'Historial diario de kcal y macros',
               onTap: () => Navigator.pushNamed(context, '/progress'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lo que respondió el nutricionista cuando no llegó a estimar: normalmente una
+/// repregunta por una cantidad. Se queda en pantalla hasta que se cierra o se
+/// manda otro mensaje, porque contestarla es el paso siguiente del flujo.
+class _RespuestaNutricionCard extends StatelessWidget {
+  const _RespuestaNutricionCard({required this.texto, required this.onCerrar});
+
+  final String texto;
+  final VoidCallback onCerrar;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        border: Border.all(color: DesignTokens.aiVia.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.sparkles, size: 18, color: DesignTokens.aiVia),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SelectableText(
+              texto,
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.4,
+                color: DesignTokens.foreground(b),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.x, size: 16),
+            tooltip: 'Cerrar',
+            color: DesignTokens.mutedForeground(b),
+            onPressed: onCerrar,
           ),
         ],
       ),

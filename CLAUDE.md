@@ -141,6 +141,20 @@ Two things about that block are load-bearing:
   complete one the user never fills in. With minimums but no composition, the block still
   forbids assuming body-fat % or lean mass.
 
+**La comida se estima por tres vías, y solo dos pasan por el modelo.** El escáner de la
+pestaña Nutrición (`_NutritionScreenState`, `home_page.dart`) manda al modo `nutricion` una
+foto, una descripción escrita ("400 ml de leche + 2 scoops de proteína") o las dos: es el
+mismo campo de texto, que sin foto es la consulta y con foto es su contexto. Las dos
+acaban en la tool `estimar_comida`, que **no guarda nada** — la app pinta la estimación y
+la escribe en `/nutrition-logs` cuando el usuario la confirma con el botón. La tercera vía
+es `ManualFoodEntryCard` → `/api/ia/nutrition/food-estimate`, que resuelve **un** alimento
+por nombre y cantidad contra `food_lookup.py` sin LLM ninguno; no la sustituye la
+descripción libre, que es para varias cosas a la vez y medidas caseras.
+Cuando el modelo no llega a estimar (le falta una cantidad y repregunta), la respuesta se
+queda pintada en una tarjeta y los turnos se guardan en un historial corto que se vacía al
+confirmar o descartar: en un `SnackBar` la pregunta desaparecía a los cuatro segundos, y
+sin historial la respuesta ("son de 30 g") llegaba sin la pregunta que la motivó.
+
 **Nutrition targets aren't fixed once set.** `ajustar_metas_nutricionales` (nutrition mode's tool set,
 `chat_tools.py`) lets Pulso rewrite `meta_kcal`/`meta_proteinas_g`/`meta_carbohidratos_g`/`meta_grasas_g`
 on its own initiative whenever newer data (a fresh composition measurement, a stated goal change)
@@ -282,6 +296,30 @@ compares a session's metrics against the mean of *all* the user's completed sess
 type or origin — trying to segment "cardio vs. cardio" would leave that mean computed over 1-2 rows
 almost always.
 
+**Rutinas: nombre del día, imagen del ejercicio y traspaso.** Tres cosas que no se
+deducen del código:
+- **`RoutineDay.focus` es el nombre del día, y es texto libre.** Antes era un desplegable
+  con una lista fija por actividad; esa lista sigue existiendo, pero solo como sugerencias
+  del campo. Es el título del día en la vista del plan, en Inicio y en la sesión
+  (`day.focus ?? routine.name`), con el día de la semana relegado a subtítulo — así que
+  `day_of_week` sigue siendo el día real de la semana y no admite nombres inventados: la
+  pantalla del plan lo cruza contra su lista fija de Lunes..Domingo. Un día cuenta como
+  descanso si su nombre es "descanso" (comparado sin mayúsculas ni espacios), no por estar
+  vacío de ejercicios.
+- **`exercises.imagen_url` se copia del catálogo al añadir el ejercicio**, no se resuelve
+  por nombre en cada lectura: el nombre de un ejercicio de rutina es editable y puede no
+  existir en el catálogo. `RoutineService.imagenesCatalogo()` solo rellena lo que llegue
+  vacío (rutinas escritas por la IA, que únicamente conoce nombres), y lo que venga en el
+  payload gana, porque una rutina importada trae su propia imagen. Las miniaturas van por
+  `ExerciseThumbnail`, que **no** lleva `Authorization`: las sirve GitHub, no NestJS.
+- **Importar/exportar rutina** (`features/routine/data/routine_transfer.dart`) es un JSON con
+  sobre (`formato` + `version`) y **sin ningún id**: los de la rutina, los días y los
+  ejercicios son de la base de datos de quien exportó, y la importada se crea siempre como
+  rutina nueva por el flujo normal (`saveRoutine` sin id). Al leer se remienda todo lo
+  remendable — el día que no case con uno de la semana va al primer hueco libre, el
+  ejercicio sin nombre se cae, la actividad desconocida pasa a `gym` — porque rechazar el
+  fichero entero por un campo suelto obligaría a editar JSON a mano.
+
 **Mapa muscular (pestaña Entrenar).** `GET /training-sessions/user/:userId/muscle-load?dias=N`
 reparte las sesiones **completadas** del rango entre 16 grupos musculares y devuelve volumen,
 intensidad y fatiga de una vez; la tarjeta (`routine/presentation/widgets/muscle_heatmap_card.dart`)
@@ -333,6 +371,20 @@ filtering otherwise hides every camera app, `startActivityForResult` throws
 which makes it look like a permissions problem when it isn't. `image_picker_android` does **not**
 declare it in its own manifest. Do not add `android.permission.CAMERA`: declaring it would force a
 runtime permission request the plugin doesn't otherwise need.
+
+**Gemini falla de dos maneras distintas y hay que distinguirlas.** `gemini_client` captura
+`genai_errors.APIError` —no `ClientError`— porque el 503 del modelo saturado ("This model is
+currently experiencing high demand") llega como `ServerError`, que es **hermana** de
+`ClientError` y no descendiente: con el `except` anterior no se reintentaba ni una vez y el
+JSON crudo de Google acababa impreso en un aviso dentro de la app. Se reintentan 429
+(`RESOURCE_EXHAUSTED`, cuota de la key), 503 (`UNAVAILABLE`) y 500 (`INTERNAL`); el resto sube
+tal cual, porque un 400 reintentado tres veces sigue siendo un 400. Agotados los intentos, el
+tipo de excepción decide el mensaje: `GeminiQuotaExhaustedError` (esperar a que renueve la
+cuota) frente a `GeminiSobrecargadoError` (reintentar en un minuto). **La única salida real a
+un 503 sostenido es `GEMINI_MODEL_FALLBACK`**, que va vacía por defecto: lo que se satura es
+un modelo concreto, así que reintentar contra el mismo puede fallar toda la tarde mientras
+otro responde a la primera. Los modos de imagen no pueden caer a Groq (no procesa imágenes),
+así que ahí ese fallback de modelo es lo único que hay.
 
 **AI service:** Two LLM providers, split strictly by mode — never mixed within a turn. Image modes
 (`nutricion`, `analisis_fisico`) always go to Gemini (`google-genai`, default model

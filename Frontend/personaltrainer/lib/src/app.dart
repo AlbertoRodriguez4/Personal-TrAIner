@@ -36,6 +36,24 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
   void initState() {
     super.initState();
     _isLoggedIn = ApiService.isAuthenticated();
+    // La sesión se restaura del disco sin validarla contra el backend, así que
+    // un token que ya no vale solo se descubre en la primera petición. Cuando
+    // eso pasa, `ApiService` avisa por aquí y se vuelve al login: sin esto la
+    // app se quedaba dentro, con todas las pantallas vacías por 401.
+    ApiService.sesionCaducada.addListener(_handleSesionCaducada);
+  }
+
+  @override
+  void dispose() {
+    ApiService.sesionCaducada.removeListener(_handleSesionCaducada);
+    super.dispose();
+  }
+
+  void _handleSesionCaducada() {
+    if (!ApiService.sesionCaducada.value || !mounted) return;
+    setState(() {
+      _isLoggedIn = false;
+    });
   }
 
   void _handleLogin() {
