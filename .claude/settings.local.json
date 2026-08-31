@@ -17,7 +17,8 @@
       "Bash(python -c \"import google.genai.errors as e; import inspect; print\\(inspect.getsource\\(e\\)\\)\")",
       "Bash(python -c ' *)",
       "Bash(python -c \"import groq; print\\(groq.__version__\\)\")",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(git ls-remote *)"
     ]
   }
 }
