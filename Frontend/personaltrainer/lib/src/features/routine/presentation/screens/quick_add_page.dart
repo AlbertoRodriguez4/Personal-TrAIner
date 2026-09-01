@@ -5,6 +5,7 @@ import '../../../../core/theme/design_tokens.dart';
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise.dart';
 import '../../models/exercise_catalog.dart';
+import '../widgets/exercise_filter_bar.dart';
 
 /// Alta rápida de varios ejercicios para un día concreto de la rutina.
 ///
@@ -38,7 +39,7 @@ class _QuickAddPageState extends State<QuickAddPage> {
   late Future<List<ExerciseGroup>> _catalogFuture;
   List<ExerciseCatalog> _allExercises = const [];
   String _query = '';
-  String _group = 'Todos';
+  String _group = kGrupoTodos;
 
   /// Lista en construcción. No se persiste nada hasta pulsar "Guardar día".
   final List<Exercise> _added = [];
@@ -82,23 +83,13 @@ class _QuickAddPageState extends State<QuickAddPage> {
     }
   }
 
-  List<ExerciseCatalog> get _filtered {
-    final q = _query.trim().toLowerCase();
-    return _allExercises.where((e) {
-      final matchesGroup = _group == 'Todos' || e.grupoMuscular == _group;
-      if (!matchesGroup) return false;
-      if (q.isEmpty) return true;
-      return e.nombre.toLowerCase().contains(q) ||
-          e.grupoMuscular.toLowerCase().contains(q) ||
-          (e.equipamiento ?? '').toLowerCase().contains(q);
-    }).toList();
-  }
+  // Acotar y listar grupos vive en `exercise_filter_bar.dart`: la hoja del
+  // constructor acota exactamente igual, y con una copia por pantalla acabarían
+  // filtrando distinto.
+  List<ExerciseCatalog> get _filtered =>
+      filtrarEjercicios(_allExercises, query: _query, grupo: _group);
 
-  List<String> get _groupOptions {
-    final groups = _allExercises.map((e) => e.grupoMuscular).toSet().toList()
-      ..sort();
-    return ['Todos', ...groups];
-  }
+  List<String> get _groupOptions => opcionesGrupo(_allExercises);
 
   void _add(String name) {
     setState(() => _added.add(_withDefaults(name)));
@@ -251,55 +242,17 @@ class _QuickAddPageState extends State<QuickAddPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
-        TextField(
-          controller: _searchController,
+        ExerciseFilterBar(
+          searchController: _searchController,
+          query: _query,
+          grupo: _group,
+          opciones: _groupOptions,
+          onQueryChanged: (v) => setState(() => _query = v),
+          onGrupoChanged: (g) => setState(() => _group = g),
+          resultados: results.length,
+          total: _allExercises.length,
+          accent: _accent,
           autofocus: true,
-          onChanged: (v) => setState(() => _query = v),
-          decoration: InputDecoration(
-            hintText: 'Busca ejercicio, grupo o equipo…',
-            prefixIcon: const Icon(LucideIcons.search, size: 18),
-            suffixIcon: _query.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(LucideIcons.x, size: 16),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _query = '');
-                    },
-                  ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 34,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _groupOptions.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              final g = _groupOptions[i];
-              final active = g == _group;
-              return Material(
-                color: active ? _accent : DesignTokens.surface1(b),
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () => setState(() => _group = g),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    child: Text(
-                      g,
-                      style: DesignTokens.bodyFont(
-                        fontSize: 12.5,
-                        weight: FontWeight.w600,
-                        color: active ? Colors.white : DesignTokens.foreground(b),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
         ),
         const SizedBox(height: 16),
         if (_added.isNotEmpty) ...[

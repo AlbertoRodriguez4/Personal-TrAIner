@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise_catalog.dart';
+import 'exercise_filter_bar.dart';
 import '../../../../core/theme/design_tokens.dart';
 
 class ExerciseCatalogSheet extends StatefulWidget {
@@ -16,7 +17,11 @@ class ExerciseCatalogSheet extends StatefulWidget {
 
 class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
   final ExerciseCatalogService _service = ExerciseCatalogService();
+  final _searchController = TextEditingController();
   List<ExerciseGroup> _groups = [];
+  List<ExerciseCatalog> _allExercises = const [];
+  String _query = '';
+  String _group = kGrupoTodos;
   bool _isLoading = true;
   String? _error;
 
@@ -26,12 +31,34 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
     _fetchCatalog();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Los grupos ya vienen ordenados y con cabecera pegajosa; acotar se hace
+  /// sobre la lista plana y se vuelve a agrupar, para no duplicar aquí el
+  /// criterio de `filtrarEjercicios`. Los grupos que se quedan sin ejercicios
+  /// desaparecen: una cabecera "PECHO" sin nada debajo parece un fallo.
+  List<ExerciseGroup> get _filteredGroups {
+    return _groups
+        .map((g) => ExerciseGroup(
+              category: g.category,
+              exercises:
+                  filtrarEjercicios(g.exercises, query: _query, grupo: _group),
+            ))
+        .where((g) => g.exercises.isNotEmpty)
+        .toList();
+  }
+
   Future<void> _fetchCatalog() async {
     try {
       final groups = await _service.getExerciseCatalog();
       if (mounted) {
         setState(() {
           _groups = groups;
+          _allExercises = groups.expand((g) => g.exercises).toList();
           _isLoading = false;
         });
       }
@@ -83,6 +110,25 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
                 ),
               ),
             ),
+            // Solo con catálogo cargado: sobre el error o el spinner, unos
+            // chips que no acotan nada solo estorban.
+            if (!_isLoading && _error == null && _allExercises.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: ExerciseFilterBar(
+                  searchController: _searchController,
+                  query: _query,
+                  grupo: _group,
+                  opciones: opcionesGrupo(_allExercises),
+                  onQueryChanged: (v) => setState(() => _query = v),
+                  onGrupoChanged: (g) => setState(() => _group = g),
+                  resultados: _filteredGroups.fold<int>(
+                    0,
+                    (n, g) => n + g.exercises.length,
+                  ),
+                  total: _allExercises.length,
+                ),
+              ),
             Divider(color: border, height: 1),
             Expanded(
               child: _buildContent(),
@@ -125,8 +171,55 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
       return const Center(child: Text('No hay ejercicios disponibles'));
     }
 
+    final grupos = _filteredGroups;
+    if (grupos.isEmpty) {
+      // Distinto de "no hay ejercicios": aquí el catálogo cargó bien y es el
+      // filtro el que no deja pasar nada, así que lo que hace falta es la vía
+      // para deshacerlo, no un aviso de error.
+      final b = Theme.of(context).brightness;
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.search,
+                  size: 40, color: DesignTokens.mutedForeground(b)),
+              const SizedBox(height: 12),
+              Text(
+                'Ningún ejercicio con estos filtros',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Prueba con otro grupo muscular o borra la búsqueda.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: DesignTokens.mutedForeground(b),
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    _query = '';
+                    _group = kGrupoTodos;
+                  });
+                },
+                icon: const Icon(LucideIcons.rotateCcw, size: 16),
+                label: const Text('Quitar filtros'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return CustomScrollView(
-      slivers: _groups.map((group) {
+      slivers: grupos.map((group) {
         return SliverMainAxisGroup(
           slivers: [
             SliverPersistentHeader(
