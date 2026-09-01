@@ -37,13 +37,25 @@ async def verificar_clave_interna(request: Request, call_next):
     return await call_next(request)
 
 
+# Los handlers de abajo son `def` y NO `async def` a propósito, y volver a
+# ponerles el `async` es el fallo que más caro sale aquí: todos hacen I/O
+# bloqueante (requests a USDA/Open Food Facts/NestJS, y el SDK de Gemini/Groq
+# dentro de run_chat), y un `async def` corre EN el event loop. Con `async`,
+# una sola estimación de comida —que el formulario manual dispara CADA 500 ms
+# mientras el usuario teclea, y que puede tardar lo que tarden las dos APIs
+# externas— dejaba clavado el servicio ENTERO mientras tanto: el chat de IA,
+# el análisis clínico y hasta el /health de otro usuario esperaban su turno.
+# Sin `async`, Starlette los ejecuta en su threadpool y se atienden en
+# paralelo. Los que sí pueden ser async son los que no tocan I/O: /health y el
+# middleware, que necesita el await de call_next.
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
 @app.post("/ai/analyze-set")
-async def analyze_set(data: SetTelemetryInput):
+def analyze_set(data: SetTelemetryInput):
     try:
         return analyze_failure(data)
     except ValueError as e:
@@ -62,7 +74,7 @@ from chat_engine import (
 from schemas import ChatRequest, ChatResponse
 
 @app.post("/api/ia/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     try:
         result = run_chat(
             user_id=request.user_id,
@@ -151,7 +163,7 @@ def _traducir_error_analisis(exc: Exception) -> HTTPException:
 
 
 @app.post("/api/ia/clinical-report")
-async def analyze_clinical_report(request: ClinicalReportRequest):
+def analyze_clinical_report(request: ClinicalReportRequest):
     try:
         return clinical_analysis.analizar_documento(
             user_id=request.user_id,
@@ -164,7 +176,7 @@ async def analyze_clinical_report(request: ClinicalReportRequest):
 
 
 @app.post("/api/ia/clinical-manual")
-async def analyze_clinical_manual(request: ClinicalManualRequest):
+def analyze_clinical_manual(request: ClinicalManualRequest):
     try:
         return clinical_analysis.analizar_valores_manuales(
             user_id=request.user_id,
@@ -176,7 +188,7 @@ async def analyze_clinical_manual(request: ClinicalManualRequest):
 
 
 @app.post("/api/ia/body-composition")
-async def register_body_composition(request: BodyCompositionRequest):
+def register_body_composition(request: BodyCompositionRequest):
     """Guarda una medición de composición corporal y devuelve su lectura.
 
     No pasa por ningún modelo: son cifras medidas y la clasificación sale de
@@ -206,7 +218,7 @@ async def register_body_composition(request: BodyCompositionRequest):
 
 
 @app.post("/api/ia/physique-analysis")
-async def analyze_physique(request: PhysiqueAnalysisRequest):
+def analyze_physique(request: PhysiqueAnalysisRequest):
     try:
         return physique_analysis.analizar_fotos(
             user_id=request.user_id,
@@ -218,7 +230,7 @@ async def analyze_physique(request: PhysiqueAnalysisRequest):
 
 
 @app.post("/api/ia/nutrition/food-estimate")
-async def estimate_food(request: FoodEstimateRequest):
+def estimate_food(request: FoodEstimateRequest):
     """Registro manual de comida (nutricion, sin foto): busca el alimento por
     nombre y escala sus macros a la cantidad pedida. No guarda nada — igual que
     estimar_comida en el chat, es la app la que llama a /nutrition-logs cuando
@@ -244,5 +256,5 @@ async def estimate_food(request: FoodEstimateRequest):
 
 
 @app.post("/api/ia/nutrition/food-suggestions")
-async def suggest_foods(request: FoodSuggestionsRequest):
+def suggest_foods(request: FoodSuggestionsRequest):
     return {"sugerencias": food_lookup.sugerir(request.query)}

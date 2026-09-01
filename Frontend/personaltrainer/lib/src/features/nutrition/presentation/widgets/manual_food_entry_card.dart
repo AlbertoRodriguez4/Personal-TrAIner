@@ -129,9 +129,18 @@ class _ManualFoodEntryCardState extends State<ManualFoodEntryCard> {
     }
   }
 
+  /// Mismo mínimo de 3 caracteres que el desplegable, y por una razón más
+  /// cara que la suya: por debajo de eso el catálogo local del backend ni
+  /// intenta la coincidencia parcial (`LONGITUD_MINIMA_COINCIDENCIA_PARCIAL`),
+  /// así que "po" o "ar" se iban derechos a USDA y Open Food Facts para acabar
+  /// en un 404 — una consulta de red por cada pulsación de las dos primeras
+  /// letras de cada alimento que se escribe.
+  static const _minCaracteresEstimacion = 3;
+
   Future<void> _fetchEstimate() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty || (_mode == 'gramos' && _grams <= 0)) {
+    if (name.length < _minCaracteresEstimacion ||
+        (_mode == 'gramos' && _grams <= 0)) {
       if (mounted) {
         setState(() {
           _estimate = null;

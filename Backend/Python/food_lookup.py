@@ -24,7 +24,11 @@ inventar la categoría metería un puño de proteína donde debería ir un pulga
 de grasa y el error se colaría directo en las kcal.
 """
 import re
+import threading
+import time
 import unicodedata
+from collections import OrderedDict
+from concurrent import futures
 
 import openfoodfacts_client
 import usda_client
@@ -249,6 +253,34 @@ def _construir_indice() -> dict[str, dict]:
 
 _INDICE = _construir_indice()
 
+# Las claves largas de sobra para el match parcial, de la más larga a la más
+# corta y con su patrón `\bclave\b` ya compilado. Las dos cosas por el mismo
+# motivo: `estimar()` corre en CADA pulsación del formulario manual (500 ms de
+# debounce), y recompilar los ~200 regex del catálogo en cada consulta —además
+# de recorrerlos todos para quedarse con la clave más larga— era trabajo
+# repetido en el camino caliente. Ordenadas aquí, el primer acierto ya es el
+# bueno y el bucle sale antes.
+_CLAVES_PARCIALES: list[tuple[str, re.Pattern[str], dict]] = sorted(
+    (
+        (clave, re.compile(r"\b" + re.escape(clave) + r"\b"), alimento)
+        for clave, alimento in _INDICE.items()
+        if len(clave) >= LONGITUD_MINIMA_COINCIDENCIA_PARCIAL
+    ),
+    key=lambda entrada: len(entrada[0]),
+    reverse=True,
+)
+
+# Nombre visible + todas sus claves ya normalizadas. `sugerir()` responde con
+# 150 ms de debounce, así que normalizar los ~200 alias del catálogo (unicodedata
+# + regex por cada uno) en cada pulsación era el grueso de su coste.
+_CLAVES_POR_ALIMENTO: list[tuple[str, list[str]]] = [
+    (
+        alimento["nombre"],
+        [normalizar(c) for c in (alimento["nombre"], *alimento.get("alias", []))],
+    )
+    for alimento in _ALIMENTOS
+]
+
 
 def buscar_local(consulta: str) -> dict | None:
     """Coincidencia exacta primero; si no, la clave más larga que aparezca
@@ -269,17 +301,13 @@ def buscar_local(consulta: str) -> dict | None:
     if len(q) < LONGITUD_MINIMA_COINCIDENCIA_PARCIAL:
         return None
 
-    mejor: dict | None = None
-    mejor_longitud = -1
-    for clave, alimento in _INDICE.items():
-        if len(clave) < LONGITUD_MINIMA_COINCIDENCIA_PARCIAL:
-            continue
-        patron = r"\b" + re.escape(clave) + r"\b"
-        consulta_en_clave = r"\b" + re.escape(q) + r"\b"
-        if (re.search(patron, q) or re.search(consulta_en_clave, clave)) and len(clave) > mejor_longitud:
-            mejor = alimento
-            mejor_longitud = len(clave)
-    return mejor
+    # `_CLAVES_PARCIALES` ya viene de más larga a más corta, así que el primer
+    # acierto es el mismo que antes elegía el `len(clave) > mejor_longitud`.
+    patron_consulta = re.compile(r"\b" + re.escape(q) + r"\b")
+    for clave, patron_clave, alimento in _CLAVES_PARCIALES:
+        if patron_clave.search(q) or patron_consulta.search(clave):
+            return alimento
+    return None
 
 
 def sugerir(consulta: str, limite: int = 8) -> list[str]:
@@ -297,12 +325,11 @@ def sugerir(consulta: str, limite: int = 8) -> list[str]:
 
     empiezan: list[str] = []
     contienen: list[str] = []
-    for alimento in _ALIMENTOS:
-        claves_norm = [normalizar(c) for c in (alimento["nombre"], *alimento.get("alias", []))]
+    for nombre, claves_norm in _CLAVES_POR_ALIMENTO:
         if any(c.startswith(q) for c in claves_norm):
-            empiezan.append(alimento["nombre"])
+            empiezan.append(nombre)
         elif any(q in c for c in claves_norm):
-            contienen.append(alimento["nombre"])
+            contienen.append(nombre)
 
     return (empiezan + contienen)[:limite]
 
@@ -392,6 +419,104 @@ def _resolver_gramos(
     }
 
 
+# ============================================================
+# Fuentes externas (USDA / Open Food Facts): a la vez y con caché
+# ============================================================
+# `estimar()` no se llama una vez por alimento: el formulario manual la dispara
+# 500 ms después de cada pulsación (manual_food_entry_card.dart), así que
+# escribir "pechuga de pollo" son también "pec", "pechu", "pechuga d"... y cada
+# una que el catálogo local no reconozca salía a la red. Encadenadas —USDA y
+# solo después Open Food Facts, 10 s de timeout cada una— eso es hasta 20 s por
+# pulsación, y las mismas consultas fallidas repetidas contra la cuota de USDA
+# (1000 req/h con key propia, mucho menos con DEMO_KEY).
+#
+# Nada de esto cambia QUÉ se responde, solo lo que cuesta responderlo:
+#  - Las dos fuentes se lanzan A LA VEZ. Si USDA trae macros se devuelve sin
+#    esperar a Open Food Facts, así que el caso bueno no se ralentiza; el peor
+#    caso pasa de 20 s a 10 s.
+#  - Se cachea el resultado, y TAMBIÉN el "no lo encuentra nadie": teclear deja
+#    un reguero de prefijos que no existen en ninguna base, y son justo los que
+#    más se repiten. Sin cachear los negativos, el prefijo se pagaría entero
+#    cada vez que el usuario borra una letra y la vuelve a escribir.
+_CACHE_TTL_SEGUNDOS = 6 * 60 * 60
+_CACHE_MAX_ENTRADAS = 512
+
+_cache_externo: OrderedDict[str, tuple[float, dict | None]] = OrderedDict()
+_cache_lock = threading.Lock()
+
+# Los handlers de main.py corren en el threadpool de Starlette, así que varias
+# estimaciones pueden entrar aquí a la vez: 4 hilos dan para dos búsquedas
+# simultáneas sin que una espere a la otra.
+_pool_externo = futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="food-lookup")
+
+
+def _cache_leer(clave: str) -> tuple[bool, dict | None]:
+    """(hubo_acierto, valor). El valor cacheado puede ser None legítimamente —
+    de ahí el booleano, y no un `if valor:` en la llamada."""
+    with _cache_lock:
+        entrada = _cache_externo.get(clave)
+        if entrada is None:
+            return False, None
+        guardado_en, valor = entrada
+        if time.monotonic() - guardado_en > _CACHE_TTL_SEGUNDOS:
+            del _cache_externo[clave]
+            return False, None
+        _cache_externo.move_to_end(clave)
+        return True, valor
+
+
+def _cache_guardar(clave: str, valor: dict | None) -> None:
+    with _cache_lock:
+        _cache_externo[clave] = (time.monotonic(), valor)
+        _cache_externo.move_to_end(clave)
+        while len(_cache_externo) > _CACHE_MAX_ENTRADAS:
+            _cache_externo.popitem(last=False)
+
+
+def _tiene_macros(resultado: dict | None) -> bool:
+    """Un resultado sin kcal no sirve para estimar nada: es exactamente el que
+    antes se colaba como `usda or off` y cortaba el paso a Open Food Facts."""
+    return bool(resultado) and resultado.get("kcal_100g") is not None
+
+
+def _resultado_o_none(tarea: "futures.Future[dict | None]") -> dict | None:
+    """Los dos clientes ya devuelven None ante cualquier fallo de red, pero un
+    error inesperado dentro del hilo no puede tumbar la estimación entera."""
+    try:
+        return tarea.result()
+    except Exception:
+        return None
+
+
+def buscar_externo(consulta: str) -> dict | None:
+    """USDA y Open Food Facts en paralelo. Mantiene la preferencia de siempre
+    (USDA para ingrediente crudo, Open Food Facts para envasado) pero solo
+    entre resultados que traigan kcal. None si ninguno reconoce el alimento."""
+    clave = normalizar(consulta)
+    if not clave:
+        return None
+
+    en_cache, valor = _cache_leer(clave)
+    if en_cache:
+        return valor
+
+    tarea_usda = _pool_externo.submit(usda_client.buscar_alimento, consulta)
+    tarea_off = _pool_externo.submit(openfoodfacts_client.buscar_producto, consulta)
+
+    usda = _resultado_o_none(tarea_usda)
+    if _tiene_macros(usda):
+        # Open Food Facts sigue en vuelo; no la esperamos (su hilo termina
+        # solo y su resultado se descarta): esperarla sería pagar su timeout
+        # para nada cuando ya tenemos la respuesta buena.
+        resultado = usda
+    else:
+        off = _resultado_o_none(tarea_off)
+        resultado = off if _tiene_macros(off) else None
+
+    _cache_guardar(clave, resultado)
+    return resultado
+
+
 def estimar(
     nombre_alimento: str,
     cantidad_g: float | None = None,
@@ -417,8 +542,8 @@ def estimar(
         fuente = "local"
         coincidencia_exacta = True
     else:
-        externo = usda_client.buscar_alimento(consulta) or openfoodfacts_client.buscar_producto(consulta)
-        if not externo or externo.get("kcal_100g") is None:
+        externo = buscar_externo(consulta)
+        if not externo:
             raise AlimentoNoEncontradoError(consulta)
         nombre_resuelto = externo.get("nombre") or consulta
         categoria = _adivinar_categoria(nombre_resuelto)
