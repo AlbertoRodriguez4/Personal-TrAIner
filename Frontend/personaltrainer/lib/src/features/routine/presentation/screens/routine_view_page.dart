@@ -9,8 +9,10 @@ import '../../models/exercise.dart';
 import '../../models/routine.dart';
 import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
+import '../widgets/routine_export_sheet.dart';
 import 'quick_add_page.dart';
 import 'routine_builder_page.dart';
+import 'routine_import_page.dart';
 
 const _diasSemana = [
   'Lunes',
@@ -38,6 +40,18 @@ class RoutineViewPage extends StatefulWidget {
 
 class _RoutineViewPageState extends State<RoutineViewPage> {
   int? _openIndex = DateTime.now().weekday - 1;
+
+  /// Importar vive aquí y no solo en `RoutinesHomePage` porque a esa pantalla
+  /// únicamente se llega al terminar una sesión: quien busca meter una rutina
+  /// entra por "Ver mi rutina" o por los atajos de Entrenar.
+  Future<void> _openImport() async {
+    final provider = context.read<RoutineProvider>();
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RoutineImportPage()),
+    );
+    if (!mounted) return;
+    await provider.loadRoutines();
+  }
 
   Future<void> _editDay(Routine routine, String dayLabel) async {
     final provider = context.read<RoutineProvider>();
@@ -152,12 +166,25 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
                         ),
                       ],
                     ),
+                    const Spacer(),
+                    if (routine != null) ...[
+                      RoundIconButton(
+                        icon: LucideIcons.share2,
+                        onTap: () => showRoutineExportSheet(context, routine),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    RoundIconButton(
+                      icon: LucideIcons.fileInput,
+                      onTap: _openImport,
+                    ),
                   ],
                 ),
               ),
               Expanded(
                 child: routine == null
                     ? _EmptyRoutineState(
+                        onImport: _openImport,
                         onCreate: () {
                           final provider = context.read<RoutineProvider>();
                           Navigator.of(context).push(
@@ -215,8 +242,9 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
 }
 
 class _EmptyRoutineState extends StatelessWidget {
-  const _EmptyRoutineState({required this.onCreate});
+  const _EmptyRoutineState({required this.onCreate, required this.onImport});
   final VoidCallback onCreate;
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +275,11 @@ class _EmptyRoutineState extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             FilledButton(onPressed: onCreate, child: const Text('Crear rutina')),
+            TextButton.icon(
+              onPressed: onImport,
+              icon: const Icon(LucideIcons.fileInput, size: 16),
+              label: const Text('o importar una en JSON'),
+            ),
           ],
         ),
       ),

@@ -1601,6 +1601,47 @@ class _TodayRoutineHero extends StatelessWidget {
                   : 'Tu rutina activa no tiene ejercicios asignados a $hoy.',
               style: TextStyle(fontSize: 13, color: mutedFg),
             ),
+            // Sin rutina, esta tarjeta era un callejón sin salida: decía qué
+            // falta pero no llevaba a ningún sitio. Es lo primero que ve quien
+            // entra en Entrenar sin nada creado, así que las dos vías de
+            // empezar van aquí — construirla a mano o pegar un JSON.
+            if (routine == null) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => RoutineBuilderPage(
+                            onSave: () =>
+                                context.read<RoutineProvider>().loadRoutines(),
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Crear'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final provider = context.read<RoutineProvider>();
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const RoutineImportPage(),
+                          ),
+                        );
+                        await provider.loadRoutines();
+                      },
+                      icon: const Icon(LucideIcons.fileInput, size: 16),
+                      label: const Text('Importar'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       );
