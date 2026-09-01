@@ -8,12 +8,27 @@ import '../../../../services/api_service.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/exercise.dart';
 import '../../models/routine.dart';
+import '../widgets/routine_day_picker.dart';
 import 'routines_home_page.dart';
 
 class WorkoutSessionPage extends StatefulWidget {
-  const WorkoutSessionPage({super.key, required this.routine});
+  const WorkoutSessionPage({
+    super.key,
+    required this.routine,
+    this.dayIndex,
+  });
 
   final Routine routine;
+
+  /// Día de la rutina con el que arrancar. `null` = el planificado para hoy
+  /// (`indiceDiaPorDefecto`), que es lo que se quiere el 99 % de las veces.
+  ///
+  /// Que sea explícito importa: `WorkoutSessionProvider.startSession` declara
+  /// `dayIndex = 0` y ninguna de las dos pantallas que abren una sesión le
+  /// pasaba nada, así que la sesión empezaba SIEMPRE por el primer día de la
+  /// rutina. Un jueves, el botón decía "Iniciar Pierna" y dentro salía el
+  /// pecho del lunes.
+  final int? dayIndex;
 
   @override
   State<WorkoutSessionPage> createState() => _WorkoutSessionPageState();
@@ -25,7 +40,10 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<WorkoutSessionProvider>();
-      p.startSession(widget.routine);
+      p.startSession(
+        widget.routine,
+        dayIndex: widget.dayIndex ?? indiceDiaPorDefecto(widget.routine),
+      );
       if (p.connectionLabel == null) p.connectWatch();
       p.onWorkoutDetected = _onWorkoutDetected;
     });
@@ -116,6 +134,26 @@ class _SessionHeader extends StatelessWidget {
   final WorkoutSessionProvider provider;
   final String routineName;
 
+  /// Cambiar de día solo mientras no se haya entrenado nada: `startSession`
+  /// limpia series, resultados y cronómetro, así que a mitad de sesión esto
+  /// sería un borrado de progreso disfrazado de cambio de día.
+  bool get _puedeCambiarDia =>
+      provider.phase == Phase.idle &&
+      provider.results.isEmpty &&
+      (provider.routine?.days.length ?? 0) > 1;
+
+  Future<void> _cambiarDia(BuildContext context) async {
+    final routine = provider.routine;
+    if (routine == null) return;
+    final elegido = await showRoutineDayPicker(
+      context,
+      routine,
+      seleccionado: provider.dayIndex,
+    );
+    if (elegido == null || elegido == provider.dayIndex) return;
+    provider.startSession(routine, dayIndex: elegido);
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
@@ -145,10 +183,45 @@ class _SessionHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                eyebrow,
-                style: DesignTokens.labelSmall(
-                    color: DesignTokens.mutedForeground(b)),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      eyebrow,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesignTokens.labelSmall(
+                          color: DesignTokens.mutedForeground(b)),
+                    ),
+                  ),
+                  if (_puedeCambiarDia) ...[
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => _cambiarDia(context),
+                      borderRadius: BorderRadius.circular(999),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.calendarDays,
+                                size: 12,
+                                color: DesignTokens.mutedForeground(b)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Cambiar',
+                              style: DesignTokens.labelSmall(
+                                  color: DesignTokens.mutedForeground(b)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               Text(
                 title,

@@ -23,13 +23,16 @@ import '../../../nutrition/presentation/widgets/hydration_card.dart';
 import '../../../nutrition/presentation/widgets/manual_food_entry_card.dart';
 import '../../../nutrition/presentation/widgets/supplements_card.dart';
 import '../../../nutrition/presentation/widgets/todays_meals_card.dart';
+import '../../../routine/data/routine_transfer.dart';
 import '../../../routine/models/exercise.dart';
+import '../../../routine/models/routine.dart';
 import '../../../routine/presentation/screens/quick_add_page.dart';
 import '../../../routine/presentation/screens/routine_builder_page.dart';
 import '../../../routine/presentation/screens/routine_import_page.dart';
 import '../../../routine/presentation/screens/routine_view_page.dart';
 import '../../../routine/presentation/screens/workout_session_page.dart';
 import '../../../routine/presentation/widgets/muscle_heatmap_card.dart';
+import '../../../routine/presentation/widgets/routine_day_picker.dart';
 import '../../../profile/presentation/screens/profile_setup_page.dart';
 import '../../../../core/route_loaders.dart';
 import 'backend_features_page.dart';
@@ -1549,15 +1552,19 @@ class _CoachScreen extends StatelessWidget {
 class _TodayRoutineHero extends StatelessWidget {
   const _TodayRoutineHero();
 
-  static const _diasSemana = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
-  ];
+  /// Abre la sesión con el día que elija el usuario. Es un método aparte
+  /// porque el selector es asíncrono y al volver hay que comprobar el
+  /// `mounted` del context antes de navegar.
+  Future<void> _entrenarOtroDia(BuildContext context, Routine? routine) async {
+    if (routine == null) return;
+    final elegido = await showRoutineDayPicker(context, routine);
+    if (elegido == null || !context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WorkoutSessionPage(routine: routine, dayIndex: elegido),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1569,7 +1576,7 @@ class _TodayRoutineHero extends StatelessWidget {
     // `_openQuickAddForToday` más arriba en este archivo — el backend ordena
     // por `updated_at DESC` y pone `activa: true` solo en la última creada.
     final routine = routines.isNotEmpty ? routines.first : null;
-    final hoy = _diasSemana[DateTime.now().weekday - 1];
+    final hoy = RoutineTransfer.diasSemana[DateTime.now().weekday - 1];
     final dayIndex = routine?.days.indexWhere((d) => d.dayOfWeek == hoy) ?? -1;
     final day = dayIndex >= 0 ? routine!.days[dayIndex] : null;
 
@@ -1640,6 +1647,21 @@ class _TodayRoutineHero extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+            // Día de descanso: hay rutina, pero hoy no toca. Antes esto se
+            // quedaba en un aviso sin salida, justo cuando más sentido tiene
+            // poder elegir otro día — quien entrena el martes lo que planificó
+            // para el lunes no tenía forma de hacerlo desde aquí.
+            if (routine?.days.isNotEmpty ?? false) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _entrenarOtroDia(context, routine),
+                  icon: const Icon(LucideIcons.calendarDays, size: 16),
+                  label: const Text('Entrenar otro día'),
+                ),
               ),
             ],
           ],
@@ -1722,9 +1744,14 @@ class _TodayRoutineHero extends StatelessWidget {
           Material(
             type: MaterialType.transparency,
             child: InkWell(
+              // `dayIndex` explícito: es el día de HOY que ya calculó el build.
+              // Sin él, WorkoutSessionProvider.startSession cae en su
+              // `dayIndex = 0` y abría el primer día de la rutina — el botón
+              // decía "Iniciar Pierna" y dentro salía el pecho del lunes.
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => WorkoutSessionPage(routine: routine),
+                  builder: (_) =>
+                      WorkoutSessionPage(routine: routine, dayIndex: dayIndex),
                 ),
               ),
               borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
@@ -1743,12 +1770,21 @@ class _TodayRoutineHero extends StatelessWidget {
                   children: [
                     const Icon(LucideIcons.play, size: 18, color: Colors.white),
                     const SizedBox(width: 8),
-                    Text(
-                      'Iniciar ${day.focus?.isNotEmpty == true ? day.focus! : hoy}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
+                    // `focus` es varchar(255) y lo escribe el usuario (o la
+                    // IA): sin Flexible + ellipsis, un enfoque largo como
+                    // "Pecho, hombro y tríceps con series descendentes"
+                    // desbordaba el botón por los dos lados.
+                    Flexible(
+                      child: Text(
+                        'Iniciar ${day.focus?.isNotEmpty == true ? day.focus! : hoy}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   ],
@@ -1756,6 +1792,16 @@ class _TodayRoutineHero extends StatelessWidget {
               ),
             ),
           ),
+          // Con un solo día planificado no hay nada entre lo que elegir.
+          if (routine.days.length > 1)
+            Center(
+              child: TextButton.icon(
+                onPressed: () => _entrenarOtroDia(context, routine),
+                icon: const Icon(LucideIcons.calendarDays, size: 15),
+                label: const Text('Entrenar otro día'),
+                style: TextButton.styleFrom(foregroundColor: mutedFg),
+              ),
+            ),
         ],
       ),
     );
