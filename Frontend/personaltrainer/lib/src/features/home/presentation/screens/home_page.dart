@@ -1974,6 +1974,22 @@ Future<void> _openQuickAddForToday(BuildContext context) async {
   }
   if (!context.mounted) return;
 
+  // Sin rutinas hay dos motivos distintos y el desenlace no es el mismo: que
+  // no tengas ninguna, o que no se haya podido preguntar. Tratar el segundo
+  // como el primero mandaba al constructor a alguien cuyo backend no responde,
+  // donde el guardado vuelve a fallar al final del formulario.
+  if (provider.routines.isEmpty && provider.error != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No se pudo consultar tus rutinas. Revisa la conexión e inténtalo '
+          'de nuevo.',
+        ),
+      ),
+    );
+    return;
+  }
+
   if (provider.routines.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

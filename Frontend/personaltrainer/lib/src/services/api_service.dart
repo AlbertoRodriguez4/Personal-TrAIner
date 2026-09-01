@@ -86,6 +86,17 @@ class ApiService {
     return Map<String, dynamic>.from(decoded);
   }
 
+  /// Tope por defecto de cualquier petición que no pida uno propio.
+  ///
+  /// Sin él, `timeout` era nulo y `package:http` espera indefinidamente: una
+  /// pulsación que llama al backend se quedaba colgada para siempre y en
+  /// pantalla no pasaba **nada** — ni error, ni aviso, ni transición. Con el
+  /// plan Free de Render, que duerme el servicio a los 15 minutos, eso es lo
+  /// normal en la primera pulsación del día, no un caso raro. Un minuto cubre
+  /// de sobra el arranque en frío; lo que no cubre son los análisis de IA, que
+  /// ya pasan su propio `_timeoutAnalisisIa`.
+  static const Duration _timeoutPorDefecto = Duration(minutes: 1);
+
   static Future<dynamic> _request({
     required String method,
     required String path,
@@ -97,7 +108,7 @@ class ApiService {
     late final http.Response response;
 
     Future<http.Response> conTimeout(Future<http.Response> peticion) =>
-        timeout == null ? peticion : peticion.timeout(timeout);
+        peticion.timeout(timeout ?? _timeoutPorDefecto);
 
     switch (method) {
       case 'GET':
