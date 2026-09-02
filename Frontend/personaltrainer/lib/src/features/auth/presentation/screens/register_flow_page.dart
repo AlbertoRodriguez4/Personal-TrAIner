@@ -6,6 +6,7 @@ import '../../../../core/ui/analysis_report.dart';
 import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/health_service.dart';
+import '../../../../services/notification_service.dart';
 import '../../../onboarding/presentation/screens/tour_page.dart';
 import '../../../profile/presentation/widgets/profile_fields.dart';
 
@@ -196,6 +197,19 @@ class _RegisterFlowPageState extends State<RegisterFlowPage> {
   Future<void> _pedirPermisos() async {
     setState(() => _procesando = true);
     try {
+      // Las notificaciones se piden AQUI, junto a Health Connect, y no solo
+      // desde el perfil como hasta ahora: este es el unico punto del registro
+      // donde se piden permisos, y quien no volviese luego a Ajustes no veia
+      // jamas un recordatorio ni la notificacion de entrenamiento en curso,
+      // sin que nada se lo explicara. Va antes que Health Connect para que los
+      // dos dialogos del sistema no se pisen.
+      //
+      // No condiciona nada: `_permisosConcedidos` sigue siendo el de Health
+      // Connect, que es el que este paso enseña y el que da sentido al resto
+      // de la app. Decir que no a las notificaciones no puede frenar el alta.
+      await NotificationService.pedirPermiso().catchError((_) => false);
+      if (!mounted) return;
+
       final ok = await HealthService.requestPermissions();
       if (!mounted) return;
       setState(() {

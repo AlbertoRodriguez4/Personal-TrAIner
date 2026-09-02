@@ -155,24 +155,30 @@ class ApiService {
     throw Exception(_extractErrorMessage(response));
   }
 
+  /// Sin try/catch a proposito. Antes envolvia todo en un
+  /// `catch (_) { return null; }`, y eso convertia CUALQUIER fallo -- un
+  /// timeout con el backend dormido, un 500, quedarse sin red, un token que
+  /// Google firma pero el backend rechaza -- en el mismo `null`, que arriba se
+  /// traduce en el mismo "No se pudo iniciar sesion con Google". Con la causa
+  /// borrada no hay forma de distinguir un problema de configuracion de uno de
+  /// red, ni depurandolo ni contandolo por telefono. Quien llama ya envuelve
+  /// esto en un try/catch que muestra el motivo.
+  ///
+  /// `null` queda reservado para su unico significado util: el backend
+  /// respondio bien pero lo que devolvio no es un usuario.
   static Future<Map<String, dynamic>?> googleLogin(String idToken) async {
-    try {
-      final decoded = await _request(
-        method: 'POST',
-        path: '/users/google-login',
-        body: {'idToken': idToken},
-      );
-      final userData = _toMap(decoded);
-      if (userData == null) {
-        return null;
-      }
-      _currentUser = userData;
-      _authToken = userData['access_token']?.toString();
-      await _persistSession();
-      return userData;
-    } catch (_) {
-      return null;
-    }
+    final decoded = await _request(
+      method: 'POST',
+      path: '/users/google-login',
+      body: {'idToken': idToken},
+    );
+    final userData = _toMap(decoded);
+    if (userData == null) return null;
+
+    _currentUser = userData;
+    _authToken = userData['access_token']?.toString();
+    await _persistSession();
+    return userData;
   }
 
   static Future<Map<String, dynamic>?> login(
