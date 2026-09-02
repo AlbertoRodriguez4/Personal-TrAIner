@@ -7,6 +7,7 @@ import '../../features/routine/models/routine_day.dart';
 import '../../features/routine/models/exercise.dart';
 import '../../services/api_service.dart';
 import '../../services/ble_service.dart';
+import '../../services/notification_service.dart';
 import '../theme/design_tokens.dart';
 
 enum Phase { idle, inSet, rest, analyzing, finished }
@@ -217,6 +218,76 @@ class WorkoutSessionProvider extends ChangeNotifier {
   bool _paused = false;
   bool get paused => _paused;
 
+  // ── Notificación de sesión en curso ──────────────────────────────────────
+  //
+  // Se engancha en `notifyListeners` y no en cada método que cambia de estado
+  // (son quince) porque así ninguno futuro puede olvidarse de avisar. Lo que
+  // hace que salga barato es la firma: este provider notifica UNA VEZ POR
+  // SEGUNDO por el cronómetro de la sesión, y republicar la notificación en
+  // cada tic sería reescribirla sesenta veces por minuto para no cambiar ni una
+  // letra. El tiempo lo pinta Android solo desde `inicio`, así que aquí solo se
+  // reescribe cuando cambia algo que de verdad se lee.
+  String? _firmaNotificacion;
+
+  @override
+  void notifyListeners() {
+    _sincronizarNotificacion();
+    super.notifyListeners();
+  }
+
+  void _sincronizarNotificacion() {
+    final day = currentDay;
+    final inicio = _sessionStartAt;
+    final terminada = _phase == Phase.finished;
+
+    if (_routine == null || day == null || inicio == null || terminada) {
+      if (_firmaNotificacion != null) {
+        _firmaNotificacion = null;
+        unawaited(NotificationService.cancelarSesionEnCurso().catchError((_) {}));
+      }
+      return;
+    }
+
+    final ejercicio = currentExercise;
+    final nombre = ejercicio?.name ?? 'Ejercicio';
+    final serie = _setIndex + 1;
+    final totalSeries = totalSetsForExercise;
+    final deSeries = totalSeries > 0 ? ' $serie/$totalSeries' : '';
+
+    final cuerpo = switch (_phase) {
+      Phase.inSet => 'Serie$deSeries en curso · $nombre',
+      Phase.rest => 'Descanso · luego serie$deSeries de $nombre',
+      Phase.analyzing => 'Analizando la serie de $nombre…',
+      _ => _paused
+          ? 'En pausa · $nombre'
+          : 'Listo para la serie$deSeries · $nombre',
+    };
+
+    final titulo = day.focus?.isNotEmpty == true ? day.focus! : _routine!.name;
+    final subtexto = totalExercisesInDay > 0
+        ? 'Ejercicio ${_exerciseIndex + 1} de $totalExercisesInDay'
+        : null;
+
+    // El tiempo queda fuera de la firma: lo lleva Android.
+    final firma = '$titulo|$cuerpo|$subtexto|$_paused';
+    if (firma == _firmaNotificacion) return;
+    _firmaNotificacion = firma;
+
+    unawaited(
+      NotificationService.mostrarSesionEnCurso(
+        titulo: titulo,
+        cuerpo: cuerpo,
+        subtexto: subtexto,
+        inicio: inicio,
+        pausada: _paused,
+        progreso: completedExercisesCount,
+        progresoMax: totalExercisesInDay,
+        // Que falle la notificación no puede tumbar el entrenamiento: sin
+        // permiso concedido, `show` simplemente no pinta nada.
+      ).catchError((_) {}),
+    );
+  }
+
   void pauseSession() {
     if (_paused) return;
     _paused = true;
@@ -268,6 +339,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _hrSub?.cancel();
     _ble.disconnect();
     _ble.dispose();
+    unawaited(NotificationService.cancelarSesionEnCurso().catchError((_) {}));
     super.dispose();
   }
 

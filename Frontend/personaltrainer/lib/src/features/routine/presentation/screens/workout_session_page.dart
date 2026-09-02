@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/providers/workout_session_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../services/api_service.dart';
+import '../../../../services/notification_service.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/exercise.dart';
 import '../../models/routine.dart';
@@ -46,6 +49,12 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       );
       if (p.connectionLabel == null) p.connectWatch();
       p.onWorkoutDetected = _onWorkoutDetected;
+      // El permiso de notificaciones solo se pedía desde el perfil, al activar
+      // los recordatorios. Quien no pasara por ahí entrenaba sin ver nunca la
+      // notificación de sesión, sin que nada se lo explicase. Empezar un
+      // entrenamiento es el momento natural para pedirlo, y Android solo
+      // muestra el diálogo la primera vez: después esto no interrumpe nada.
+      unawaited(NotificationService.pedirPermiso().catchError((_) => false));
     });
   }
 

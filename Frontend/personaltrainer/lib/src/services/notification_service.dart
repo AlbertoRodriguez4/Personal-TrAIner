@@ -37,11 +37,26 @@ class NotificationService {
   static const _idComposicion = 200;
   static const _idNutricion = 300;
 
+  static const _idSesion = 400;
+
   static const _canalRecordatorios = AndroidNotificationChannel(
     'recordatorios',
     'Recordatorios',
     description: 'Entrenamientos, pesarte y cerrar el diario de comidas.',
     importance: Importance.defaultImportance,
+  );
+
+  /// Canal aparte del de recordatorios, y con importancia baja a propósito: la
+  /// notificación de sesión se reescribe en cada serie, cada descanso y cada
+  /// cambio de ejercicio. Con la importancia de los recordatorios, entrenar
+  /// sería un pitido cada treinta segundos.
+  static const _canalSesion = AndroidNotificationChannel(
+    'sesion_en_curso',
+    'Entrenamiento en curso',
+    description: 'La serie y el ejercicio actuales mientras entrenas.',
+    importance: Importance.low,
+    playSound: false,
+    enableVibration: false,
   );
 
   /// Prepara el plugin y la zona horaria. Idempotente: se puede llamar en cada
@@ -70,6 +85,16 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_canalRecordatorios);
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_canalSesion);
+
+    // Si la app murió con un entrenamiento a medias, su notificación `ongoing`
+    // sigue en la barra: el sistema la mantiene aunque el proceso ya no exista.
+    // Al arrancar nunca hay sesión viva, así que lo que quede es basura de la
+    // anterior y ofrecería volver a una sesión que ya no está.
+    await _plugin.cancel(id: _idSesion);
 
     _iniciado = true;
   }
@@ -175,6 +200,64 @@ class NotificationService {
           priority: Priority.defaultPriority,
         ),
       );
+
+  /// Notificación persistente mientras hay un entrenamiento en marcha.
+  ///
+  /// Se reescribe sobre el mismo id, así que llamar de nuevo actualiza la que
+  /// ya está en la barra en vez de apilar otra.
+  ///
+  /// El tiempo NO se escribe aquí: se le pasa a Android el instante de inicio y
+  /// él lleva el cronómetro solo (`usesChronometer`). Esa es la diferencia
+  /// entre reescribir la notificación cuando cambia algo —cuatro o cinco veces
+  /// por ejercicio— y reescribirla sesenta veces por minuto, que es lo que
+  /// pasaría si el texto tuviera que traer el tiempo ya pintado.
+  static Future<void> mostrarSesionEnCurso({
+    required String titulo,
+    required String cuerpo,
+    required DateTime inicio,
+    required bool pausada,
+    String? subtexto,
+    int progreso = 0,
+    int progresoMax = 0,
+  }) async {
+    await init();
+    await _plugin.show(
+      id: _idSesion,
+      title: titulo,
+      body: cuerpo,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _canalSesion.id,
+          _canalSesion.name,
+          channelDescription: _canalSesion.description,
+          importance: Importance.low,
+          priority: Priority.low,
+          category: AndroidNotificationCategory.workout,
+          // Mientras el entrenamiento siga, no se puede descartar deslizando:
+          // es el acceso de vuelta a la sesión, no un aviso que se lee y se
+          // tira.
+          ongoing: true,
+          autoCancel: false,
+          // Se reescribe constantemente; sin esto cada serie volvería a alertar
+          // aunque el canal sea silencioso.
+          onlyAlertOnce: true,
+          silent: true,
+          subText: subtexto,
+          // En pausa el cronómetro se apaga: dejarlo correr diría que llevas
+          // entrenando un rato que no has entrenado.
+          usesChronometer: !pausada,
+          showWhen: !pausada,
+          when: inicio.millisecondsSinceEpoch,
+          showProgress: progresoMax > 0,
+          maxProgress: progresoMax,
+          progress: progreso,
+        ),
+      ),
+    );
+  }
+
+  static Future<void> cancelarSesionEnCurso() =>
+      _plugin.cancel(id: _idSesion);
 
   static Future<void> _programarDiario({
     required int id,
