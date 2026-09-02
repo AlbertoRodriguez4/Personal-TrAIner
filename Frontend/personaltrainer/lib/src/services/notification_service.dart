@@ -37,6 +37,11 @@ class NotificationService {
   static const _idComposicion = 200;
   static const _idNutricion = 300;
 
+  /// Último fallo del plugin, para poder enseñarlo. Sin esto, cualquier
+  /// excepción al publicar moría en un `catchError` y la funcion parecia
+  /// simplemente no existir: ni notificación, ni error, ni pista.
+  static String? ultimoFallo;
+
   static const _idSesion = 400;
 
   static const _canalRecordatorios = AndroidNotificationChannel(

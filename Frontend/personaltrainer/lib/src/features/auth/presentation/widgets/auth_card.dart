@@ -64,6 +64,11 @@ class _AuthCardState extends State<AuthCard> {
     }
   }
 
+  /// Distingue el timeout del selector de cuentas del timeout del backend: son
+  /// dos causas distintas con dos soluciones distintas y no pueden compartir
+  /// mensaje.
+  bool _googleFaseSeleccion = false;
+
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
     try {
@@ -75,10 +80,17 @@ class _AuthCardState extends State<AuthCard> {
       }
 
       GoogleSignInAccount? googleUser;
+      _googleFaseSeleccion = true;
       try {
-        googleUser = await GoogleSignIn.instance.authenticate(
-          scopeHint: ['email', 'profile'],
-        );
+        // Con tope de tiempo a propósito. Si tras elegir la cuenta no aparece
+        // NINGÚN mensaje -- ni el del token, ni el de la excepción -- es que
+        // esta llamada no vuelve nunca: el selector lo pinta Google Play
+        // Services y el resultado se queda por el camino. Sin tope, el `await`
+        // se queda esperando para siempre, el spinner girando y la pantalla
+        // muda, que es exactamente el sintoma que no habia forma de explicar.
+        googleUser = await GoogleSignIn.instance
+            .authenticate(scopeHint: ['email', 'profile'])
+            .timeout(const Duration(seconds: 40));
       } on GoogleSignInException catch (e) {
         if (e.code == GoogleSignInExceptionCode.canceled) {
           setState(() => _isLoading = false);
@@ -90,6 +102,7 @@ class _AuthCardState extends State<AuthCard> {
         return;
       }
 
+      _googleFaseSeleccion = false;
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
 
@@ -123,14 +136,17 @@ class _AuthCardState extends State<AuthCard> {
         _showMessage('No se pudo iniciar sesión con Google.');
       }
     } on TimeoutException {
-      // El backend duerme a los 15 minutos en el plan Free de Render, asi que
-      // el primer intento tras un rato puede pasarse del minuto de espera. Es
-      // un caso concreto y con solucion concreta -- reintentar --, no el mismo
-      // "error" que una configuracion mal puesta.
       if (!mounted) return;
+      // Dos timeouts distintos con dos causas y dos soluciones distintas, asi
+      // que no pueden compartir mensaje: el del selector de cuentas apunta a la
+      // configuracion de Google Cloud; el del backend, a Render despertando.
       _showMessage(
-        'El servidor no respondió a tiempo. Si llevaba un rato sin usarse '
-        'tarda en despertar: inténtalo otra vez en unos segundos.',
+        _googleFaseSeleccion
+            ? 'Google no devolvió respuesta tras elegir la cuenta (40 s). Suele '
+                'ser que la app no esté registrada en Google Cloud con la firma '
+                'de esta compilación.'
+            : 'El servidor no respondió a tiempo. Si llevaba un rato sin usarse '
+                'tarda en despertar: inténtalo otra vez en unos segundos.',
       );
     } catch (e) {
       if (!mounted) return;

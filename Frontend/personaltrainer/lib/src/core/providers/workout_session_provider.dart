@@ -443,9 +443,13 @@ class WorkoutSessionProvider extends ChangeNotifier {
         pausada: _paused,
         progreso: completedExercisesCount,
         progresoMax: totalExercisesInDay,
-        // Que falle la notificación no puede tumbar el entrenamiento: sin
-        // permiso concedido, `show` simplemente no pinta nada.
-      ).catchError((_) {}),
+        // Que falle no puede tumbar el entrenamiento, pero tampoco puede
+        // desaparecer sin dejar rastro: se guarda para que la pantalla de
+        // sesión lo enseñe. Tragarse esto era lo que hacía que "no funciona"
+        // no se pudiera distinguir de "no está implementado".
+      ).catchError((Object e) {
+        NotificationService.ultimoFallo = e.toString();
+      }),
     );
   }
 

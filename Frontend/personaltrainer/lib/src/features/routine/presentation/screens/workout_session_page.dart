@@ -65,8 +65,45 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       // notificación de sesión, sin que nada se lo explicase. Empezar un
       // entrenamiento es el momento natural para pedirlo, y Android solo
       // muestra el diálogo la primera vez: después esto no interrumpe nada.
-      unawaited(NotificationService.pedirPermiso().catchError((_) => false));
+      _comprobarNotificaciones();
     });
+  }
+
+  /// Pide el permiso y, si no hay notificación, DICE por qué. Antes esto era
+  /// un `unawaited(...).catchError((_) => false)`: sin permiso o con el plugin
+  /// fallando, no aparecía nada y nada lo explicaba, que es indistinguible de
+  /// que la función no exista.
+  Future<void> _comprobarNotificaciones() async {
+    bool concedido;
+    try {
+      concedido = await NotificationService.pedirPermiso();
+    } catch (e) {
+      NotificationService.ultimoFallo = e.toString();
+      concedido = false;
+    }
+    if (!mounted) return;
+
+    final fallo = NotificationService.ultimoFallo;
+    if (fallo != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Las notificaciones fallaron: $fallo'),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+      return;
+    }
+    if (!concedido) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sin permiso de notificaciones no se puede mostrar el '
+            'entrenamiento en la barra. Actívalo en los ajustes del sistema.',
+          ),
+          duration: Duration(seconds: 6),
+        ),
+      );
+    }
   }
 
   void _onWorkoutDetected() {
