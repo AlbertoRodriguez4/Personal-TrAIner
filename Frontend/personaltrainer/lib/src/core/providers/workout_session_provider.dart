@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/routine/models/routine.dart';
 import '../../features/routine/models/routine_day.dart';
@@ -49,12 +51,43 @@ class SetResult {
     required this.reachedFailure,
     required this.sufficientIntensity,
   });
+
+  Map<String, dynamic> toJson() => {
+        'exerciseName': exerciseName,
+        'setNumber': setNumber,
+        'durationSec': durationSec,
+        'maxBpm': maxBpm,
+        'avgBpm': avgBpm,
+        'rirEstimated': rirEstimated,
+        'attackSlope': attackSlope,
+        'plateauIndex': plateauIndex,
+        'zone': zone,
+        'feedback': feedback,
+        'reachedFailure': reachedFailure,
+        'sufficientIntensity': sufficientIntensity,
+      };
+
+  factory SetResult.fromJson(Map<String, dynamic> j) => SetResult(
+        exerciseName: j['exerciseName']?.toString() ?? '',
+        setNumber: (j['setNumber'] as num?)?.toInt() ?? 0,
+        durationSec: (j['durationSec'] as num?)?.toInt() ?? 0,
+        maxBpm: (j['maxBpm'] as num?)?.toInt() ?? 0,
+        avgBpm: (j['avgBpm'] as num?)?.toInt() ?? 0,
+        rirEstimated: (j['rirEstimated'] as num?)?.toInt() ?? 0,
+        attackSlope: (j['attackSlope'] as num?)?.toDouble() ?? 0,
+        plateauIndex: (j['plateauIndex'] as num?)?.toDouble() ?? 0,
+        zone: j['zone']?.toString() ?? '',
+        feedback: j['feedback']?.toString() ?? '',
+        reachedFailure: j['reachedFailure'] == true,
+        sufficientIntensity: j['sufficientIntensity'] == true,
+      );
 }
 
 class WorkoutSessionProvider extends ChangeNotifier {
   final BleService _ble = BleService();
 
   WorkoutSessionProvider() {
+    unawaited(_cargarSesionPendiente());
     _ble.onStateChanged = _updateBleState;
   }
 
@@ -218,6 +251,129 @@ class WorkoutSessionProvider extends ChangeNotifier {
   bool _paused = false;
   bool get paused => _paused;
 
+  // ── Sesión que sobrevive a que Android mate la app ───────────────────────
+  //
+  // La sesión vivía solo en memoria, así que salir a otra aplicación un rato
+  // largo la perdía entera: al volver, ni pantalla de entrenamiento ni series
+  // hechas. Android puede matar el proceso en segundo plano cuando quiera y no
+  // avisa, así que no basta con "no salirse": hay que poder volver.
+  //
+  // Se guarda un resumen en disco, no la rutina entera: solo el id de la
+  // rutina, por dónde ibas y las series ya analizadas. La rutina se vuelve a
+  // resolver desde `RoutineProvider` al reanudar, que es la copia buena y puede
+  // haber cambiado mientras tanto.
+  static const _clave = 'pt_sesion_en_curso';
+
+  /// Pasado este rato, lo guardado se considera de otro día. Reanudar el
+  /// entrenamiento de ayer al abrir la app sería peor que no reanudar nada.
+  static const _caduca = Duration(hours: 6);
+
+  Map<String, dynamic>? _pendiente;
+
+  /// Sesión sin terminar que se puede reanudar, o null. Solo tiene sentido
+  /// mientras no haya una sesión viva en este mismo proceso.
+  Map<String, dynamic>? get sesionPendiente => _routine == null ? _pendiente : null;
+
+  Future<void> _cargarSesionPendiente() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_clave);
+      if (raw == null || raw.isEmpty) return;
+      final snap = jsonDecode(raw) as Map<String, dynamic>;
+      final guardado = DateTime.tryParse(snap['guardadoEn']?.toString() ?? '');
+      if (guardado == null || DateTime.now().difference(guardado) > _caduca) {
+        await prefs.remove(_clave);
+        return;
+      }
+      _pendiente = snap;
+      notifyListeners();
+    } catch (_) {
+      // Un resumen corrupto no puede impedir abrir la app: se ignora y la
+      // siguiente sesión lo sobrescribe.
+    }
+  }
+
+  int _ticksDesdeGuardado = 0;
+
+  Future<void> _guardarSesion() async {
+    final routine = _routine;
+    if (routine?.id == null || _phase == Phase.finished) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _clave,
+        jsonEncode({
+          'guardadoEn': DateTime.now().toIso8601String(),
+          'routineId': routine!.id,
+          'dayIndex': _dayIndex,
+          'exerciseIndex': _exerciseIndex,
+          'setIndex': _setIndex,
+          'elapsed': _sessionElapsedSeconds,
+          'completados': _completedExerciseIndices.toList(),
+          'results': _results.map((r) => r.toJson()).toList(),
+        }),
+      );
+    } catch (_) {
+      // Que no se pueda escribir en disco no puede cortar el entrenamiento.
+    }
+  }
+
+  /// Tirar lo guardado sin reanudarlo. Es explícito y del usuario: si sale de
+  /// aquí sin decir nada, el resumen sigue disponible hasta que caduque.
+  void descartarPendiente() {
+    unawaited(_borrarSesion());
+    notifyListeners();
+  }
+
+  Future<void> _borrarSesion() async {
+    _pendiente = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_clave);
+    } catch (_) {}
+  }
+
+  /// Retoma una sesión guardada. La fase NO se restaura a propósito: se vuelve
+  /// siempre a `idle`. Una serie a medias depende del cronómetro de la serie y
+  /// del buffer de pulsaciones, que murieron con el proceso; devolverte a
+  /// "serie en curso" con esos dos vacíos daría un análisis inventado. Se
+  /// reanuda en el mismo ejercicio y la misma serie, listo para empezarla.
+  void reanudarSesion(Routine routine, Map<String, dynamic> snap) {
+    _routine = routine;
+    _dayIndex = ((snap['dayIndex'] as num?)?.toInt() ?? 0)
+        .clamp(0, routine.days.length - 1);
+    final ejercicios = currentDay?.exercises.length ?? 0;
+    _exerciseIndex = ejercicios == 0
+        ? 0
+        : ((snap['exerciseIndex'] as num?)?.toInt() ?? 0).clamp(0, ejercicios - 1);
+    _setIndex = (snap['setIndex'] as num?)?.toInt() ?? 0;
+    _sessionElapsedSeconds = (snap['elapsed'] as num?)?.toInt() ?? 0;
+
+    _completedExerciseIndices
+      ..clear()
+      ..addAll(((snap['completados'] as List?) ?? const [])
+          .map((e) => (e as num).toInt()));
+
+    _results
+      ..clear()
+      ..addAll(((snap['results'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(SetResult.fromJson));
+
+    // El tiempo muerto mientras la app no existía no cuenta como entrenamiento,
+    // así que el inicio se recoloca hacia atrás justo lo ya cronometrado: el
+    // cronómetro de la notificación sigue donde lo dejaste, no donde estaría si
+    // hubiera corrido solo.
+    _sessionStartAt =
+        DateTime.now().subtract(Duration(seconds: _sessionElapsedSeconds));
+    _phase = Phase.idle;
+    _paused = false;
+    _sessionSaved = false;
+    _pendiente = null;
+    _startSessionTimer();
+    notifyListeners();
+  }
+
   // ── Notificación de sesión en curso ──────────────────────────────────────
   //
   // Se engancha en `notifyListeners` y no en cada método que cambia de estado
@@ -273,6 +429,11 @@ class WorkoutSessionProvider extends ChangeNotifier {
     if (firma == _firmaNotificacion) return;
     _firmaNotificacion = firma;
 
+    // Cada transición real (serie, descanso, cambio de ejercicio) deja el
+    // avance en disco. El tiempo lo cubre aparte el tic del cronómetro: aquí
+    // solo se escribe cuando cambia algo que importa recuperar.
+    unawaited(_guardarSesion());
+
     unawaited(
       NotificationService.mostrarSesionEnCurso(
         titulo: titulo,
@@ -306,6 +467,13 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _sessionTimer?.cancel();
     _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _sessionElapsedSeconds += 1;
+      // El tiempo cambia cada segundo pero no justifica escribir en disco cada
+      // segundo: cada 15 s, que es lo máximo que se puede perder del cronómetro
+      // si el sistema mata la app justo entre dos guardados.
+      if (++_ticksDesdeGuardado >= 15) {
+        _ticksDesdeGuardado = 0;
+        unawaited(_guardarSesion());
+      }
       notifyListeners();
     });
   }
@@ -539,6 +707,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
       if (currentDay == null || _exerciseIndex >= currentDay!.exercises.length) {
         _phase = Phase.finished;
         _sessionTimer?.cancel();
+        unawaited(_borrarSesion());
         notifyListeners();
         return;
       }
@@ -572,6 +741,9 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _restTimer?.cancel();
     _sessionTimer?.cancel();
     _phase = Phase.finished;
+    // La sesión terminada ya no se reanuda: se guarda en el backend, no en el
+    // resumen local.
+    unawaited(_borrarSesion());
     notifyListeners();
     // Fire-and-forget: guardar no puede bloquear al usuario viendo su propio
     // resumen. `_SummaryView` sondea `savedSessionId`/`isSavingSession` para

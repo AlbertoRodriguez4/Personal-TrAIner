@@ -11,6 +11,7 @@ import '../../../../services/health_service.dart';
 import '../../../../core/providers/theme_provider.dart';
 
 import '../../../../core/providers/routine_provider.dart';
+import '../../../../core/providers/workout_session_provider.dart';
 import '../../../../core/providers/daily_summary_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/ai_animations.dart';
@@ -1572,9 +1573,22 @@ class _TodayRoutineHero extends StatelessWidget {
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final routines = context.watch<RoutineProvider>().routines;
+    // Sesión que se quedó a medias porque el sistema mató la app. Se mira
+    // antes que nada: volver a "hoy toca X" cuando llevabas cuatro ejercicios
+    // hechos es perderlos sin decirlo.
     // La más reciente hace de "activa": mismo criterio que ya usa
     // `_openQuickAddForToday` más arriba en este archivo — el backend ordena
     // por `updated_at DESC` y pone `activa: true` solo en la última creada.
+    final pendiente = context.watch<WorkoutSessionProvider>().sesionPendiente;
+    if (pendiente != null) {
+      final id = pendiente['routineId']?.toString();
+      for (final r in routines) {
+        if (r.id != null && r.id == id) {
+          return _ReanudarSesionCard(routine: r, snapshot: pendiente);
+        }
+      }
+    }
+
     final routine = routines.isNotEmpty ? routines.first : null;
     final hoy = RoutineTransfer.diasSemana[DateTime.now().weekday - 1];
     final dayIndex = routine?.days.indexWhere((d) => d.dayOfWeek == hoy) ?? -1;
@@ -1802,6 +1816,96 @@ class _TodayRoutineHero extends StatelessWidget {
                 style: TextButton.styleFrom(foregroundColor: mutedFg),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Vuelta a un entrenamiento que se quedó a medias. Sale EN LUGAR de la tarjeta
+/// del día, no debajo: son excluyentes, y mientras haya algo que reanudar,
+/// ofrecer "empezar hoy" al lado sería ofrecer tirar lo hecho por error.
+class _ReanudarSesionCard extends StatelessWidget {
+  const _ReanudarSesionCard({required this.routine, required this.snapshot});
+
+  final Routine routine;
+  final Map<String, dynamic> snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
+    final hechos = ((snapshot['completados'] as List?) ?? const []).length;
+    final minutos = ((snapshot['elapsed'] as num?)?.toInt() ?? 0) ~/ 60;
+    final dia = routine.days.isEmpty
+        ? 0
+        : ((snapshot['dayIndex'] as num?)?.toInt() ?? 0)
+            .clamp(0, routine.days.length - 1);
+    final enfoque = routine.days.isEmpty ? null : routine.days[dia].focus;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: DesignTokens.shadowCard(b),
+        border: Border.all(color: DesignTokens.activityGym),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ENTRENAMIENTO SIN TERMINAR',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.4,
+              color: mutedFg,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            enfoque?.isNotEmpty == true ? enfoque! : routine.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$hechos ejercicios hechos · $minutos min cronometrados',
+            style: TextStyle(fontSize: 13, color: mutedFg),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => WorkoutSessionPage(
+                        routine: routine,
+                        reanudar: snapshot,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(LucideIcons.play, size: 16),
+                  label: const Text('Reanudar'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
+                onPressed: () =>
+                    context.read<WorkoutSessionProvider>().descartarPendiente(),
+                child: const Text('Descartar'),
+              ),
+            ],
+          ),
         ],
       ),
     );

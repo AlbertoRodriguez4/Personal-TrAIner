@@ -19,9 +19,15 @@ class WorkoutSessionPage extends StatefulWidget {
     super.key,
     required this.routine,
     this.dayIndex,
+    this.reanudar,
   });
 
   final Routine routine;
+
+  /// Resumen de una sesión sin terminar. Si viene, la sesión se retoma por
+  /// donde iba en vez de empezar de cero, y `dayIndex` se ignora: el día lo
+  /// dice el propio resumen.
+  final Map<String, dynamic>? reanudar;
 
   /// Día de la rutina con el que arrancar. `null` = el planificado para hoy
   /// (`indiceDiaPorDefecto`), que es lo que se quiere el 99 % de las veces.
@@ -43,10 +49,15 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<WorkoutSessionProvider>();
-      p.startSession(
-        widget.routine,
-        dayIndex: widget.dayIndex ?? indiceDiaPorDefecto(widget.routine),
-      );
+      final aReanudar = widget.reanudar;
+      if (aReanudar != null) {
+        p.reanudarSesion(widget.routine, aReanudar);
+      } else {
+        p.startSession(
+          widget.routine,
+          dayIndex: widget.dayIndex ?? indiceDiaPorDefecto(widget.routine),
+        );
+      }
       if (p.connectionLabel == null) p.connectWatch();
       p.onWorkoutDetected = _onWorkoutDetected;
       // El permiso de notificaciones solo se pedía desde el perfil, al activar
