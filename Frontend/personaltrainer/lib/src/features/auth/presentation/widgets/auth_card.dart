@@ -82,20 +82,43 @@ class _AuthCardState extends State<AuthCard> {
           setState(() => _isLoading = false);
           return; // El usuario canceló
         }
-        rethrow;
+        if (mounted) {
+          _showMessage('Google Sign-In falló (${e.code.name}): ${e.description ?? 'sin detalle'}');
+        }
+        return;
       }
 
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
 
-      if (idToken != null) {
-        final userData = await ApiService.googleLogin(idToken);
-        if (!mounted) return;
-        if (userData != null) {
-          await _checkProfileAndProceed();
-        } else {
-          _showMessage('No se pudo iniciar sesión con Google.');
+      // Este `if` no tenía `else`, y ESO era el "elijo cuenta y no pasa nada":
+      // sin token no se entraba, el `finally` apagaba el spinner y la pantalla
+      // se quedaba igual, sin un solo aviso. El selector de cuentas lo pinta
+      // Google Play Services, así que aparece aunque la configuración esté mal;
+      // el fallo solo asoma al pedir el token, y ahí es donde hay que contarlo.
+      //
+      // Que no haya token casi siempre significa que la huella SHA-1 de la
+      // firma con la que se compiló ESTA app no está dada de alta en un cliente
+      // OAuth de Android (con el paquete com.altf4.personaltrainer) del mismo
+      // proyecto de Google Cloud que el serverClientId de arriba. Es
+      // configuración de consola, no código — ver la nota de Google Sign-In en
+      // CLAUDE.md.
+      if (idToken == null) {
+        if (mounted) {
+          _showMessage(
+            'Google no devolvió el token de acceso. Comprueba que la huella '
+            'SHA-1 de esta compilación esté registrada en Google Cloud Console.',
+          );
         }
+        return;
+      }
+
+      final userData = await ApiService.googleLogin(idToken);
+      if (!mounted) return;
+      if (userData != null) {
+        await _checkProfileAndProceed();
+      } else {
+        _showMessage('No se pudo iniciar sesión con Google.');
       }
     } catch (e) {
       if (!mounted) return;
