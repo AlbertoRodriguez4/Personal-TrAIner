@@ -3,13 +3,13 @@
   Icono pequeño de las notificaciones.
 
   Tiene que vivir en `drawable/` y no en `mipmap/`: el plugin lo resuelve con
-  getIdentifier(name, "drawable", ...) (FlutterLocalNotificationsPlugin.java),
-  asi que un `@mipmap/...` no se encuentra jamas y toda notificacion muere con
-  PlatformException(invalid_icon).
+  getIdentifier(name, "drawable", ...) en FlutterLocalNotificationsPlugin.java,
+  asi que un nombre con prefijo `@mipmap/` no se encuentra jamas y toda
+  notificacion muere con PlatformException(invalid_icon).
 
   Silueta blanca sobre transparente a proposito: Android tiñe el icono pequeño
-  con el color del sistema e ignora los colores, asi que un icono a todo color
-  saldria como una mancha solida.
+  con el color del sistema e ignora los colores propios, asi que un icono a todo
+  color saldria como una mancha solida.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
