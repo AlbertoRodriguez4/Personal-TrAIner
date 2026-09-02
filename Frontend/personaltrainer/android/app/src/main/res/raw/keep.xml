@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  El icono de las notificaciones se referencia SOLO desde una cadena en Dart
+  ('ic_notification' en NotificationService), y el shrinker de recursos no
+  puede ver esa referencia: para el, el drawable no lo usa nadie y lo borra de
+  la APK de release. El resultado era el mismo error que el mipmap,
+  PlatformException(invalid_icon), pero solo en release y sin nada que lo
+  explicara -- en debug funcionaba.
+
+  Comprobado en esta misma APK: `mipmap/launcher_icon`, que si aparece en el
+  manifest, sobrevive; `mipmap/ic_launcher`, que no lo referencia nadie,
+  desaparece del paquete.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification" />
