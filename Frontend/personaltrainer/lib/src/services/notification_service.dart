@@ -82,7 +82,12 @@ class NotificationService {
 
     await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // Nombre pelado de un drawable, sin '@mipmap/' ni '@drawable/': el
+        // plugin lo resuelve con getIdentifier(name, "drawable", ...), asi que
+        // cualquier prefijo -- o un icono que solo exista en mipmap/ -- da
+        // PlatformException(invalid_icon) y tumba TODAS las notificaciones,
+        // recordatorios incluidos. Era lo que pasaba con '@mipmap/ic_launcher'.
+        android: AndroidInitializationSettings('ic_notification'),
       ),
     );
 

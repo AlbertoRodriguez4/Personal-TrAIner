@@ -94,7 +94,20 @@ class _AuthCardState extends State<AuthCard> {
       } on GoogleSignInException catch (e) {
         if (e.code == GoogleSignInExceptionCode.canceled) {
           setState(() => _isLoading = false);
-          return; // El usuario canceló
+          // `canceled` NO siempre es que el usuario cerrase el selector:
+          // Credential Manager devuelve este mismo codigo cuando no puede
+          // emitir credencial -- tipicamente porque la firma de la app no esta
+          // registrada en Google Cloud. Los dos casos se distinguen por la
+          // descripcion: un cierre a mano no trae ninguna.
+          //
+          // Tratarlos igual era el ultimo camino mudo que quedaba: elegias
+          // cuenta, volvias al login y no aparecia nada, ni siquiera los
+          // mensajes añadidos para los demas fallos.
+          final detalle = e.description;
+          if (detalle != null && detalle.trim().isNotEmpty && mounted) {
+            _showMessage('Google canceló el acceso: $detalle');
+          }
+          return;
         }
         if (mounted) {
           _showMessage('Google Sign-In falló (${e.code.name}): ${e.description ?? 'sin detalle'}');
