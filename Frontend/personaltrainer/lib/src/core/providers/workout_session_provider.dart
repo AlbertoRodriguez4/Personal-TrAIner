@@ -224,6 +224,20 @@ class WorkoutSessionProvider extends ChangeNotifier {
   Timer? _restTimer;
   int _restRemaining = 0;
   int get restRemaining => _restRemaining;
+
+  /// Descanso REAL de la sesión: todo el tiempo que no se está haciendo una
+  /// serie. Antes solo existía `restRemaining`, la cuenta atrás del descanso
+  /// pautado, así que el rato entre ejercicios, el de montar la máquina o el de
+  /// mirar el móvil no contaba como nada: la tarjeta "Descanso" enseñaba un
+  /// guion salvo en los segundos justos posteriores a una serie.
+  int _restAcumuladoSegundos = 0;
+  int get restAcumuladoSegundos => _restAcumuladoSegundos;
+
+  String get restAcumuladoFormateado {
+    final m = (_restAcumuladoSegundos ~/ 60).toString().padLeft(2, '0');
+    final s = (_restAcumuladoSegundos % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
   static const int _defaultRestSec = 90;
 
   // ── Timer de sesión + pausa (independiente del timer por set/descanso, que
@@ -309,6 +323,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
           'exerciseIndex': _exerciseIndex,
           'setIndex': _setIndex,
           'elapsed': _sessionElapsedSeconds,
+          'descanso': _restAcumuladoSegundos,
           'completados': _completedExerciseIndices.toList(),
           'results': _results.map((r) => r.toJson()).toList(),
         }),
@@ -348,6 +363,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
         : ((snap['exerciseIndex'] as num?)?.toInt() ?? 0).clamp(0, ejercicios - 1);
     _setIndex = (snap['setIndex'] as num?)?.toInt() ?? 0;
     _sessionElapsedSeconds = (snap['elapsed'] as num?)?.toInt() ?? 0;
+    _restAcumuladoSegundos = (snap['descanso'] as num?)?.toInt() ?? 0;
 
     _completedExerciseIndices
       ..clear()
@@ -471,6 +487,10 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _sessionTimer?.cancel();
     _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _sessionElapsedSeconds += 1;
+      // Descansando es todo lo que no es estar haciendo la serie: el descanso
+      // pautado, pero también el rato entre ejercicios y el que se va en
+      // preparar la siguiente. La pausa no cuenta, que para eso está pausada.
+      if (_phase != Phase.inSet) _restAcumuladoSegundos += 1;
       // El tiempo cambia cada segundo pero no justifica escribir en disco cada
       // segundo: cada 15 s, que es lo máximo que se puede perder del cronómetro
       // si el sistema mata la app justo entre dos guardados.
@@ -576,6 +596,19 @@ class WorkoutSessionProvider extends ChangeNotifier {
     }
   }
 
+  /// Recupera la pulsera al volver a la app.
+  ///
+  /// Con la app en segundo plano el sistema congela los temporizadores, así que
+  /// los 5 reintentos de `BleService` se gastan sin que ninguno pueda prosperar
+  /// y la conexión acaba en el modo simulado para siempre: al volver, la banda
+  /// estaba muerta y nadie la volvía a intentar. `connectBle()` pone el
+  /// contador de intentos a cero, así que esto devuelve el presupuesto entero.
+  void reconectarBandaSiHaceFalta() {
+    if (_routine == null || _phase == Phase.finished) return;
+    if (_ble.bleState == BleConnectionState.connected) return;
+    connectWatch();
+  }
+
   void dismissWorkoutDetection() {
     _workoutDetected = false;
     _elevatedSeconds = 0;
@@ -593,6 +626,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _workoutDetected = false;
     _paused = false;
     _sessionElapsedSeconds = 0;
+    _restAcumuladoSegundos = 0;
     _sessionStartAt = DateTime.now();
     _sessionSaved = false;
     _startSessionTimer();

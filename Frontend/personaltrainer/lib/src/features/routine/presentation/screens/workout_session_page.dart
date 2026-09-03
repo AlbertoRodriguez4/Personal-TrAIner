@@ -43,10 +43,22 @@ class WorkoutSessionPage extends StatefulWidget {
   State<WorkoutSessionPage> createState() => _WorkoutSessionPageState();
 }
 
-class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
+class _WorkoutSessionPageState extends State<WorkoutSessionPage>
+    with WidgetsBindingObserver {
+  /// Al volver de segundo plano se reintenta la pulsera. Estando fuera, el
+  /// sistema congela los temporizadores y los reintentos de reconexión se
+  /// gastan en vano, así que la banda se quedaba desconectada para siempre y
+  /// solo se arreglaba saliendo y entrando de la sesión.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    context.read<WorkoutSessionProvider>().reconectarBandaSiHaceFalta();
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<WorkoutSessionProvider>();
       final aReanudar = widget.reanudar;
@@ -128,6 +140,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     final p = context.read<WorkoutSessionProvider>();
     p.onWorkoutDetected = null;
     super.dispose();
@@ -408,9 +421,13 @@ class _TimerCard extends StatelessWidget {
                 child: _MiniStat(
                   icon: LucideIcons.clock,
                   label: 'Descanso',
+                  // Durante el descanso pautado manda la cuenta atrás, que es
+                  // lo accionable. El resto del tiempo se enseña el descanso
+                  // acumulado de la sesión en vez de un guion: entre ejercicios
+                  // también se descansa, y ese rato antes no se contaba.
                   value: provider.phase == Phase.rest
                       ? '${provider.restRemaining}'
-                      : '—',
+                      : provider.restAcumuladoFormateado,
                   unit: provider.phase == Phase.rest ? 's' : '',
                 ),
               ),
