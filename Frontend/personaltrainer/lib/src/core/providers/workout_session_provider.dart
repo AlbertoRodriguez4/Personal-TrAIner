@@ -10,6 +10,7 @@ import '../../features/routine/models/exercise.dart';
 import '../../services/api_service.dart';
 import '../../services/ble_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/workout_foreground_service.dart';
 import '../theme/design_tokens.dart';
 
 enum Phase { idle, inSet, rest, analyzing, finished }
@@ -337,6 +338,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
   /// aquí sin decir nada, el resumen sigue disponible hasta que caduque.
   void descartarPendiente() {
     unawaited(_borrarSesion());
+    unawaited(WorkoutForegroundService.parar());
     notifyListeners();
   }
 
@@ -387,6 +389,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _sessionSaved = false;
     _pendiente = null;
     _startSessionTimer();
+    _arrancarServicio();
     notifyListeners();
   }
 
@@ -405,6 +408,22 @@ class WorkoutSessionProvider extends ChangeNotifier {
   void notifyListeners() {
     _sincronizarNotificacion();
     super.notifyListeners();
+  }
+
+  void _arrancarServicio() {
+    final day = currentDay;
+    if (day == null) return;
+    final titulo = day.focus?.isNotEmpty == true ? day.focus! : _routine!.name;
+    unawaited(() async {
+      final ok = await WorkoutForegroundService.iniciar(
+        titulo: titulo,
+        texto: 'Preparando la sesión…',
+      );
+      // Si arrancó, la firma se limpia para que el primer refresco escriba en
+      // la notificación del servicio y no en la local.
+      if (ok) _firmaNotificacion = null;
+      notifyListeners();
+    }());
   }
 
   void _sincronizarNotificacion() {
@@ -449,6 +468,18 @@ class WorkoutSessionProvider extends ChangeNotifier {
     // avance en disco. El tiempo lo cubre aparte el tic del cronómetro: aquí
     // solo se escribe cuando cambia algo que importa recuperar.
     unawaited(_guardarSesion());
+
+    // El servicio en primer plano ya pinta su propia notificación, así que se
+    // actualiza esa: publicar además la local dejaría DOS avisos del mismo
+    // entrenamiento. La local queda de plan B para cuando el servicio no
+    // arranca, que es justo cuando más falta hace no quedarse sin nada.
+    if (WorkoutForegroundService.activo) {
+      unawaited(WorkoutForegroundService.actualizar(
+        titulo: titulo,
+        texto: subtexto == null ? cuerpo : '$cuerpo · $subtexto',
+      ));
+      return;
+    }
 
     unawaited(
       NotificationService.mostrarSesionEnCurso(
@@ -630,6 +661,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _sessionStartAt = DateTime.now();
     _sessionSaved = false;
     _startSessionTimer();
+    _arrancarServicio();
     notifyListeners();
   }
 
@@ -746,6 +778,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
         _phase = Phase.finished;
         _sessionTimer?.cancel();
         unawaited(_borrarSesion());
+    unawaited(WorkoutForegroundService.parar());
         notifyListeners();
         return;
       }
@@ -782,6 +815,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
     // La sesión terminada ya no se reanuda: se guarda en el backend, no en el
     // resumen local.
     unawaited(_borrarSesion());
+    unawaited(WorkoutForegroundService.parar());
     notifyListeners();
     // Fire-and-forget: guardar no puede bloquear al usuario viendo su propio
     // resumen. `_SummaryView` sondea `savedSessionId`/`isSavingSession` para

@@ -26,6 +26,19 @@
          No se pide SCHEDULE_EXACT_ALARM a proposito: los recordatorios usan
          alarmas inexactas, que no requieren ese permiso restringido. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+         Servicio en primer plano para el entrenamiento en curso. Sin el, el
+         sistema congela la app a los pocos minutos de salir: se para el
+         cronometro y se corta el BLE de la pulsera.
+
+         El tipo es connectedDevice y NO health a proposito. Los dos encajarian
+         semanticamente, pero en Android 14 el tipo health exige permisos de
+         sensores concedidos en runtime, y si faltan el servicio ni arranca.
+         connectedDevice solo pide BLUETOOTH_CONNECT, que esta arriba y ya se
+         concede para la banda.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
@@ -95,6 +108,11 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="connectedDevice"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
