@@ -12,6 +12,7 @@ import '../../../../services/api_service.dart';
 import '../../../../services/health_service.dart';
 import '../../../health/presentation/screens/workout_detail_page.dart';
 import '../../models/calendar_day_summary.dart';
+import '../../data/training_month_analysis.dart';
 import '../../models/daily_nutrition_detail.dart';
 
 /// Pantalla de Progreso — réplica de `progress.tsx` (3 tabs:
@@ -1153,6 +1154,37 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
   List<DayWorkoutSummary> _openDayWorkouts = const [];
   bool _loadingDay = false;
 
+  ResumenMesEntrenamientos? _resumen;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarResumen();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrainingCalendar old) {
+    super.didUpdateWidget(old);
+    // Al cambiar de mes hay que rehacer las cuentas, si no se quedan las del
+    // mes anterior debajo de la cabecera nueva.
+    if (old.monthDate != widget.monthDate) _cargarResumen();
+  }
+
+  Future<void> _cargarResumen() async {
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+    try {
+      final sesiones = await ApiService.getTrainingSessionsByUser(userId);
+      if (!mounted) return;
+      setState(() {
+        _resumen = analizarMes(sesiones, mes: widget.monthDate);
+      });
+    } catch (_) {
+      // El calendario se pinta igual sin las medias: no puede quedarse en
+      // blanco porque falle una peticion.
+    }
+  }
+
   Future<void> _openDaySheet(int day) async {
     setState(() {
       _openDay = day;
@@ -1228,6 +1260,10 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
                   ],
                 ),
               ),
+              if (_resumen != null) ...[
+                const SizedBox(height: 20),
+                _ResumenMesEntrenamiento(resumen: _resumen!),
+              ],
               const SizedBox(height: 20),
               _WeeklyVolumeChart(weeks: widget.weeklyVolume),
             ],
@@ -1349,6 +1385,102 @@ class _InlineDaySummary extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Medias del mes y una lectura corta de ellas.
+///
+/// El calendario enseñaba qué días entrenaste pero ninguna cifra agregada: dos
+/// meses distintos se veían igual salvo por los puntos pintados. Las medias
+/// salen de las sesiones ya deduplicadas (ver `sinDuplicadosDeReloj`), asi que
+/// entrenar con la app y el reloj a la vez no las infla.
+class _ResumenMesEntrenamiento extends StatelessWidget {
+  const _ResumenMesEntrenamiento({required this.resumen});
+
+  final ResumenMesEntrenamientos resumen;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        boxShadow: DesignTokens.shadowSoft(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'RESUMEN DEL MES',
+            style: DesignTokens.labelSmall(
+              color: DesignTokens.mutedForeground(b),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (resumen.vacio)
+            Text(
+              resumen.observaciones.first,
+              style: DesignTokens.bodyFont(
+                fontSize: 13,
+                color: DesignTokens.mutedForeground(b),
+              ),
+            )
+          else ...[
+            _MonthlySummary([
+              (label: 'Sesiones', value: '${resumen.sesiones}'),
+              (label: 'Media', value: '${resumen.mediaMinutos} min'),
+              (label: 'Total', value: '${resumen.minutosTotales} min'),
+            ]),
+            // kcal y FC solo si alguna sesión las midió: un 0 aquí se leería
+            // como "no quemaste nada", que es una afirmación falsa.
+            if (resumen.mediaKcal != null || resumen.mediaFc != null) ...[
+              const SizedBox(height: 12),
+              _MonthlySummary([
+                (label: 'Días', value: '${resumen.diasEntrenados}'),
+                if (resumen.mediaKcal != null)
+                  (label: 'Kcal/sesión', value: '${resumen.mediaKcal}'),
+                if (resumen.mediaFc != null)
+                  (label: 'FC media', value: '${resumen.mediaFc} ppm'),
+              ]),
+            ],
+            const SizedBox(height: 16),
+            for (final linea in resumen.observaciones)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, right: 8),
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: DesignTokens.mutedForeground(b),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        linea,
+                        style: DesignTokens.bodyFont(
+                          fontSize: 12.5,
+                          color: DesignTokens.foreground(b),
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

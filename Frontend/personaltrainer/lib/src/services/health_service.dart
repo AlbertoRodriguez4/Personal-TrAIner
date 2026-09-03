@@ -4,6 +4,7 @@ import 'package:health/health.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'api_service.dart';
+import '../features/progress/data/training_month_analysis.dart';
 
 class HealthService {
   static final Health _health = Health();
@@ -268,6 +269,18 @@ class HealthService {
           .whereType<String>()
           .toSet();
 
+      // Ventanas de los entrenamientos hechos CON la app. El reloj graba lo
+      // mismo por su cuenta, así que sin esto el gimnasio de esta mañana acaba
+      // dos veces en el historial: una con series, RIR y zonas, y otra con
+      // duración y poco más. Manda el de la app, que es el que sabe más.
+      final ventanasApp = <({DateTime inicio, DateTime fin})>[];
+      for (final s in existentes.where((e) => e['origen'] != 'health_connect')) {
+        final ini = DateTime.tryParse(s['fecha_programada']?.toString() ?? '');
+        if (ini == null) continue;
+        final mins = int.tryParse(s['duracion_minutos']?.toString() ?? '') ?? 0;
+        ventanasApp.add((inicio: ini, fin: ini.add(Duration(minutes: mins))));
+      }
+
       for (final w in workouts) {
         if (w.value is! WorkoutHealthValue) continue;
         final valor = w.value as WorkoutHealthValue;
@@ -280,6 +293,15 @@ class HealthService {
 
         final origenId = w.dateFrom.toIso8601String();
         if (idsSincronizados.contains(origenId)) continue;
+
+        // Mismo entrenamiento ya registrado desde la app: no se duplica. El
+        // margen existe porque el reloj y la app no arrancan a la vez -- se
+        // pulsa "empezar" y luego uno se coloca la banda, o al revés.
+        const margen = Duration(minutes: toleranciaSolapeMinutos);
+        final pisaSesionDeApp = ventanasApp.any((v) =>
+            w.dateFrom.isBefore(v.fin.add(margen)) &&
+            w.dateTo.isAfter(v.inicio.subtract(margen)));
+        if (pisaSesionDeApp) continue;
 
         int? fcMedia, fcMax;
         try {

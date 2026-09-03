@@ -848,8 +848,50 @@ class WorkoutSessionProvider extends ChangeNotifier {
   /// banda BLE. Antes de esto, una sesión rastreada en vivo terminaba en la
   /// pantalla de resumen y ahí se quedaba — nada se guardaba en el backend, así
   /// que no había ni historial ni con qué comparar la siguiente.
+  /// Ejercicios a guardar. Con series analizadas se guarda el detalle real;
+  /// sin ellas, al menos qué ejercicios se hicieron.
+  List<Map<String, dynamic>> _ejerciciosParaGuardar() {
+    if (_results.isNotEmpty) {
+      return [
+        for (final r in _results)
+          {
+            'ejercicio': r.exerciseName,
+            'serie': r.setNumber,
+            'duracion_seg': r.durationSec,
+            'fc_media': r.avgBpm,
+            'fc_max': r.maxBpm,
+            'rir_estimado': r.rirEstimated,
+            'zona': r.zone,
+            'al_fallo': r.reachedFailure,
+          },
+      ];
+    }
+    final dia = currentDay;
+    if (dia == null) return const [];
+    final hechos = _completedExerciseIndices.toList()..sort();
+    return [
+      for (final i in hechos)
+        if (i >= 0 && i < dia.exercises.length)
+          {'ejercicio': dia.exercises[i].name, 'serie': dia.exercises[i].sets ?? 1},
+    ];
+  }
+
+  /// Hay algo que guardar si se analizó alguna serie, si se marcó algún
+  /// ejercicio, o si el cronómetro corrió lo bastante como para que fuese un
+  /// entrenamiento y no un toque accidental al botón.
+  bool get _mereceGuardarse =>
+      _results.isNotEmpty ||
+      _completedExerciseIndices.isNotEmpty ||
+      _sessionElapsedSeconds >= 60;
+
   Future<void> _persistSession() async {
-    if (_sessionSaved || _results.isEmpty) return;
+    // Antes la condición era `_results.isEmpty`, y `_results` solo se llena
+    // analizando series con la pulsera. Entrenar sin banda -- o marcando los
+    // ejercicios a mano en el checklist -- no guardaba NADA: ni resumen al
+    // terminar, ni fila en el historial, ni nada en el calendario. El
+    // entrenamiento se evaporaba y la pantalla solo decía "no se registraron
+    // series", como si el fallo fuese del usuario.
+    if (_sessionSaved || !_mereceGuardarse) return;
     final userId = ApiService.getCurrentUserId();
     if (userId == null) return;
 
@@ -866,19 +908,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
         fechaProgramada:
             (_sessionStartAt ?? DateTime.now()).toIso8601String(),
         tipoEntrenamiento: _tipoSesionDesdeActividad(_routine?.activityType),
-        ejercicios: [
-          for (final r in _results)
-            {
-              'ejercicio': r.exerciseName,
-              'serie': r.setNumber,
-              'duracion_seg': r.durationSec,
-              'fc_media': r.avgBpm,
-              'fc_max': r.maxBpm,
-              'rir_estimado': r.rirEstimated,
-              'zona': r.zone,
-              'al_fallo': r.reachedFailure,
-            },
-        ],
+        ejercicios: _ejerciciosParaGuardar(),
         estado: 'completado',
         duracionMinutos: (_sessionElapsedSeconds / 60).round(),
         caloriasKcal: estimatedKcal,

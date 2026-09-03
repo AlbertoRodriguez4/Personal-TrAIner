@@ -1618,27 +1618,58 @@ class _SummaryView extends StatelessWidget {
               ),
         ),
         const SizedBox(height: 20),
+        // Primero lo que SIEMPRE existe: tiempo, ejercicios y descanso salen
+        // del cronómetro y del checklist, no de la pulsera. Antes el resumen
+        // empezaba por series/fallo/intensa, que son cero enteros cuando se
+        // entrena sin banda, y el resultado era una pantalla de ceros que
+        // parecía decir que no habías hecho nada.
         Row(
           children: [
             _SummaryStat(
-              label: 'Series',
-              value: '${provider.completedSets}',
+              label: 'Tiempo',
+              value: provider.sessionElapsedFormatted,
+              color: DesignTokens.info(b),
+            ),
+            const SizedBox(width: 12),
+            _SummaryStat(
+              label: 'Ejercicios',
+              value:
+                  '${provider.completedExercisesCount}/${provider.totalExercisesInDay}',
               color: DesignTokens.success(b),
             ),
             const SizedBox(width: 12),
             _SummaryStat(
-              label: 'Fallo',
-              value: '${provider.failureSets}',
-              color: DesignTokens.destructive(b),
-            ),
-            const SizedBox(width: 12),
-            _SummaryStat(
-              label: 'Intensa',
-              value: '${provider.highIntensitySets}',
-              color: DesignTokens.info(b),
+              label: 'Descanso',
+              value: provider.restAcumuladoFormateado,
+              color: DesignTokens.warning(b),
             ),
           ],
         ),
+        // El detalle por series solo cuando de verdad lo hay.
+        if (provider.results.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _SummaryStat(
+                label: 'Series',
+                value: '${provider.completedSets}',
+                color: DesignTokens.success(b),
+              ),
+              const SizedBox(width: 12),
+              _SummaryStat(
+                label: 'Fallo',
+                value: '${provider.failureSets}',
+                color: DesignTokens.destructive(b),
+              ),
+              const SizedBox(width: 12),
+              _SummaryStat(
+                label: 'Intensa',
+                value: '${provider.highIntensitySets}',
+                color: DesignTokens.info(b),
+              ),
+            ],
+          ),
+        ],
         if (provider.results.isNotEmpty) ...[
           const SizedBox(height: 20),
           _ComparisonCard(provider: provider),
@@ -1648,7 +1679,13 @@ class _SummaryView extends StatelessWidget {
           const Center(
             child: Padding(
               padding: EdgeInsets.only(top: 40),
-              child: Text('No se registraron series en esta sesión.'),
+              // Ya no es un "no hay nada": la sesión se guarda igual. Lo que
+              // falta es el análisis por series, que necesita la pulsera.
+              child: Text(
+                'Sin series analizadas: conecta la banda durante la sesión '
+                'para tener también el detalle por serie.',
+                textAlign: TextAlign.center,
+              ),
             ),
           )
         else
