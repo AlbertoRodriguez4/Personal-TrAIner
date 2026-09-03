@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/routine/models/routine.dart';
 import '../../features/routine/models/routine_day.dart';
+import '../../features/routine/data/rest_guidelines.dart';
 import '../../features/routine/models/exercise.dart';
 import '../../services/api_service.dart';
 import '../../services/ble_service.dart';
@@ -239,7 +240,11 @@ class WorkoutSessionProvider extends ChangeNotifier {
     final s = (_restAcumuladoSegundos % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
-  static const int _defaultRestSec = 90;
+  /// Descanso pautado para el ejercicio en curso, segun su rango de
+  /// repeticiones. Antes eran 90 s fijos para todo: el mismo descanso para un
+  /// triple de sentadilla que para unas elevaciones laterales.
+  int get descansoPautadoSegundos =>
+      descansoRecomendadoSegundos(currentExercise?.reps);
 
   // ── Timer de sesión + pausa (independiente del timer por set/descanso, que
   // sigue su propio flujo de análisis de IA sin interrupciones) ──
@@ -747,7 +752,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
 
   void _startRest() {
     _phase = Phase.rest;
-    _restRemaining = _defaultRestSec;
+    _restRemaining = descansoPautadoSegundos;
     _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _restRemaining -= 1;

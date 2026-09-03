@@ -10,6 +10,7 @@ import '../../../../services/api_service.dart';
 import '../../../../services/notification_service.dart';
 import '../../../../services/ble_service.dart';
 import '../../models/exercise.dart';
+import '../../data/rest_guidelines.dart';
 import '../../models/routine.dart';
 import '../widgets/routine_day_picker.dart';
 import 'routines_home_page.dart';
@@ -663,6 +664,10 @@ class _ChecklistRow extends StatelessWidget {
       else if (exercise.reps != null)
         exercise.reps!,
       if (exercise.weight != null) '${exercise.weight} kg',
+      // El descanso pautado se ve ANTES de necesitarlo, no solo cuando arranca
+      // la cuenta atras: sirve para planificar la serie, y llegando tarde solo
+      // informa de lo que ya estas haciendo.
+      'descanso ${descansoLegible(descansoRecomendadoSegundos(exercise.reps))}',
     ].join(' · ');
 
     return Container(
@@ -1232,17 +1237,27 @@ class _ExerciseCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
+          // Wrap y no Row: con el descanso son cuatro datos y en pantallas
+          // estrechas la fila se desbordaba por el lado derecho. Wrap los
+          // reparte en dos lineas en vez de recortarlos.
+          Wrap(
+            spacing: 16,
+            runSpacing: 10,
             children: [
               _Meta(
                 label: 'Serie',
                 value: '${provider.setIndex + 1}/${ex.sets ?? 1}',
               ),
-              const SizedBox(width: 16),
               if (ex.reps != null) _Meta(label: 'Reps', value: ex.reps!),
-              const SizedBox(width: 16),
               if (ex.weight != null)
                 _Meta(label: 'Peso', value: '${ex.weight} kg'),
+              // El descanso pautado, donde se mira entre serie y serie. Es el
+              // mismo numero que usa la cuenta atras al terminar la serie, no
+              // una sugerencia distinta por su cuenta.
+              _Meta(
+                label: 'Descanso',
+                value: descansoLegible(provider.descansoPautadoSegundos),
+              ),
             ],
           ),
           const SizedBox(height: 14),
