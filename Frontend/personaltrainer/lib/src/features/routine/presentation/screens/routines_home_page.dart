@@ -9,6 +9,7 @@ import '../../models/routine.dart';
 import '../widgets/routine_export_sheet.dart';
 import 'routine_builder_page.dart';
 import 'routine_import_page.dart';
+import '../widgets/delete_routine_action.dart';
 import 'workout_session_page.dart';
 
 class RoutinesHomePage extends StatefulWidget {
@@ -55,46 +56,10 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
     });
   }
 
-  Future<void> _confirmDelete(Routine routine) async {
-    final provider = context.read<RoutineProvider>();
-    final b = Theme.of(context).brightness;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DesignTokens.radius3xl),
-        ),
-        title: const Text('Eliminar rutina'),
-        content: Text('¿Seguro que quieres eliminar "${routine.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DesignTokens.destructive(b),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && routine.id != null) {
-      final ok = await provider.deleteRoutine(routine.id!);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ok ? 'Rutina eliminada' : 'Error al eliminar: ${provider.error}',
-          ),
-        ),
-      );
-    }
-  }
+  /// El diálogo vive en `delete_routine_action.dart`: lo comparte con
+  /// "Ver mi rutina", que ofrece el mismo borrado.
+  Future<void> _confirmDelete(Routine routine) =>
+      confirmarYEliminarRutina(context, routine);
 
   void _openBuilder(BuildContext context, {Routine? routine}) {
     Navigator.of(context).push(

@@ -9,6 +9,7 @@ import '../../models/exercise.dart';
 import '../../models/routine.dart';
 import '../../models/routine_day.dart';
 import '../dialogs/exercise_dialog.dart';
+import '../widgets/delete_routine_action.dart';
 import '../widgets/routine_export_sheet.dart';
 import 'quick_add_page.dart';
 import 'routine_builder_page.dart';
@@ -171,6 +172,14 @@ class _RoutineViewPageState extends State<RoutineViewPage> {
                       RoundIconButton(
                         icon: LucideIcons.share2,
                         onTap: () => showRoutineExportSheet(context, routine),
+                      ),
+                      const SizedBox(width: 8),
+                      // Eliminar va aquí, pegado a exportar, y no es casual:
+                      // quien vaya a borrar una rutina tiene justo al lado la
+                      // forma de guardarse una copia antes.
+                      RoundIconButton(
+                        icon: LucideIcons.trash2,
+                        onTap: () => confirmarYEliminarRutina(context, routine),
                       ),
                       const SizedBox(width: 8),
                     ],
