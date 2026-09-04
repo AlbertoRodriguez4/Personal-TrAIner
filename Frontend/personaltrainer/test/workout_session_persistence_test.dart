@@ -23,6 +23,8 @@ void main() {
     sufficientIntensity: true,
   );
 
+  pruebasDeCierreDeSesion();
+
   test('SetResult sobrevive al viaje de ida y vuelta por JSON', () {
     final vuelta = SetResult.fromJson(
       jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
@@ -72,5 +74,61 @@ void main() {
     });
     expect(vuelta.attackSlope, 2.0);
     expect(vuelta.plateauIndex, 0.0);
+  });
+}
+
+/// La sesión termina cuando están hechos TODOS los ejercicios, no al pasar del
+/// último de la lista. La diferencia solo se nota si te saltas alguno, que es
+/// justo cuando el fallo era invisible: el entrenamiento se cerraba con
+/// ejercicios sin hacer y nada lo decía.
+void pruebasDeCierreDeSesion() {
+  group('siguienteEjercicioPendiente', () {
+    test('avanza al siguiente cuando no hay nada saltado', () {
+      expect(
+        siguienteEjercicioPendiente(desde: 1, total: 4, completados: {0}),
+        1,
+      );
+    });
+
+    test('da la vuelta para recoger los que quedaron atrás', () {
+      // Terminas el último (3) habiéndote saltado el 1: no has acabado.
+      expect(
+        siguienteEjercicioPendiente(desde: 4, total: 4, completados: {0, 2, 3}),
+        1,
+      );
+    });
+
+    test('null solo cuando están todos hechos', () {
+      expect(
+        siguienteEjercicioPendiente(
+            desde: 4, total: 4, completados: {0, 1, 2, 3}),
+        isNull,
+      );
+    });
+
+    test('salta los que ya están hechos en vez de volver a ellos', () {
+      expect(
+        siguienteEjercicioPendiente(desde: 1, total: 5, completados: {1, 2}),
+        3,
+      );
+    });
+
+    test('un día sin ejercicios no tiene pendientes', () {
+      expect(
+        siguienteEjercicioPendiente(desde: 0, total: 0, completados: {}),
+        isNull,
+      );
+    });
+
+    test('con uno solo: pendiente antes, terminado después', () {
+      expect(
+        siguienteEjercicioPendiente(desde: 1, total: 1, completados: {}),
+        0,
+      );
+      expect(
+        siguienteEjercicioPendiente(desde: 1, total: 1, completados: {0}),
+        isNull,
+      );
+    });
   });
 }

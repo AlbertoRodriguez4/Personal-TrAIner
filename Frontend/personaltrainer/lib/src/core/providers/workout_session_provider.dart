@@ -770,6 +770,12 @@ class WorkoutSessionProvider extends ChangeNotifier {
     _advanceAfterSet(null);
   }
 
+  int? _siguientePendiente(int desde) => siguienteEjercicioPendiente(
+        desde: desde,
+        total: currentDay?.exercises.length ?? 0,
+        completados: _completedExerciseIndices,
+      );
+
   void _advanceAfterSet(SetResult? _) {
     _setIndex += 1;
     final finishedExercise = currentExercise;
@@ -777,16 +783,23 @@ class WorkoutSessionProvider extends ChangeNotifier {
       if (finishedExercise != null) {
         _completedExerciseIndices.add(_exerciseIndex);
       }
-      _exerciseIndex += 1;
       _setIndex = 0;
-      if (currentDay == null || _exerciseIndex >= currentDay!.exercises.length) {
+
+      // La sesión se acaba cuando están hechos TODOS los ejercicios del día, no
+      // al pasar del último de la lista. Antes bastaba con llegar al final:
+      // saltarse el segundo y el cuarto y terminar el último daba la sesión por
+      // completada con dos ejercicios sin hacer, y ni el resumen ni el
+      // calendario decían que faltaba nada.
+      final siguiente = _siguientePendiente(_exerciseIndex + 1);
+      if (siguiente == null) {
         _phase = Phase.finished;
         _sessionTimer?.cancel();
         unawaited(_borrarSesion());
-    unawaited(WorkoutForegroundService.parar());
+        unawaited(WorkoutForegroundService.parar());
         notifyListeners();
         return;
       }
+      _exerciseIndex = siguiente;
     }
     _phase = Phase.idle;
     notifyListeners();
@@ -794,11 +807,13 @@ class WorkoutSessionProvider extends ChangeNotifier {
 
   void nextExercise() {
     if (currentDay == null) return;
-    _exerciseIndex += 1;
+    // Saltar va al siguiente PENDIENTE, dando la vuelta si hace falta. Antes se
+    // quedaba clavado en el último de la lista: pulsar "siguiente" ahí no hacía
+    // nada, aunque quedaran ejercicios sin hacer más arriba.
+    final siguiente = _siguientePendiente(_exerciseIndex + 1);
+    if (siguiente == null) return; // no queda nada que saltar
+    _exerciseIndex = siguiente;
     _setIndex = 0;
-    if (_exerciseIndex >= currentDay!.exercises.length) {
-      _exerciseIndex = currentDay!.exercises.length - 1;
-    }
     _phase = Phase.idle;
     notifyListeners();
   }
@@ -951,4 +966,31 @@ class WorkoutSessionProvider extends ChangeNotifier {
 
   int get highIntensitySets =>
       _results.where((r) => r.sufficientIntensity).length;
+}
+
+/// Primer ejercicio que sigue sin hacer, buscando desde `desde` y dando la
+/// vuelta al llegar al final. `null` si ya están todos.
+///
+/// Dar la vuelta es lo que arregla el saltarse ejercicios: pasar del último de
+/// la lista no significa haber terminado, solo haber llegado al final de una
+/// vuelta. Antes la sesión se daba por completada ahí mismo, así que saltarse
+/// el segundo y el cuarto y terminar el último cerraba el entrenamiento con dos
+/// ejercicios sin hacer, sin que el resumen ni el calendario dijeran que
+/// faltaba nada.
+///
+/// Está fuera de la clase a propósito: `WorkoutSessionProvider` necesita
+/// SharedPreferences y Bluetooth para construirse, y esta cuenta -- con su
+/// módulo y su vuelta al principio -- es justo la que hay que poder probar sin
+/// nada de eso.
+int? siguienteEjercicioPendiente({
+  required int desde,
+  required int total,
+  required Set<int> completados,
+}) {
+  if (total <= 0) return null;
+  for (var i = 0; i < total; i++) {
+    final idx = (desde + i) % total;
+    if (idx >= 0 && !completados.contains(idx)) return idx;
+  }
+  return null;
 }
