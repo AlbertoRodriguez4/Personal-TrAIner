@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/routine/models/routine.dart';
 import '../../features/routine/models/routine_day.dart';
+import '../../features/progress/data/training_month_analysis.dart';
 import '../../features/routine/data/rest_guidelines.dart';
 import '../../features/routine/models/exercise.dart';
 import '../../services/api_service.dart';
@@ -899,6 +900,41 @@ class WorkoutSessionProvider extends ChangeNotifier {
       _completedExerciseIndices.isNotEmpty ||
       _sessionElapsedSeconds >= 60;
 
+  /// Borra las sesiones de Health Connect que cubren este mismo entrenamiento.
+  ///
+  /// El reloj sincroniza por su cuenta y puede llegar ANTES de que la app
+  /// guarde lo suyo, así que filtrar al leer no basta: la fila del reloj ya
+  /// está en la base de datos y sale en el historial. Cuando se ha entrenado
+  /// con la app, esa es la versión que manda -- trae ejercicios, series, RIR y
+  /// zonas, mientras que la del reloj trae duración y calorías -- así que la
+  /// otra sobra.
+  ///
+  /// Va sin await desde el guardado: si falla, lo peor que pasa es que quede el
+  /// duplicado, y `sinDuplicadosDeReloj` ya lo ignora en las medias.
+  Future<void> _retirarDuplicadosDelReloj(String userId) async {
+    final inicio = _sessionStartAt;
+    if (inicio == null) return;
+    final fin = inicio.add(Duration(seconds: _sessionElapsedSeconds));
+    const margen = Duration(minutes: toleranciaSolapeMinutos);
+
+    try {
+      final todas = await ApiService.getTrainingSessionsByUser(userId);
+      for (final s in todas) {
+        if (s['origen'] != 'health_connect') continue;
+        final f = DateTime.tryParse(s['fecha_programada']?.toString() ?? '');
+        final id = s['id']?.toString();
+        if (f == null || id == null) continue;
+        final mins = int.tryParse(s['duracion_minutos']?.toString() ?? '') ?? 0;
+        final fFin = f.add(Duration(minutes: mins));
+        final solapa = f.isBefore(fin.add(margen)) &&
+            fFin.isAfter(inicio.subtract(margen));
+        if (solapa) await ApiService.deleteTrainingSession(id);
+      }
+    } catch (_) {
+      // Ver el doc de arriba: quedarse el duplicado es tolerable.
+    }
+  }
+
   Future<void> _persistSession() async {
     // Antes la condición era `_results.isEmpty`, y `_results` solo se llena
     // analizando series con la pulsera. Entrenar sin banda -- o marcando los
@@ -936,6 +972,7 @@ class WorkoutSessionProvider extends ChangeNotifier {
         origen: 'app',
       );
       _savedSessionId = guardada['id']?.toString();
+      unawaited(_retirarDuplicadosDelReloj(userId));
     } catch (_) {
       // No hay dónde mostrar el error en una pantalla que ya se está cerrando;
       // el usuario ya vio su resumen en pantalla, perder el guardado no puede

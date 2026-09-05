@@ -118,4 +118,53 @@ void main() {
       expect(r.observaciones.first, contains('1 sesión'));
     });
   });
+
+  group('minutos por semana', () {
+    test('reparte por tramos de 7 dias del mes', () {
+      final r = minutosPorSemana([
+        sesion(fecha: '2026-09-01T18:00:00', minutos: 30), // S1
+        sesion(fecha: '2026-09-07T18:00:00', minutos: 20), // S1
+        sesion(fecha: '2026-09-08T18:00:00', minutos: 45), // S2
+        sesion(fecha: '2026-09-30T18:00:00', minutos: 60), // S5
+      ], mes: DateTime(2026, 9));
+      expect(r[0].minutos, 50);
+      expect(r[0].sesiones, 2);
+      expect(r[1].minutos, 45);
+      expect(r.last.minutos, 60);
+    });
+
+    test('el duplicado del reloj tampoco infla el grafico', () {
+      final r = minutosPorSemana([
+        sesion(fecha: '2026-09-01T18:00:00', minutos: 60),
+        sesion(fecha: '2026-09-01T18:05:00', minutos: 55, origen: 'health_connect'),
+      ], mes: DateTime(2026, 9));
+      expect(r[0].minutos, 60);
+      expect(r[0].sesiones, 1);
+    });
+  });
+
+  group('variacion vs mes anterior', () {
+    test('calcula el porcentaje real', () {
+      final datos = [
+        sesion(fecha: '2026-08-05T18:00:00', minutos: 100),
+        sesion(fecha: '2026-09-05T18:00:00', minutos: 150),
+      ];
+      expect(variacionVsMesAnterior(datos, mes: DateTime(2026, 9)), closeTo(0.5, 1e-9));
+    });
+
+    test('null si el mes anterior esta vacio, en vez de un numero inventado', () {
+      // Sin base con la que comparar, cualquier porcentaje es mentira. Es el
+      // fallo que tenia el "+18% vs mes anterior" escrito a mano.
+      final datos = [sesion(fecha: '2026-09-05T18:00:00', minutos: 150)];
+      expect(variacionVsMesAnterior(datos, mes: DateTime(2026, 9)), isNull);
+    });
+
+    test('detecta una bajada', () {
+      final datos = [
+        sesion(fecha: '2026-08-05T18:00:00', minutos: 200),
+        sesion(fecha: '2026-09-05T18:00:00', minutos: 150),
+      ];
+      expect(variacionVsMesAnterior(datos, mes: DateTime(2026, 9)), closeTo(-0.25, 1e-9));
+    });
+  });
 }

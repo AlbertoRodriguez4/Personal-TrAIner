@@ -1155,6 +1155,8 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
   bool _loadingDay = false;
 
   ResumenMesEntrenamientos? _resumen;
+  List<SemanaEntrenada> _semanas = const [];
+  double? _variacion;
 
   @override
   void initState() {
@@ -1178,6 +1180,8 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
       if (!mounted) return;
       setState(() {
         _resumen = analizarMes(sesiones, mes: widget.monthDate);
+        _semanas = minutosPorSemana(sesiones, mes: widget.monthDate);
+        _variacion = variacionVsMesAnterior(sesiones, mes: widget.monthDate);
       });
     } catch (_) {
       // El calendario se pinta igual sin las medias: no puede quedarse en
@@ -1265,7 +1269,10 @@ class _TrainingCalendarState extends State<_TrainingCalendar> {
                 _ResumenMesEntrenamiento(resumen: _resumen!),
               ],
               const SizedBox(height: 20),
-              _WeeklyVolumeChart(weeks: widget.weeklyVolume),
+              _MinutosPorSemanaChart(
+                semanas: _semanas,
+                variacion: _variacion,
+              ),
             ],
           ),
         ),
@@ -1701,6 +1708,159 @@ class _TrainingGrid extends StatelessWidget {
       ),
       CalendarDayIcon.none => const SizedBox.shrink(),
     };
+  }
+}
+
+/// Minutos entrenados por semana del mes.
+///
+/// Sustituye al gráfico de "Volumen semanal · Tonelaje", que llegaba SIEMPRE
+/// vacío: `route_loaders.dart` le pasaba `const []` porque el tonelaje necesita
+/// peso × repeticiones completadas y eso no se guarda en ninguna parte. El
+/// hueco venía además con un "+18% vs mes anterior" escrito a mano en el
+/// código: un número inventado presentado como dato del usuario.
+class _MinutosPorSemanaChart extends StatelessWidget {
+  const _MinutosPorSemanaChart({required this.semanas, this.variacion});
+
+  final List<SemanaEntrenada> semanas;
+
+  /// Tanto por uno respecto al mes anterior, o null si no hay con qué comparar.
+  final double? variacion;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final max = semanas.fold<int>(0, (m, s) => s.minutos > m ? s.minutos : m);
+    final total = semanas.fold<int>(0, (a, s) => a + s.minutos);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+        boxShadow: DesignTokens.shadowSoft(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Minutos por semana'.toUpperCase(),
+                  style: DesignTokens.labelSmall(
+                    color: DesignTokens.mutedForeground(b),
+                  ),
+                ),
+              ),
+              // Solo si hay mes anterior con el que comparar.
+              if (variacion != null)
+                Text(
+                  '${variacion! >= 0 ? '+' : ''}'
+                  '${(variacion! * 100).round()}% vs mes anterior',
+                  style: DesignTokens.bodyFont(
+                    fontSize: 11,
+                    color: variacion! >= 0
+                        ? DesignTokens.progressGreen
+                        : DesignTokens.mutedForeground(b),
+                    weight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            total == 0
+                ? 'Sin entrenamientos este mes.'
+                : '$total min en total este mes',
+            style: DesignTokens.bodyFont(
+              fontSize: 12,
+              color: DesignTokens.mutedForeground(b),
+            ),
+          ),
+          if (total > 0) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 132,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < semanas.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 10),
+                    Expanded(
+                      child: _BarraSemana(
+                        semana: semanas[i],
+                        max: max,
+                        destacada: semanas[i].minutos == max && max > 0,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BarraSemana extends StatelessWidget {
+  const _BarraSemana({
+    required this.semana,
+    required this.max,
+    required this.destacada,
+  });
+
+  final SemanaEntrenada semana;
+  final int max;
+  final bool destacada;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    // Altura proporcional al máximo del mes. Una semana sin entrenar se queda
+    // en un hilo visible en vez de desaparecer: el hueco es el dato.
+    final fraccion = max <= 0 ? 0.0 : semana.minutos / max;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text(
+          semana.minutos == 0 ? '—' : '${semana.minutos}',
+          style: DesignTokens.bodyFont(
+            fontSize: 11,
+            weight: FontWeight.w700,
+            color: semana.minutos == 0
+                ? DesignTokens.mutedForeground(b)
+                : DesignTokens.foreground(b),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, c) => Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                height: (c.maxHeight * fraccion).clamp(3.0, c.maxHeight),
+                decoration: BoxDecoration(
+                  color: destacada
+                      ? DesignTokens.activityGym
+                      : DesignTokens.activityGym.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          semana.etiqueta,
+          style: DesignTokens.labelSmall(
+            color: DesignTokens.mutedForeground(b),
+          ),
+        ),
+      ],
+    );
   }
 }
 

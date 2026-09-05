@@ -1675,6 +1675,16 @@ class _SummaryView extends StatelessWidget {
           _ComparisonCard(provider: provider),
         ],
         const SizedBox(height: 24),
+        // Qué se hizo, ejercicio por ejercicio. El resumen daba cifras
+        // agregadas pero no decía QUÉ entrenaste, que es lo primero que uno
+        // mira al terminar y lo único que permite comprobar que quedó bien
+        // registrado antes de cerrar.
+        _EjerciciosDelResumen(provider: provider),
+        const SizedBox(height: 16),
+        // Estado del guardado: hasta ahora no había forma de saber si la
+        // sesión había llegado al servidor o se había perdido.
+        _EstadoGuardado(provider: provider),
+        const SizedBox(height: 20),
         if (provider.results.isEmpty)
           const Center(
             child: Padding(
@@ -1859,6 +1869,140 @@ class _DeltaPill extends StatelessWidget {
           color: DesignTokens.foreground(b),
         ),
       ),
+    );
+  }
+}
+
+/// Lista de los ejercicios del día con su estado: los hechos y los que se
+/// quedaron sin hacer. Sin esto el resumen decía "6/6" pero no cuáles.
+class _EjerciciosDelResumen extends StatelessWidget {
+  const _EjerciciosDelResumen({required this.provider});
+  final WorkoutSessionProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final dia = provider.currentDay;
+    if (dia == null || dia.exercises.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DesignTokens.surface1(b),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
+        border: Border.all(color: DesignTokens.border(b)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'LO QUE HAS HECHO',
+            style: DesignTokens.labelSmall(
+              color: DesignTokens.mutedForeground(b),
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < dia.exercises.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            Builder(
+              builder: (context) {
+                final ex = dia.exercises[i];
+                final hecho = provider.isExerciseDone(i);
+                // Las series analizadas de ESTE ejercicio, si hubo pulsera.
+                final series = provider.results
+                    .where((r) => r.exerciseName == ex.name)
+                    .length;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      hecho ? LucideIcons.checkCircle2 : LucideIcons.circle,
+                      size: 16,
+                      color: hecho
+                          ? DesignTokens.success(b)
+                          : DesignTokens.mutedForeground(b),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ex.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesignTokens.bodyFont(
+                              fontSize: 13.5,
+                              weight: FontWeight.w600,
+                              color: hecho
+                                  ? DesignTokens.foreground(b)
+                                  : DesignTokens.mutedForeground(b),
+                            ),
+                          ),
+                          Text(
+                            [
+                              if (ex.sets != null && ex.reps != null)
+                                '${ex.sets} × ${ex.reps}',
+                              if (ex.weight != null) '${ex.weight} kg',
+                              if (series > 0)
+                                '$series ${series == 1 ? 'serie analizada' : 'series analizadas'}',
+                              if (!hecho) 'sin completar',
+                            ].join(' · '),
+                            style: DesignTokens.bodyFont(
+                              fontSize: 11.5,
+                              color: DesignTokens.mutedForeground(b),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Si la sesión llegó al servidor. Un entrenamiento que no se guarda es un
+/// entrenamiento perdido, y hasta ahora eso pasaba sin que nada lo dijera.
+class _EstadoGuardado extends StatelessWidget {
+  const _EstadoGuardado({required this.provider});
+  final WorkoutSessionProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final guardando = provider.isSavingSession;
+    final guardada = provider.savedSessionId != null;
+
+    final (icono, texto, color) = guardando
+        ? (LucideIcons.loader, 'Guardando la sesión…',
+            DesignTokens.mutedForeground(b))
+        : guardada
+            ? (LucideIcons.checkCircle2, 'Guardada en tu historial',
+                DesignTokens.success(b))
+            : (
+                LucideIcons.alertCircle,
+                'No se pudo guardar: revisa la conexión',
+                DesignTokens.destructive(b)
+              );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icono, size: 15, color: color),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            texto,
+            style: DesignTokens.bodyFont(fontSize: 12.5, color: color),
+          ),
+        ),
+      ],
     );
   }
 }

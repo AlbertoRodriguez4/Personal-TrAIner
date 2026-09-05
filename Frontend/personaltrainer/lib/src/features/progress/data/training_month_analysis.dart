@@ -165,3 +165,71 @@ ResumenMesEntrenamientos analizarMes(
     observaciones: obs,
   );
 }
+
+/// Una semana del mes, para el gráfico.
+class SemanaEntrenada {
+  const SemanaEntrenada({
+    required this.etiqueta,
+    required this.minutos,
+    required this.sesiones,
+  });
+  final String etiqueta;
+  final int minutos;
+  final int sesiones;
+}
+
+/// Minutos entrenados por semana del mes (S1 = días 1-7, S2 = 8-14…).
+///
+/// Es minutos y no tonelaje a propósito. El gráfico decía "Volumen semanal ·
+/// Tonelaje" pero llegaba siempre vacío, porque el tonelaje necesita peso ×
+/// repeticiones COMPLETADAS y eso no se guarda en ningún sitio (ver la nota de
+/// CLAUDE.md sobre por qué el resumen de hoy no lo incluye). Los minutos sí
+/// existen en cada sesión, así que el gráfico enseña algo real en vez de un
+/// hueco con un título prometiendo lo que no hay.
+List<SemanaEntrenada> minutosPorSemana(
+  List<Map<String, dynamic>> todas, {
+  required DateTime mes,
+}) {
+  final ultimoDia = DateTime(mes.year, mes.month + 1, 0).day;
+  final semanas = ((ultimoDia + 6) ~/ 7);
+  final minutos = List<int>.filled(semanas, 0);
+  final sesiones = List<int>.filled(semanas, 0);
+
+  for (final s in sinDuplicadosDeReloj(todas)) {
+    final f = _fecha(s);
+    if (f == null || f.year != mes.year || f.month != mes.month) continue;
+    final idx = ((f.day - 1) ~/ 7).clamp(0, semanas - 1);
+    minutos[idx] += _minutos(s);
+    sesiones[idx] += 1;
+  }
+
+  return [
+    for (var i = 0; i < semanas; i++)
+      SemanaEntrenada(
+        etiqueta: 'S${i + 1}',
+        minutos: minutos[i],
+        sesiones: sesiones[i],
+      ),
+  ];
+}
+
+/// Variación de minutos totales respecto al mes anterior, en tanto por uno.
+/// `null` cuando el mes anterior no tiene nada: sin base con la que comparar,
+/// cualquier porcentaje es inventado -- que es justo lo que hacía el "+18% vs
+/// mes anterior" que estaba escrito a mano en el gráfico.
+double? variacionVsMesAnterior(
+  List<Map<String, dynamic>> todas, {
+  required DateTime mes,
+}) {
+  final limpias = sinDuplicadosDeReloj(todas);
+  int totalDe(DateTime m) => limpias
+      .where((s) {
+        final f = _fecha(s);
+        return f != null && f.year == m.year && f.month == m.month;
+      })
+      .fold<int>(0, (a, s) => a + _minutos(s));
+
+  final anterior = totalDe(DateTime(mes.year, mes.month - 1));
+  if (anterior <= 0) return null;
+  return (totalDe(mes) - anterior) / anterior;
+}
