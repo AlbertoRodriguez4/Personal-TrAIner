@@ -7,6 +7,8 @@ import {
   ClinicalManualDto,
   FoodEstimateDto,
   FoodSuggestionsDto,
+  MealEstimateDto,
+  FoodReferencesDto,
   PhysiqueAnalysisDto,
 } from '../dto/analysis.dto';
 import { AiService } from '../service/ai.service';
@@ -62,5 +64,20 @@ export class AiController {
   @Post('nutrition/food-suggestions')
   suggestFoods(@Body() dto: FoodSuggestionsDto) {
     return this.aiService.suggestFoods(dto);
+  }
+
+  /// Plato compuesto: suma varios ingredientes en una sola entrada. No pasa por
+  /// ningun modelo -- un plato es una suma, y sumar con un LLM cambia exactitud
+  /// por nada.
+  @Post('nutrition/meal-estimate')
+  estimateMeal(@Body() dto: MealEstimateDto) {
+    return this.aiService.estimateMeal(dto);
+  }
+
+  /// Referencias corporales que aplican a un alimento, para no ofrecer "un puno
+  /// de aceite".
+  @Post('nutrition/food-references')
+  foodReferences(@Body() dto: FoodReferencesDto) {
+    return this.aiService.foodReferences(dto);
   }
 }

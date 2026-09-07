@@ -129,7 +129,9 @@ from schemas import (
     ClinicalManualRequest,
     ClinicalReportRequest,
     FoodEstimateRequest,
+    FoodReferencesRequest,
     FoodSuggestionsRequest,
+    MealEstimateRequest,
     PhysiqueAnalysisRequest,
 )
 
@@ -258,3 +260,52 @@ def estimate_food(request: FoodEstimateRequest):
 @app.post("/api/ia/nutrition/food-suggestions")
 def suggest_foods(request: FoodSuggestionsRequest):
     return {"sugerencias": food_lookup.sugerir(request.query)}
+
+
+@app.post("/api/ia/nutrition/meal-estimate")
+def estimate_meal(request: MealEstimateRequest):
+    """Plato compuesto: suma varios ingredientes en una sola entrada.
+
+    No pasa por ningun modelo a proposito: un plato es una suma, y sumar con un
+    LLM cambia exactitud por nada. Cada ingrediente se resuelve con el mismo
+    camino que el registro de uno solo -- catalogo local, luego USDA y Open Food
+    Facts -- asi que hereda su regla de oro: ningun numero inventado.
+    """
+    try:
+        return food_lookup.estimar_plato(
+            [i.model_dump() for i in request.ingredientes]
+        )
+    except food_lookup.IngredienteNoResueltoError as e:
+        # 422 con el detalle de lo que SI se resolvio: la app puede enseñar el
+        # plato a medias y pedir solo lo que falta, en vez de tirar todo lo que
+        # el usuario ya habia metido.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "mensaje": str(e),
+                "no_resueltos": e.fallos,
+                "resueltos": e.resueltos,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ia/nutrition/food-references")
+def food_references(request: FoodReferencesRequest):
+    """Referencias corporales que aplican a un alimento, con sus gramos.
+
+    Devuelve lista vacia si no se puede determinar la categoria: sin ella solo
+    caben gramos, porque inventarla metería un puño de proteína donde debería ir
+    un pulgar de grasa y el error se colaria directo en las kcal.
+    """
+    try:
+        categoria = food_lookup.categoria_de(request.nombre_alimento)
+        return {
+            "categoria": categoria,
+            "referencias": food_lookup.referencias_de(categoria),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

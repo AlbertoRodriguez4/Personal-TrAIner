@@ -569,3 +569,96 @@ def estimar(
         "coincidencia_exacta": coincidencia_exacta,
         "referencia_aplicada": referencia_aplicada,
     }
+
+
+class IngredienteNoResueltoError(Exception):
+    """Un ingrediente del plato no se pudo resolver. Lleva el detalle de los que
+    sí, para que la app pueda enseñar el plato a medias y pedir solo lo que
+    falta en vez de tirar todo lo que el usuario ya había metido."""
+
+    def __init__(self, fallos: list[dict], resueltos: list[dict]):
+        self.fallos = fallos
+        self.resueltos = resueltos
+        nombres = ", ".join(f["nombre"] for f in fallos)
+        super().__init__(f"No se reconocieron estos ingredientes: {nombres}")
+
+
+def estimar_plato(ingredientes: list[dict]) -> dict:
+    """Suma varios ingredientes en un solo plato.
+
+    Existe porque comer no es comer un alimento: es "ensalada de garbanzos con
+    atún, tomate, lechuga y un chorro de aceite". Con el registro de uno en uno
+    eso son cinco entradas en el diario, cinco búsquedas y cinco cantidades, y
+    lo que pasa de verdad es que la gente no lo registra.
+
+    Cada ingrediente se resuelve con `estimar`, así que hereda lo bueno de él:
+    catálogo local primero, referencias corporales en vez de báscula, y jamás un
+    número inventado. NO pasa por ningún modelo: un plato es una suma, y sumar
+    con un LLM es cambiar exactitud por nada.
+
+    Si algo no se reconoce se levanta `IngredienteNoResueltoError` con lo que sí
+    se resolvió dentro: mejor pedir el que falta que perder los cuatro buenos.
+    """
+    if not ingredientes:
+        raise ValueError("el plato no tiene ingredientes")
+    if len(ingredientes) > 30:
+        raise ValueError("demasiados ingredientes para un solo plato")
+
+    resueltos: list[dict] = []
+    fallos: list[dict] = []
+
+    for crudo in ingredientes:
+        nombre = (crudo.get("nombre_alimento") or crudo.get("nombre") or "").strip()
+        if not nombre:
+            continue
+        try:
+            resueltos.append(
+                estimar(
+                    nombre_alimento=nombre,
+                    cantidad_g=crudo.get("cantidad_g"),
+                    referencia_unidad=crudo.get("referencia_unidad"),
+                    referencia_cantidad=crudo.get("referencia_cantidad") or 1.0,
+                )
+            )
+        except (AlimentoNoEncontradoError, ReferenciaNoDisponibleError, ValueError) as e:
+            fallos.append({"nombre": nombre, "motivo": str(e)})
+
+    if fallos:
+        raise IngredienteNoResueltoError(fallos, resueltos)
+
+    return {
+        "ingredientes": resueltos,
+        "cantidad_g": round(sum(i["cantidad_g"] for i in resueltos), 1),
+        "calorias_consumidas": round(sum(i["calorias_consumidas"] for i in resueltos)),
+        "proteinas_g": round(sum(i["proteinas_g"] for i in resueltos), 1),
+        "carbohidratos_g": round(sum(i["carbohidratos_g"] for i in resueltos), 1),
+        "grasas_g": round(sum(i["grasas_g"] for i in resueltos), 1),
+    }
+
+
+def referencias_de(categoria: str | None) -> list[dict]:
+    """Referencias que tienen sentido para una categoría, con sus gramos.
+
+    La app las necesita para no ofrecer "un puño de aceite": cada unidad solo
+    existe donde significa algo, y esa decisión ya está tomada en
+    REFERENCIAS_GRAMOS. Devolverla evita que el cliente tenga su propia copia de
+    la tabla y acabe desincronizada.
+    """
+    if not categoria:
+        return []
+    salida = []
+    for unidad, tabla in REFERENCIAS_GRAMOS.items():
+        gramos = tabla.get(categoria)
+        if gramos is not None:
+            salida.append({"unidad": unidad, "gramos": gramos})
+    return salida
+
+
+def categoria_de(nombre_alimento: str) -> str | None:
+    """Categoría del alimento, para saber qué referencias ofrecer antes incluso
+    de que el usuario elija cantidad."""
+    local = buscar_local(nombre_alimento)
+    if local:
+        return local["categoria"]
+    externo = buscar_externo(nombre_alimento)
+    return _adivinar_categoria(externo.get("nombre") or nombre_alimento) if externo else None

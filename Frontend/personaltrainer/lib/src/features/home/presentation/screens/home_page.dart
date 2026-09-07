@@ -20,6 +20,7 @@ import '../../../../core/ui/ai_gradient_text.dart';
 import '../../../../core/ui/glass_card.dart';
 import '../../../../services/api_service.dart';
 import '../../../ai_coach/presentation/screens/ai_coach_page.dart';
+import '../../../nutrition/presentation/screens/meal_builder_page.dart';
 import '../../../nutrition/presentation/widgets/hydration_card.dart';
 import '../../../nutrition/presentation/widgets/manual_food_entry_card.dart';
 import '../../../nutrition/presentation/widgets/supplements_card.dart';
@@ -1912,6 +1913,84 @@ class _ReanudarSesionCard extends StatelessWidget {
   }
 }
 
+/// Entrada principal al registro de comida: montar el plato por ingredientes.
+///
+/// Se pone por delante del formulario de un alimento porque es lo que resuelve
+/// el caso real -- "ensalada de garbanzos con atún, tomate y lechuga" -- y
+/// porque no pide báscula: la ración se elige con la mano.
+class _AnadirComidaCard extends StatelessWidget {
+  const _AnadirComidaCard();
+
+  /// Tipo de comida por la hora, para no preguntarlo. Se puede cambiar dentro,
+  /// pero acertar el 90 % de las veces ahorra un toque en cada registro.
+  String get _tipoPorHora {
+    final h = DateTime.now().hour;
+    if (h < 11) return 'desayuno';
+    if (h < 16) return 'comida';
+    if (h < 19) return 'snack';
+    return 'cena';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: DesignTokens.card(b),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: DesignTokens.shadowCard(b),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'AÑADIR COMIDA',
+            style: DesignTokens.labelSmall(
+              color: DesignTokens.mutedForeground(b),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Monta el plato por ingredientes',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: DesignTokens.foreground(b),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Sin pesar nada: una palma de atún, un puño de garbanzos, un '
+            'pulgar de aceite. Los platos que repites se guardan.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: DesignTokens.mutedForeground(b),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MealBuilderPage(tipoComida: _tipoPorHora),
+                ),
+              ),
+              icon: const Icon(LucideIcons.utensils, size: 18),
+              label: const Text('Montar un plato'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// FC media / duración / calorías del entrenamiento de HOY (Health Connect).
 /// No incluye "volumen" (tonelaje): ni `WorkoutSessionProvider` ni el modelo
 /// de ejercicios guardan peso×reps completados, así que no hay de dónde
@@ -2925,6 +3004,11 @@ class _NutritionScreenState extends State<_NutritionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _MacrosOverview(),
+          const SizedBox(height: 16),
+          // El constructor de platos va PRIMERO y el formulario de un alimento
+          // detrás: una comida real casi nunca es un solo alimento, y pedir
+          // gramos de entrada es lo que hacía que la gente dejara de registrar.
+          const _AnadirComidaCard(),
           const SizedBox(height: 16),
           const ManualFoodEntryCard(),
           const SizedBox(height: 16),

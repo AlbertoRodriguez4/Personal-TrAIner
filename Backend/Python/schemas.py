@@ -344,3 +344,34 @@ class FoodSuggestionsRequest(BaseModel):
     propio, así que responde lo bastante rápido para llamarse en cada tecla."""
     query: str = Field(..., min_length=1)
 
+
+class IngredientePlato(BaseModel):
+    """Un ingrediente dentro de un plato. Misma forma que FoodEstimateRequest
+    pero sin user_id: el usuario es del plato entero, no de cada tomate."""
+    nombre_alimento: str = Field(..., min_length=1)
+    cantidad_g: Optional[float] = Field(None, gt=0)
+    referencia_unidad: Optional[str] = Field(None)
+    referencia_cantidad: Optional[float] = Field(1.0, gt=0)
+
+
+class MealEstimateRequest(BaseModel):
+    """Un plato compuesto: varios ingredientes que se suman en una sola entrada
+    del diario.
+
+    Comer no es comer UN alimento: es "ensalada de garbanzos con atun, tomate,
+    lechuga y un chorro de aceite". Registrando de uno en uno eso son cinco
+    entradas y cinco busquedas, y lo que pasa de verdad es que no se registra.
+    """
+    user_id: str = Field(..., description="UUID del usuario")
+    ingredientes: list[IngredientePlato] = Field(..., min_length=1, max_length=30)
+
+
+class FoodReferencesRequest(BaseModel):
+    """Que referencias corporales tienen sentido para un alimento.
+
+    Las pide el cliente para no ofrecer "un puno de aceite": cada unidad solo
+    existe donde significa algo, y esa decision vive en REFERENCIAS_GRAMOS. Se
+    consulta en vez de duplicar la tabla en la app, que acabaria desincronizada.
+    """
+    user_id: str = Field(..., description="UUID del usuario")
+    nombre_alimento: str = Field(..., min_length=1)

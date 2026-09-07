@@ -7,6 +7,8 @@ import {
   ClinicalManualDto,
   FoodEstimateDto,
   FoodSuggestionsDto,
+  MealEstimateDto,
+  FoodReferencesDto,
   PhysiqueAnalysisDto,
 } from '../dto/analysis.dto';
 
@@ -224,5 +226,32 @@ export class AiService {
   /// USDA/Open Food Facts — si tarda más de eso, algo va mal.
   async suggestFoods(payload: FoodSuggestionsDto) {
     return this.post('/api/ia/nutrition/food-suggestions', { query: payload.query }, 5_000);
+  }
+
+  /// Plato compuesto: varios ingredientes en una sola entrada del diario.
+  /// Timeout mas largo que el de un alimento suelto porque cada ingrediente que
+  /// no este en el catalogo local puede salir a USDA/Open Food Facts.
+  async estimateMeal(payload: MealEstimateDto) {
+    return this.post(
+      '/api/ia/nutrition/meal-estimate',
+      {
+        user_id: payload.userId,
+        ingredientes: (payload.ingredientes ?? []).map((i) => ({
+          nombre_alimento: i.nombreAlimento,
+          cantidad_g: i.cantidadG ?? null,
+          referencia_unidad: i.referenciaUnidad ?? null,
+          referencia_cantidad: i.referenciaCantidad ?? null,
+        })),
+      },
+      30_000,
+    );
+  }
+
+  async foodReferences(payload: FoodReferencesDto) {
+    return this.post(
+      '/api/ia/nutrition/food-references',
+      { user_id: payload.userId, nombre_alimento: payload.nombreAlimento },
+      15_000,
+    );
   }
 }

@@ -80,3 +80,30 @@ export class FoodEstimateDto {
 export class FoodSuggestionsDto {
   query: string;
 }
+
+/// Un ingrediente dentro de un plato compuesto. Igual que FoodEstimateDto pero
+/// sin userId: el usuario es del plato entero, no de cada tomate.
+export class IngredientePlatoDto {
+  nombreAlimento: string;
+  cantidadG?: number;
+  referenciaUnidad?: string;
+  referenciaCantidad?: number;
+}
+
+/// Plato compuesto: varios ingredientes que se suman en UNA entrada del diario.
+///
+/// Comer no es comer un alimento: es "ensalada de garbanzos con atun, tomate,
+/// lechuga y un chorro de aceite". Registrandolo de uno en uno son cinco
+/// entradas y cinco busquedas, y lo que pasa de verdad es que no se registra.
+export class MealEstimateDto {
+  userId: string;
+  ingredientes: IngredientePlatoDto[];
+}
+
+/// Que referencias corporales (palma, puno, punado...) tienen sentido para un
+/// alimento. Se consultan en vez de duplicar la tabla en la app, que acabaria
+/// desincronizada con la del backend.
+export class FoodReferencesDto {
+  userId: string;
+  nombreAlimento: string;
+}

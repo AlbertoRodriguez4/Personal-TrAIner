@@ -756,6 +756,41 @@ class ApiService {
     return _toMap(decoded) ?? {};
   }
 
+  /// Plato compuesto: varios ingredientes sumados en UNA entrada del diario.
+  ///
+  /// Timeout más largo que el de un alimento suelto: cada ingrediente que no
+  /// esté en el catálogo local puede salir a USDA y Open Food Facts.
+  static Future<Map<String, dynamic>> estimateMealMacros({
+    required String userId,
+    required List<Map<String, dynamic>> ingredientes,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/meal-estimate',
+      body: {'userId': userId, 'ingredientes': ingredientes},
+      timeout: const Duration(seconds: 40),
+    );
+    return _toMap(decoded) ?? {};
+  }
+
+  /// Referencias corporales que aplican a un alimento, con sus gramos.
+  ///
+  /// Se pregunta en vez de tener la tabla duplicada en la app: la decisión de
+  /// qué unidad tiene sentido para qué categoría vive en el backend, y dos
+  /// copias acabarían ofreciendo "un puño de aceite".
+  static Future<Map<String, dynamic>> foodReferences({
+    required String userId,
+    required String nombreAlimento,
+  }) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/ai/nutrition/food-references',
+      body: {'userId': userId, 'nombreAlimento': nombreAlimento},
+      timeout: const Duration(seconds: 15),
+    );
+    return _toMap(decoded) ?? {};
+  }
+
   /// Autocompletado del catálogo local mientras el usuario escribe el nombre
   /// del alimento — ver comentario en `estimateFoodMacros`.
   static Future<List<String>> suggestFoods(String query) async {
