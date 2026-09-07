@@ -244,8 +244,14 @@ class WorkoutSessionProvider extends ChangeNotifier {
   /// Descanso pautado para el ejercicio en curso, segun su rango de
   /// repeticiones. Antes eran 90 s fijos para todo: el mismo descanso para un
   /// triple de sentadilla que para unas elevaciones laterales.
-  int get descansoPautadoSegundos =>
-      descansoRecomendadoSegundos(currentExercise?.reps);
+  int get descansoPautadoSegundos {
+    // Manda lo que diga el ejercicio. La pauta por rango de repeticiones es una
+    // estimación razonable, pero si la rutina trae su propio descanso -- de la
+    // IA o escrito a mano en el JSON -- esa es la intención real y no se pisa.
+    final propio = currentExercise?.restSeconds;
+    if (propio != null && propio > 0) return propio;
+    return descansoRecomendadoSegundos(currentExercise?.reps);
+  }
 
   // ── Timer de sesión + pausa (independiente del timer por set/descanso, que
   // sigue su propio flujo de análisis de IA sin interrupciones) ──
@@ -263,6 +269,12 @@ class WorkoutSessionProvider extends ChangeNotifier {
   bool _sessionSaved = false;
   bool _saving = false;
   bool get isSavingSession => _saving;
+
+  /// Por qué no se pudo guardar la sesión. Cuando el guardado fallaba, esto se
+  /// perdía en un `catch (_)` y la pantalla solo decía "revisa la conexión",
+  /// que puede ser cierto o puede ser un 401, un 500 o el backend dormido.
+  String? _saveError;
+  String? get saveError => _saveError;
   String get sessionElapsedFormatted {
     final m = (_sessionElapsedSeconds ~/ 60).toString().padLeft(2, '0');
     final s = (_sessionElapsedSeconds % 60).toString().padLeft(2, '0');
@@ -806,6 +818,39 @@ class WorkoutSessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cambia el peso del ejercicio en curso y lo guarda EN LA RUTINA.
+  ///
+  /// Guardarlo solo en la sesión no serviría de nada: el sentido es que el día
+  /// que subes de 60 a 65 quede puesto para la próxima vez. Devuelve false si
+  /// el guardado remoto falló, y en ese caso el cambio sigue aplicado para hoy:
+  /// perderlo de la pantalla además de no guardarlo sería el peor de los dos
+  /// mundos.
+  Future<bool> actualizarPesoEjercicioActual(double peso) async {
+    final routine = _routine;
+    final dia = currentDay;
+    final ex = currentExercise;
+    if (routine == null || dia == null || ex == null) return false;
+
+    final ejercicios = List<Exercise>.from(dia.exercises);
+    ejercicios[_exerciseIndex] = ex.copyWith(weight: peso);
+    final dias = List<RoutineDay>.from(routine.days);
+    dias[_dayIndex] = dias[_dayIndex].copyWith(exercises: ejercicios);
+    _routine = routine.copyWith(days: dias);
+    notifyListeners();
+
+    if (routine.id == null) return false;
+    try {
+      await ApiService.updateRoutine(
+        routine.id!,
+        _routine!.toJson(),
+        userId: ApiService.getCurrentUserId() ?? '',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void nextExercise() {
     if (currentDay == null) return;
     // Saltar va al siguiente PENDIENTE, dando la vuelta si hace falta. Antes se
@@ -944,7 +989,14 @@ class WorkoutSessionProvider extends ChangeNotifier {
     // series", como si el fallo fuese del usuario.
     if (_sessionSaved || !_mereceGuardarse) return;
     final userId = ApiService.getCurrentUserId();
-    if (userId == null) return;
+    if (userId == null) {
+      // Sin sesión iniciada no hay a quién asignar el entrenamiento. Se dice,
+      // en vez de salir en silencio y dejar el resumen con un "no se pudo
+      // guardar" sin causa.
+      _saveError = 'No hay sesión iniciada en la app.';
+      notifyListeners();
+      return;
+    }
 
     _sessionSaved = true; // se marca antes del await: un doble tap no duplica
     _saving = true;
@@ -973,16 +1025,30 @@ class WorkoutSessionProvider extends ChangeNotifier {
       );
       _savedSessionId = guardada['id']?.toString();
       unawaited(_retirarDuplicadosDelReloj(userId));
-    } catch (_) {
-      // No hay dónde mostrar el error en una pantalla que ya se está cerrando;
-      // el usuario ya vio su resumen en pantalla, perder el guardado no puede
-      // bloquear el flujo. `_sessionSaved` se queda en true a propósito: un
-      // reintento automático aquí podría duplicar si el POST sí llegó a
-      // guardarse y solo falló la respuesta.
+    } catch (e) {
+      // Sí hay dónde mostrarlo: el resumen sigue en pantalla hasta que el
+      // usuario lo cierra. Guardar el motivo permite distinguir un backend
+      // dormido de una sesión caducada, y ofrecer reintentar en vez de dar el
+      // entrenamiento por perdido.
+      _saveError = e.toString();
+      // No se reintenta solo: si el POST llegó y solo falló la respuesta, un
+      // reintento automático duplicaría. Lo decide el usuario con el botón.
+      _sessionSaved = true;
     } finally {
       _saving = false;
       notifyListeners();
     }
+  }
+
+  /// Reintenta guardar tras un fallo. Solo se llega aquí desde el botón del
+  /// resumen: perder el entrenamiento pesa más que el riesgo de duplicar si el
+  /// POST anterior sí llegó, y un duplicado se puede borrar.
+  Future<void> reintentarGuardado() async {
+    if (_saving || _savedSessionId != null) return;
+    _saveError = null;
+    _sessionSaved = false;
+    notifyListeners();
+    await _persistSession();
   }
 
   void clearError() {

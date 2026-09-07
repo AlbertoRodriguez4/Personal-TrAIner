@@ -1249,8 +1249,10 @@ class _ExerciseCard extends StatelessWidget {
                 value: '${provider.setIndex + 1}/${ex.sets ?? 1}',
               ),
               if (ex.reps != null) _Meta(label: 'Reps', value: ex.reps!),
-              if (ex.weight != null)
-                _Meta(label: 'Peso', value: '${ex.weight} kg'),
+              // El peso se toca DURANTE la serie, que es cuando descubres que
+              // subes. Guardarlo aquí evita el paso de acordarte al llegar a
+              // casa y editar la rutina a mano, que es donde se pierde.
+              _MetaPeso(provider: provider),
               // El descanso pautado, donde se mira entre serie y serie. Es el
               // mismo numero que usa la cuenta atras al terminar la serie, no
               // una sugerencia distinta por su cuenta.
@@ -1297,6 +1299,114 @@ class _ExerciseCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Peso del ejercicio actual, editable en caliente.
+///
+/// Al cambiarlo se guarda en la RUTINA, no solo en la sesión: la gracia es que
+/// el día que subes de 60 a 65 quede puesto para la próxima vez sin tener que
+/// acordarte luego.
+class _MetaPeso extends StatelessWidget {
+  const _MetaPeso({required this.provider});
+  final WorkoutSessionProvider provider;
+
+  Future<void> _editar(BuildContext context) async {
+    final ex = provider.currentExercise;
+    if (ex == null) return;
+    final controlador =
+        TextEditingController(text: ex.weight?.toString() ?? '');
+    final messenger = ScaffoldMessenger.of(context);
+
+    final valor = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DesignTokens.radius3xl),
+        ),
+        title: Text(ex.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        content: TextField(
+          controller: controlador,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Peso (kg)',
+            helperText: 'Se guarda en la rutina para los próximos días',
+          ),
+          onSubmitted: (v) => Navigator.of(context).pop(
+            double.tryParse(v.replaceAll(',', '.')),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(
+              double.tryParse(controlador.text.replaceAll(',', '.')),
+            ),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    controlador.dispose();
+    if (valor == null || valor < 0) return;
+
+    final ok = await provider.actualizarPesoEjercicioActual(valor);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Peso actualizado a $valor kg en la rutina'
+              : 'Peso cambiado para hoy, pero no se pudo guardar en la rutina',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    final peso = provider.currentExercise?.weight;
+    return InkWell(
+      onTap: () => _editar(context),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'PESO',
+                  style: DesignTokens.labelSmall(
+                    color: DesignTokens.mutedForeground(b),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(LucideIcons.pencil,
+                    size: 11, color: DesignTokens.mutedForeground(b)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              peso == null ? 'Añadir' : '$peso kg',
+              style: DesignTokens.bodyFont(
+                fontSize: 15,
+                weight: FontWeight.w700,
+                color: peso == null
+                    ? DesignTokens.mutedForeground(b)
+                    : DesignTokens.foreground(b),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1979,6 +2089,10 @@ class _EstadoGuardado extends StatelessWidget {
     final guardando = provider.isSavingSession;
     final guardada = provider.savedSessionId != null;
 
+    // El motivo real en vez de "revisa la conexión" para todo: puede ser el
+    // backend dormido, un 500 o la sesión caducada, y cada uno se arregla de
+    // una forma distinta.
+    final motivo = provider.saveError;
     final (icono, texto, color) = guardando
         ? (LucideIcons.loader, 'Guardando la sesión…',
             DesignTokens.mutedForeground(b))
@@ -1987,21 +2101,38 @@ class _EstadoGuardado extends StatelessWidget {
                 DesignTokens.success(b))
             : (
                 LucideIcons.alertCircle,
-                'No se pudo guardar: revisa la conexión',
+                motivo == null
+                    ? 'Guardando…'
+                    : 'No se pudo guardar: $motivo',
                 DesignTokens.destructive(b)
               );
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        Icon(icono, size: 15, color: color),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            texto,
-            style: DesignTokens.bodyFont(fontSize: 12.5, color: color),
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icono, size: 15, color: color),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                texto,
+                textAlign: TextAlign.center,
+                style: DesignTokens.bodyFont(fontSize: 12.5, color: color),
+              ),
+            ),
+          ],
         ),
+        // Un entrenamiento perdido no se recupera, así que la salida tiene que
+        // estar aquí y no obligar a repetirlo.
+        if (!guardando && !guardada && motivo != null) ...[
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: provider.reintentarGuardado,
+            icon: const Icon(LucideIcons.rotateCcw, size: 15),
+            label: const Text('Reintentar guardado'),
+          ),
+        ],
       ],
     );
   }

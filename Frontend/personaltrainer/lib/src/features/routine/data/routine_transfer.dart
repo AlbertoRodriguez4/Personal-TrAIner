@@ -112,6 +112,10 @@ class RoutineTransfer {
                       'duration': ex.duration,
                     if (ex.notes != null && ex.notes!.isNotEmpty)
                       'notes': ex.notes,
+                    // Exportar sin el descanso hacía que el ciclo
+                    // exportar-editar-importar lo perdiera por el camino.
+                    if (ex.restSeconds != null)
+                      'rest_seconds': ex.restSeconds,
                   },
               ],
             },
@@ -137,7 +141,12 @@ class RoutineTransfer {
               'focus': 'Full body',
               'exercises': [
                 {'name': 'Sentadilla', 'sets': 4, 'reps': '8-10', 'weight': 60},
-                {'name': 'Press banca', 'sets': 4, 'reps': '8-10'},
+                {
+                  'name': 'Press banca',
+                  'sets': 4,
+                  'reps': '8-10',
+                  'rest_seconds': 120,
+                },
                 {
                   'name': 'Remo con barra',
                   'sets': 3,
@@ -368,7 +377,51 @@ class RoutineTransfer {
         40,
       ),
       notes: _texto(_campo(crudo, const ['notes', 'notas', 'nota']), 1000),
+      // El descanso entre series se perdía al importar: la columna existe en el
+      // backend y la IA la rellena, pero ni el modelo ni este lector la
+      // miraban. Se aceptan los nombres que de verdad escribe la gente y los
+      // que usa el generador por IA.
+      restSeconds: _segundosDescanso(_campo(crudo, const [
+        'rest_seconds',
+        'descanso_segundos',
+        'descanso_seg',
+        'descanso',
+        'rest',
+        'descanso_entre_series',
+      ])),
     );
+  }
+
+  /// Segundos de descanso a partir de lo que traiga el JSON: un número suelto
+  /// (segundos), o un texto como "90s", "2 min", "1:30".
+  ///
+  /// Se interpreta a minutos cuando el número es pequeño y viene con "min", y
+  /// se descartan los valores absurdos: un descanso de 4 horas entre series es
+  /// un error de quien escribió el JSON, no una pauta.
+  static int? _segundosDescanso(Object? crudo) {
+    if (crudo == null) return null;
+    if (crudo is num) {
+      final v = crudo.round();
+      return (v > 0 && v <= 3600) ? v : null;
+    }
+    final texto = crudo.toString().trim().toLowerCase();
+    if (texto.isEmpty) return null;
+
+    // "1:30" -> 90
+    final reloj = RegExp(r'^(\d{1,2}):([0-5]\d)$').firstMatch(texto);
+    if (reloj != null) {
+      final v = int.parse(reloj.group(1)!) * 60 + int.parse(reloj.group(2)!);
+      return (v > 0 && v <= 3600) ? v : null;
+    }
+
+    final numero = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(texto);
+    if (numero == null) return null;
+    final valor = double.tryParse(numero.group(0)!.replaceAll(',', '.'));
+    if (valor == null || valor <= 0) return null;
+
+    final enMinutos = texto.contains('min') || texto.contains("'");
+    final segundos = (enMinutos ? valor * 60 : valor).round();
+    return (segundos > 0 && segundos <= 3600) ? segundos : null;
   }
 
   /// Primer valor no nulo de [claves] en [mapa].
