@@ -663,11 +663,20 @@ class _ChecklistRow extends StatelessWidget {
         '${exercise.sets} × ${exercise.reps}'
       else if (exercise.reps != null)
         exercise.reps!,
-      if (exercise.weight != null) '${exercise.weight} kg',
+      // En rampa se enseña el recorrido completo, no un peso suelto: es lo
+      // que distingue de un vistazo un ejercicio que sube de uno que no.
+      if (exercise.subeEnRampa)
+        '${exercise.weights!.first}→${exercise.weights!.last} kg'
+      else if (exercise.weight != null)
+        '${exercise.weight} kg',
       // El descanso pautado se ve ANTES de necesitarlo, no solo cuando arranca
-      // la cuenta atras: sirve para planificar la serie, y llegando tarde solo
-      // informa de lo que ya estas haciendo.
-      'descanso ${descansoLegible(descansoRecomendadoSegundos(exercise.reps))}',
+      // la cuenta atrás: sirve para planificar la serie, y llegando tarde solo
+      // informa de lo que ya estás haciendo.
+      //
+      // Manda el del ejercicio y solo se deduce del rango de repeticiones
+      // cuando no lo trae. Esta línea usaba SIEMPRE el deducido, así que el
+      // mismo ejercicio decía "3 min" en su tarjeta y "descanso 90 s" aquí.
+      'descanso ${descansoLegible(exercise.restSeconds != null && exercise.restSeconds! > 0 ? exercise.restSeconds! : descansoRecomendadoSegundos(exercise.reps))}',
     ].join(' · ');
 
     return Container(
