@@ -106,6 +106,9 @@ export class RoutineService {
             reps: String(ex.repeticiones),
             weight: ex.peso_sugerido_kg,
             rest_seconds: ex.descanso_segundos,
+            // Peso por serie cuando el ejercicio sube en rampa; `weight` se
+            // queda como el de referencia.
+            weights: ex.pesos_por_serie ?? null,
             notes: ex.notas,
           }),
         ),
@@ -211,6 +214,9 @@ export class RoutineService {
             reps: String(ex.repeticiones),
             weight: ex.peso_sugerido_kg,
             rest_seconds: ex.descanso_segundos,
+            // Peso por serie cuando el ejercicio sube en rampa; `weight` se
+            // queda como el de referencia.
+            weights: ex.pesos_por_serie ?? null,
             notes: ex.notas,
           }),
         ),

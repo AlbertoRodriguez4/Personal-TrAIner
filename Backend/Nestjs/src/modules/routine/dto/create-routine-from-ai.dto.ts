@@ -31,6 +31,10 @@ export class AiExerciseDto {
   @IsOptional()
   peso_sugerido_kg?: number;
 
+  /// Peso de cada serie cuando el ejercicio sube en rampa (60-65-70). Opcional:
+  /// sin el, manda `peso_sugerido_kg` para todas las series.
+  pesos_por_serie?: number[];
+
   @IsString()
   @IsOptional()
   notas?: string;

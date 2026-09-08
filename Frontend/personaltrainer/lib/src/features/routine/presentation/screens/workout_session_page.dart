@@ -1262,6 +1262,39 @@ class _ExerciseCard extends StatelessWidget {
               ),
             ],
           ),
+          // La rampa entera de un vistazo: saber que despues de los 65 vienen
+          // 70 cambia como afrontas la serie que estas haciendo.
+          if (ex.subeEnRampa) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (var i = 0; i < ex.weights!.length; i++)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: i == provider.setIndex
+                          ? DesignTokens.activityGym
+                          : DesignTokens.surface1(b),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: DesignTokens.border(b)),
+                    ),
+                    child: Text(
+                      '${ex.weights![i]} kg',
+                      style: DesignTokens.bodyFont(
+                        fontSize: 11.5,
+                        weight: FontWeight.w600,
+                        color: i == provider.setIndex
+                            ? Colors.white
+                            : DesignTokens.mutedForeground(b),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           SizedBox(
             height: 42,
@@ -1371,7 +1404,12 @@ class _MetaPeso extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    final peso = provider.currentExercise?.weight;
+    final ex = provider.currentExercise;
+    // En rampa manda el peso de la serie que toca, no el de referencia: si el
+    // ejercicio va 60-65-70, enseñar 60 en la tercera serie es enseñar el dato
+    // equivocado justo cuando hay que cargar la barra.
+    final peso = ex?.pesoDeSerie(provider.setIndex);
+    final rampa = ex?.subeEnRampa ?? false;
     return InkWell(
       onTap: () => _editar(context),
       borderRadius: BorderRadius.circular(8),
@@ -1384,7 +1422,7 @@ class _MetaPeso extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'PESO',
+                  rampa ? 'PESO · SERIE ${provider.setIndex + 1}' : 'PESO',
                   style: DesignTokens.labelSmall(
                     color: DesignTokens.mutedForeground(b),
                   ),

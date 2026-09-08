@@ -16,6 +16,14 @@ class Exercise {
   /// la deducida del rango de repeticiones.
   final int? restSeconds;
 
+  /// Peso de CADA serie, para los ejercicios que se suben en rampa (60-65-70).
+  ///
+  /// `weight` sigue siendo el peso de referencia y basta para la mayoría. Pero
+  /// con un solo número hay que elegir entre apuntar el de la primera serie --y
+  /// quedarse corto las dos siguientes-- o el de la última, e ir sobrado al
+  /// empezar. Nulo o vacío = el ejercicio no sube, y manda `weight`.
+  final List<double>? weights;
+
   Exercise({
     this.id,
     required this.name,
@@ -25,6 +33,7 @@ class Exercise {
     this.duration,
     this.notes,
     this.restSeconds,
+    this.weights,
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
@@ -41,6 +50,10 @@ class Exercise {
       restSeconds: json['rest_seconds'] != null
           ? int.tryParse(json['rest_seconds'].toString())
           : null,
+      weights: (json['weights'] as List?)
+          ?.map((e) => double.tryParse(e.toString()))
+          .whereType<double>()
+          .toList(),
     );
   }
 
@@ -54,6 +67,7 @@ class Exercise {
       if (duration != null) 'duration': duration,
       if (notes != null) 'notes': notes,
       if (restSeconds != null) 'rest_seconds': restSeconds,
+      if (weights != null && weights!.isNotEmpty) 'weights': weights,
     };
   }
 
@@ -66,6 +80,7 @@ class Exercise {
     String? duration,
     String? notes,
     int? restSeconds,
+    List<double>? weights,
   }) {
     return Exercise(
       id: id ?? this.id,
@@ -76,6 +91,22 @@ class Exercise {
       duration: duration ?? this.duration,
       notes: notes ?? this.notes,
       restSeconds: restSeconds ?? this.restSeconds,
+      weights: weights ?? this.weights,
     );
   }
+
+  /// Peso que toca en la serie `indice` (0-based).
+  ///
+  /// Con rampa devuelve el de esa serie; pasado el final se queda en el último,
+  /// que es lo que pasa de verdad cuando alguien mete una serie extra: se
+  /// repite el peso más alto, no se vuelve al de calentamiento.
+  double? pesoDeSerie(int indice) {
+    final lista = weights;
+    if (lista == null || lista.isEmpty) return weight;
+    if (indice < 0) return lista.first;
+    return indice < lista.length ? lista[indice] : lista.last;
+  }
+
+  /// Si el ejercicio sube de peso entre series.
+  bool get subeEnRampa => (weights?.length ?? 0) > 1;
 }

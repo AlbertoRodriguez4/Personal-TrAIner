@@ -27,6 +27,10 @@ export class CreateExerciseDto {
   @IsOptional()
   weight?: number;
 
+  /// Peso de cada serie, para los ejercicios en rampa. `weight` sigue siendo el
+  /// de referencia y se usa cuando esto viene vacio.
+  weights?: number[];
+
   @IsString()
   @IsOptional()
   duration?: string;
@@ -34,6 +38,11 @@ export class CreateExerciseDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  /// Descanso entre series. Sin declararlo aqui llegaba igual a la entidad
+  /// porque el ValidationPipe va sin whitelist, pero eso es un accidente
+  /// afortunado y no un contrato: escrito, se ve que forma parte del payload.
+  rest_seconds?: number;
 }
 
 export class CreateRoutineDayDto {

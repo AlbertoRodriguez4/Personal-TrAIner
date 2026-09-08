@@ -116,6 +116,8 @@ class RoutineTransfer {
                     // exportar-editar-importar lo perdiera por el camino.
                     if (ex.restSeconds != null)
                       'rest_seconds': ex.restSeconds,
+                    if (ex.weights != null && ex.weights!.isNotEmpty)
+                      'weights': ex.weights,
                   },
               ],
             },
@@ -381,6 +383,7 @@ class RoutineTransfer {
       // backend y la IA la rellena, pero ni el modelo ni este lector la
       // miraban. Se aceptan los nombres que de verdad escribe la gente y los
       // que usa el generador por IA.
+      weights: _pesosPorSerie(crudo, series, peso),
       restSeconds: _segundosDescanso(_campo(crudo, const [
         'rest_seconds',
         'descanso_segundos',
@@ -390,6 +393,67 @@ class RoutineTransfer {
         'descanso_entre_series',
       ])),
     );
+  }
+
+  /// Peso de cada serie para los ejercicios en rampa.
+  ///
+  /// Se aceptan las tres formas en que esto se escribe de verdad, porque el
+  /// JSON lo teclea una persona:
+  ///
+  ///   "weights": [60, 65, 70]     lista explícita
+  ///   "weight": "60/65/70"        o "60-65-70", que es como se apunta a mano
+  ///   "weight": 60, "weight_step": 5   peso inicial + incremento por serie
+  ///
+  /// Devuelve null cuando no hay rampa: un solo peso se queda en `weight` y no
+  /// se convierte en lista de uno, para que `subeEnRampa` signifique lo que
+  /// dice y la sesión no enseñe "serie 1 de 1" donde no hay progresión.
+  static List<double>? _pesosPorSerie(
+    Map<String, dynamic> crudo,
+    int? series,
+    double? pesoBase,
+  ) {
+    final explicito = _campo(crudo, const [
+      'weights',
+      'pesos',
+      'pesos_por_serie',
+      'peso_por_serie',
+    ]);
+    if (explicito is List) {
+      final lista = explicito
+          .map((e) => _decimal(e))
+          .whereType<double>()
+          .toList();
+      if (lista.length > 1) return lista;
+      return null;
+    }
+
+    // "60/65/70" o "60-65-70" en el propio campo de peso. El guion se acepta
+    // porque es como se escribe en papel, aunque también sea el separador de
+    // los rangos de repeticiones: aquí no hay ambigüedad, son pesos.
+    final textoPeso = _campo(crudo, const ['weight', 'peso', 'kg']);
+    if (textoPeso is String && RegExp(r'[/\-]').hasMatch(textoPeso)) {
+      final lista = textoPeso
+          .split(RegExp(r'[/\-]'))
+          .map((t) => _decimal(t.trim()))
+          .whereType<double>()
+          .toList();
+      if (lista.length > 1) return lista;
+    }
+
+    // Peso inicial + incremento: la forma corta de una rampa regular.
+    final paso = _decimal(_campo(crudo, const [
+      'weight_step',
+      'incremento',
+      'incremento_kg',
+      'subida',
+      'progresion',
+    ]));
+    if (paso != null && paso > 0 && pesoBase != null && (series ?? 0) > 1) {
+      return [
+        for (var i = 0; i < series!; i++) pesoBase + paso * i,
+      ];
+    }
+    return null;
   }
 
   /// Segundos de descanso a partir de lo que traiga el JSON: un número suelto

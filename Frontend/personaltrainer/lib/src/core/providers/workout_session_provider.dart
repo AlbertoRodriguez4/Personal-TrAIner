@@ -832,7 +832,17 @@ class WorkoutSessionProvider extends ChangeNotifier {
     if (routine == null || dia == null || ex == null) return false;
 
     final ejercicios = List<Exercise>.from(dia.exercises);
-    ejercicios[_exerciseIndex] = ex.copyWith(weight: peso);
+    // En un ejercicio en rampa se cambia el peso de LA SERIE que estás
+    // haciendo, no el de referencia: en un 60-65-70, subir la tercera a 75 no
+    // significa empezar la próxima vez por 75.
+    if (ex.subeEnRampa) {
+      final pesos = List<double>.from(ex.weights!);
+      final i = _setIndex.clamp(0, pesos.length - 1);
+      pesos[i] = peso;
+      ejercicios[_exerciseIndex] = ex.copyWith(weights: pesos);
+    } else {
+      ejercicios[_exerciseIndex] = ex.copyWith(weight: peso);
+    }
     final dias = List<RoutineDay>.from(routine.days);
     dias[_dayIndex] = dias[_dayIndex].copyWith(exercises: ejercicios);
     _routine = routine.copyWith(days: dias);
