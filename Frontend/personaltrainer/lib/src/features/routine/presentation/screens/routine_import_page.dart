@@ -10,6 +10,7 @@ import '../../../../core/providers/routine_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/ui/round_icon_button.dart';
 import '../../data/routine_transfer.dart';
+import '../../models/routine.dart';
 
 /// Importar una rutina escrita en JSON, sin pasar por la IA.
 ///
@@ -132,10 +133,53 @@ class _RoutineImportPageState extends State<RoutineImportPage> {
       setState(() => _error = 'No se pudo guardar: ${provider.error ?? 'error desconocido'}');
       return;
     }
-    messenger.showSnackBar(
-      SnackBar(content: Text('Rutina "${guardada.name}" importada')),
-    );
+    // Lo que se envió frente a lo que devolvió el servidor. Un campo que la
+    // base de datos todavía no tiene no da error: TypeORM ignora en silencio
+    // las propiedades que no conoce, la rutina se guarda "bien" y el dato
+    // desaparece. Sin esta comprobación te enteras a mitad del entrenamiento,
+    // viendo un ejercicio en rampa que no enseña ningún peso.
+    final perdidos = _camposPerdidos(revisada.routine, guardada);
+    if (perdidos.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 10),
+          content: Text(
+            'Rutina importada, pero el servidor no guardó: '
+            '${perdidos.join(', ')}. Falta actualizar el backend.',
+          ),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Rutina "${guardada.name}" importada')),
+      );
+    }
     navigator.pop(true);
+  }
+
+  /// Datos que iban en el JSON y no han vuelto del servidor.
+  ///
+  /// Se comparan CANTIDADES y no ejercicio a ejercicio: basta con saber que se
+  /// mandaron once rampas y han vuelto cero para decir qué falta, y así la
+  /// comprobación no depende de que el orden se conserve.
+  List<String> _camposPerdidos(Routine enviada, Routine guardada) {
+    int rampas(Routine r) => r.days
+        .expand((d) => d.exercises)
+        .where((e) => e.subeEnRampa)
+        .length;
+    int descansos(Routine r) => r.days
+        .expand((d) => d.exercises)
+        .where((e) => (e.restSeconds ?? 0) > 0)
+        .length;
+
+    final faltan = <String>[];
+    if (rampas(enviada) > 0 && rampas(guardada) == 0) {
+      faltan.add('los pesos por serie');
+    }
+    if (descansos(enviada) > 0 && descansos(guardada) == 0) {
+      faltan.add('los descansos');
+    }
+    return faltan;
   }
 
   @override
