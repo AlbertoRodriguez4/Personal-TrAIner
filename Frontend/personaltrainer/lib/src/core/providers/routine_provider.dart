@@ -126,6 +126,29 @@ class RoutineProvider extends ChangeNotifier {
     return saveRoutine(routine.copyWith(days: days).toJson(), id: routine.id);
   }
 
+  /// Quita el ejercicio en [exerciseIndex] del día [dayLabel] y persiste la
+  /// rutina completa. Gemela de `updateExerciseInDay`: mismo merge, misma
+  /// tolerancia a que el día o el índice ya no existan (la rutina pudo cambiar
+  /// entre pintarla y tocar el botón), y también guarda la rutina entera
+  /// porque el backend no tiene un borrado de ejercicio suelto — `PATCH
+  /// /api/routines/:id` reemplaza días y ejercicios de una pieza.
+  Future<Routine?> removeExerciseFromDay(
+    Routine routine,
+    String dayLabel,
+    int exerciseIndex,
+  ) {
+    final dayIndex = routine.days.indexWhere((d) => d.dayOfWeek == dayLabel);
+    if (dayIndex < 0) return Future.value(null);
+    final exercises = List<Exercise>.from(routine.days[dayIndex].exercises);
+    if (exerciseIndex < 0 || exerciseIndex >= exercises.length) {
+      return Future.value(null);
+    }
+    exercises.removeAt(exerciseIndex);
+    final days = List<RoutineDay>.from(routine.days);
+    days[dayIndex] = days[dayIndex].copyWith(exercises: exercises);
+    return saveRoutine(routine.copyWith(days: days).toJson(), id: routine.id);
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

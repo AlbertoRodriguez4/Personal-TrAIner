@@ -5,7 +5,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../data/exercise_catalog_service.dart';
 import '../../models/exercise_catalog.dart';
-import 'exercise_filter_bar.dart';
+import '../../models/exercise_filters.dart';
+import 'exercise_thumbnail.dart';
+import 'filter_chips_row.dart';
 import '../../../../core/theme/design_tokens.dart';
 
 class ExerciseCatalogSheet extends StatefulWidget {
@@ -21,7 +23,13 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
   List<ExerciseGroup> _groups = [];
   List<ExerciseCatalog> _allExercises = const [];
   String _query = '';
-  String _group = kGrupoTodos;
+
+  /// Los mismos tres filtros que el catálogo de la pantalla de alta
+  /// (`quick_add_page.dart`), y con el mismo vocabulario: acotar aquí de otra
+  /// forma haría que el mismo ejercicio apareciera según por dónde se entre.
+  String _region = filtroTodos;
+  String _subgrupo = filtroTodos;
+  String _equipamiento = filtroTodos;
   bool _isLoading = true;
   String? _error;
 
@@ -46,10 +54,123 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
         .map((g) => ExerciseGroup(
               category: g.category,
               exercises:
-                  filtrarEjercicios(g.exercises, query: _query, grupo: _group),
+                  filtrarEjercicios(
+                g.exercises,
+                region: _region,
+                subgrupo: _subgrupo,
+                equipamiento: _equipamiento,
+                consulta: _query,
+              ),
             ))
         .where((g) => g.exercises.isNotEmpty)
         .toList();
+  }
+
+  /// Buscador y las tres filas de chips. Es el mismo bloque que el catálogo de
+  /// `quick_add_page`, con los contadores incluidos: con ~890 ejercicios una
+  /// combinación de filtros vacía es fácil de alcanzar, y el cero se ve antes
+  /// de pulsar.
+  Widget _filtros() {
+    const acento = DesignTokens.activityGym;
+    final regiones = regionesConEjercicios(_allExercises);
+    final subgrupos = _region == filtroTodos
+        ? const <String>[]
+        : subgruposDe(_region, _allExercises);
+    final equipos = equipamientosDe(_allExercises);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _searchController,
+          onChanged: (v) => setState(() => _query = v),
+          decoration: InputDecoration(
+            hintText: 'Busca ejercicio, grupo o equipo…',
+            prefixIcon: const Icon(LucideIcons.search, size: 18),
+            isDense: true,
+            suffixIcon: _query.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(LucideIcons.x, size: 16),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
+                    },
+                  ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        FilterChipsRow(
+          opciones: regiones,
+          seleccionada: _region,
+          onSeleccion: (v) => setState(() {
+            _region = v;
+            // Un subgrupo de la región anterior no existe en la nueva y dejaría
+            // la lista vacía sin que se vea por qué.
+            _subgrupo = filtroTodos;
+          }),
+          acento: acento,
+          contadores: _contar(
+            regiones,
+            valorRegion: (o) => o,
+            valorSubgrupo: (_) => filtroTodos,
+            valorEquipo: (_) => _equipamiento,
+          ),
+        ),
+        if (subgrupos.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          FilterChipsRow(
+            opciones: subgrupos,
+            seleccionada: _subgrupo,
+            onSeleccion: (v) => setState(() => _subgrupo = v),
+            acento: acento,
+            alto: 30,
+            contadores: _contar(
+              subgrupos,
+              valorRegion: (_) => _region,
+              valorSubgrupo: (o) => o,
+              valorEquipo: (_) => _equipamiento,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        FilterChipsRow(
+          opciones: equipos,
+          seleccionada: _equipamiento,
+          onSeleccion: (v) => setState(() => _equipamiento = v),
+          acento: acento,
+          alto: 30,
+          contadores: _contar(
+            equipos,
+            valorRegion: (_) => _region,
+            valorSubgrupo: (_) => _subgrupo,
+            valorEquipo: (o) => o,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Cuántos ejercicios dejaría cada opción de una fila si se pulsara ahora,
+  /// con los otros dos filtros como están. Cada fila se cuenta a sí misma en
+  /// abierto: contarla con su propio filtro puesto marcaría cero en todas las
+  /// opciones menos la activa.
+  Map<String, int> _contar(
+    List<String> opciones, {
+    required String Function(String) valorRegion,
+    required String Function(String) valorSubgrupo,
+    required String Function(String) valorEquipo,
+  }) {
+    return {
+      for (final o in opciones)
+        o: filtrarEjercicios(
+          _allExercises,
+          region: valorRegion(o),
+          subgrupo: valorSubgrupo(o),
+          equipamiento: valorEquipo(o),
+          consulta: _query,
+        ).length,
+    };
   }
 
   Future<void> _fetchCatalog() async {
@@ -115,19 +236,7 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
             if (!_isLoading && _error == null && _allExercises.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: ExerciseFilterBar(
-                  searchController: _searchController,
-                  query: _query,
-                  grupo: _group,
-                  opciones: opcionesGrupo(_allExercises),
-                  onQueryChanged: (v) => setState(() => _query = v),
-                  onGrupoChanged: (g) => setState(() => _group = g),
-                  resultados: _filteredGroups.fold<int>(
-                    0,
-                    (n, g) => n + g.exercises.length,
-                  ),
-                  total: _allExercises.length,
-                ),
+                child: _filtros(),
               ),
             Divider(color: border, height: 1),
             Expanded(
@@ -206,7 +315,9 @@ class _ExerciseCatalogSheetState extends State<ExerciseCatalogSheet> {
                   _searchController.clear();
                   setState(() {
                     _query = '';
-                    _group = kGrupoTodos;
+                    _region = filtroTodos;
+                    _subgrupo = filtroTodos;
+                    _equipamiento = filtroTodos;
                   });
                 },
                 icon: const Icon(LucideIcons.rotateCcw, size: 16),
@@ -288,19 +399,7 @@ class _ExerciseCardTile extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: DesignTokens.activityGym.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    LucideIcons.dumbbell,
-                    color: DesignTokens.activityGym,
-                    size: 24,
-                  ),
-                ),
+                ExerciseThumbnail(url: exercise.imagenUrl, size: 48),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(

@@ -7,7 +7,7 @@ import 'package:personaltrainer/src/features/routine/models/exercise.dart';
 /// equivocado justo cuando vas a cargar la barra.
 void main() {
   Exercise primerEjercicio(String json) =>
-      RoutineTransfer.decode(json).routine!.days.first.exercises.first;
+      RoutineTransfer.decode(json).routine.days.first.exercises.first;
 
   String conEjercicio(String ejercicio) => '''
   {"name":"R","days":[{"day_of_week":"Lunes","exercises":[$ejercicio]}]}''';

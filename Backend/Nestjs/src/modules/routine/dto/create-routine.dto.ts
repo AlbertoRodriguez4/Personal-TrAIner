@@ -43,6 +43,10 @@ export class CreateExerciseDto {
   /// porque el ValidationPipe va sin whitelist, pero eso es un accidente
   /// afortunado y no un contrato: escrito, se ve que forma parte del payload.
   rest_seconds?: number;
+
+  @IsString()
+  @IsOptional()
+  imagen_url?: string;
 }
 
 export class CreateRoutineDayDto {

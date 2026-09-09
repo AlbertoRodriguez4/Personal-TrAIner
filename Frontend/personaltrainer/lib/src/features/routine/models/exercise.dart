@@ -23,6 +23,10 @@ class Exercise {
   /// quedarse corto las dos siguientes-- o el de la última, e ir sobrado al
   /// empezar. Nulo o vacío = el ejercicio no sube, y manda `weight`.
   final List<double>? weights;
+  /// Miniatura del catálogo, copiada al añadir el ejercicio a la rutina. Se
+  /// arrastra con el ejercicio (en vez de volver a buscarla por nombre) porque
+  /// el nombre es editable y puede no existir en el catálogo.
+  final String? imagenUrl;
 
   Exercise({
     this.id,
@@ -34,6 +38,7 @@ class Exercise {
     this.notes,
     this.restSeconds,
     this.weights,
+    this.imagenUrl,
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
@@ -54,6 +59,7 @@ class Exercise {
           ?.map((e) => double.tryParse(e.toString()))
           .whereType<double>()
           .toList(),
+      imagenUrl: json['imagen_url']?.toString(),
     );
   }
 
@@ -68,6 +74,7 @@ class Exercise {
       if (notes != null) 'notes': notes,
       if (restSeconds != null) 'rest_seconds': restSeconds,
       if (weights != null && weights!.isNotEmpty) 'weights': weights,
+      if (imagenUrl != null) 'imagen_url': imagenUrl,
     };
   }
 
@@ -81,6 +88,7 @@ class Exercise {
     String? notes,
     int? restSeconds,
     List<double>? weights,
+    String? imagenUrl,
   }) {
     return Exercise(
       id: id ?? this.id,
@@ -92,6 +100,7 @@ class Exercise {
       notes: notes ?? this.notes,
       restSeconds: restSeconds ?? this.restSeconds,
       weights: weights ?? this.weights,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
     );
   }
 

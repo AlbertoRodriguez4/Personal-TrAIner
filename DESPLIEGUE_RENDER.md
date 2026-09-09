@@ -94,14 +94,45 @@ salvo la IA, que es el fallo más caro de diagnosticar.
 
 ## 3. Migraciones
 
-Una vez desplegado, desde la *Shell* del servicio en Render:
+**En el plan Free no hay Shell.** La pestaña *Shell* del panel es de instancias
+de pago, así que el camino de "entrar al contenedor y ejecutar el comando" no
+existe aquí. Y las migraciones no corren solas: `synchronize` está en `false` a
+propósito (ver `data-source.ts`), porque dejar que TypeORM altere el esquema
+solo, contra la base de datos de verdad, es la forma corta de perder una
+columna.
 
-```bash
-cd /app/api && npm run migration:run:prod
+La vía que funciona en Free es **correrlas desde tu máquina contra Neon**. La
+base de datos es la misma; lo único que cambia es desde dónde se conecta.
+
+Crea `Backend/Nestjs/.env` con las credenciales de Neon (las mismas cinco que
+pusiste en el panel de Render — no hacen falta las claves de IA ni
+`JWT_SECRET`, que el `data-source` no las lee):
+
+```
+DB_HOST=<host de Neon>
+DB_PORT=5432
+DB_USERNAME=<usuario de Neon>
+DB_PASSWORD=<password de Neon>
+DB_DATABASE=<base de datos de Neon>
 ```
 
-Contra `dist/`, no contra `src/`: `ts-node` es devDependency y no está en la
-imagen final.
+No hace falta `DB_SSL`: `db-ssl.ts` activa TLS solo, por el host. Y ese `.env`
+está en `.gitignore` — que no es un detalle menor en este repo, ver el aviso de
+[DESPLIEGUE.md](DESPLIEGUE.md) sobre credenciales.
+
+Y desde `Backend/Nestjs/`:
+
+```bash
+npm run migration:run
+```
+
+Ese script va contra `src/` con `ts-node`, que en local sí está (es
+devDependency). El registro de migraciones vive en la propia base de datos, así
+que lo que se aplique desde aquí queda aplicado para el servicio desplegado.
+
+`migration:run:prod` es el equivalente dentro del contenedor, contra `dist/`,
+para cuando haya Shell (plan de pago) o si algún día el `entrypoint` las lanza
+al arrancar.
 
 ## 4. Comprobar que va
 

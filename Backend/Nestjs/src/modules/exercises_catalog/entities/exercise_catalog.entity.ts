@@ -16,4 +16,11 @@ export class ExerciseCatalog {
 
   @Column({ type: 'text', nullable: true })
   descripcion: string | null;
+
+  /// Imagen del ejercicio en el repo de origen (`free-exercise-db`). Nullable
+  /// porque los ejercicios anteriores a esa importacion no tienen ninguna, y
+  /// tambien es lo que distingue a los importados de los escritos a mano — el
+  /// `down` de la migracion 1787100000000 se apoya en eso.
+  @Column({ type: 'text', nullable: true })
+  imagen_url: string | null;
 }

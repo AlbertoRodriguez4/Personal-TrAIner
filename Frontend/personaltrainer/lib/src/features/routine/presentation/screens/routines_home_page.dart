@@ -131,6 +131,11 @@ class _RoutinesHomePageState extends State<RoutinesHomePage> {
                               ),
                             ),
                           ),
+                          IconButton(
+                            onPressed: () => _openImport(context),
+                            icon: const Icon(LucideIcons.fileInput, size: 20),
+                            tooltip: 'Importar rutina desde JSON',
+                          ),
                           Selector<RoutineProvider, bool>(
                             selector: (_, p) => p.routines.isNotEmpty,
                             builder: (_, hasRoutines, _) {

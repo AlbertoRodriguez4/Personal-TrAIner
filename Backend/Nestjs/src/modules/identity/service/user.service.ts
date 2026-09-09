@@ -2,7 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { OAuth2Client } from 'google-auth-library';
+import { LoginTicket, OAuth2Client } from 'google-auth-library';
 import { User } from '../entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { UserDto } from '../dto/user.dto';
@@ -79,10 +79,21 @@ export class UserService {
     }
 
     async googleLogin(idToken: string) {
-        const ticket = await googleClient.verifyIdToken({
-            idToken,
-            audience: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
-        });
+        // `verifyIdToken` lanza en crudo cuando el token no vale (caducado, de
+        // otro cliente, o directamente basura), y eso salia como un 500
+        // "Internal server error" — indistinguible desde la app de un backend
+        // roto, que es justo lo que parecia. Es un 401.
+        let ticket: LoginTicket;
+        try {
+            ticket = await googleClient.verifyIdToken({
+                idToken,
+                audience: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
+            });
+        } catch (e) {
+            throw new UnauthorizedException(
+                `Token de Google no valido: ${e instanceof Error ? e.message : e}`,
+            );
+        }
         const payload = ticket.getPayload();
         if (!payload) {
             throw new UnauthorizedException('Token de Google inválido');

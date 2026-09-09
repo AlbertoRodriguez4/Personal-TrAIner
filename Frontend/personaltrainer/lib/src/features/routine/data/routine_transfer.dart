@@ -118,6 +118,11 @@ class RoutineTransfer {
                       'rest_seconds': ex.restSeconds,
                     if (ex.weights != null && ex.weights!.isNotEmpty)
                       'weights': ex.weights,
+                    // La miniatura viaja con el ejercicio porque el backend
+                    // solo la deduce del catálogo por nombre: un ejercicio
+                    // propio, o renombrado, se quedaría sin foto al importar.
+                    if (ex.imagenUrl != null && ex.imagenUrl!.isNotEmpty)
+                      'imagen_url': ex.imagenUrl,
                   },
               ],
             },
@@ -392,6 +397,10 @@ class RoutineTransfer {
         'rest',
         'descanso_entre_series',
       ])),
+      imagenUrl: _texto(
+        _campo(crudo, const ['imagen_url', 'imagen', 'image', 'image_url']),
+        500,
+      ),
     );
   }
 

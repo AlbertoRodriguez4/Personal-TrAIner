@@ -4,6 +4,7 @@ class ExerciseCatalog {
   final String grupoMuscular;
   final String? equipamiento;
   final String? descripcion;
+  final String? imagenUrl;
 
   ExerciseCatalog({
     required this.id,
@@ -11,6 +12,7 @@ class ExerciseCatalog {
     required this.grupoMuscular,
     this.equipamiento,
     this.descripcion,
+    this.imagenUrl,
   });
 
   factory ExerciseCatalog.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class ExerciseCatalog {
       grupoMuscular: json['grupo_muscular'] as String,
       equipamiento: json['equipamiento'] as String?,
       descripcion: json['descripcion'] as String?,
+      imagenUrl: json['imagen_url'] as String?,
     );
   }
 
@@ -30,6 +33,7 @@ class ExerciseCatalog {
       'grupo_muscular': grupoMuscular,
       'equipamiento': equipamiento,
       'descripcion': descripcion,
+      'imagen_url': imagenUrl,
     };
   }
 }
