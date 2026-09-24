@@ -8,8 +8,13 @@ async function bootstrap() {
   app.enableCors();
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
-  // Esto hace que los DTOs funcionen automáticamente
-  app.useGlobalPipes(new ValidationPipe());
+  // `whitelist`: lo que el DTO no declare se descarta antes de llegar al
+  // servicio. Sin él, cualquier propiedad extra viajaba hasta `create()` o
+  // `update()` de TypeORM: un `id` en `POST /users/register` sobrescribía la
+  // cuenta de ese usuario y un `password` en `PUT /users/:id` se guardaba en
+  // claro. Por eso cada campo de un DTO de entrada necesita al menos un
+  // decorador (`@IsOptional()` basta), o desaparece sin avisar.
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   
   // El puerto sale del entorno para que el contenedor pueda mandarlo. '0.0.0.0'
   // es obligatorio dentro de Docker: sin él Nest escucha solo en el localhost

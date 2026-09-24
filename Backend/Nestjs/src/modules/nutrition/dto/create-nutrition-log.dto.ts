@@ -1,6 +1,6 @@
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
-const TIPOS_COMIDA = ['desayuno', 'comida', 'snack', 'cena', 'otro'];
+export const TIPOS_COMIDA = ['desayuno', 'comida', 'snack', 'cena', 'otro'];
 
 export class CreateNutritionLogDto {
   @IsUUID()

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Put, Delete, HttpCode, HttpStatus }
 import { UserService } from '../service/user.service';
 import { UserDto } from '../dto/user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
+import { LoginDto } from '../dto/login.dto';
 import { Public } from '../../auth/public.decorator';
 
 @Controller('users')
@@ -21,8 +22,8 @@ export class UserController {
    
     @Public()
     @Post('login')
-    @HttpCode(HttpStatus.OK) 
-    login(@Body() body: { email: string; password: string }) {
+    @HttpCode(HttpStatus.OK)
+    login(@Body() body: LoginDto) {
         return this.userService.login(body.email, body.password);
     }
 

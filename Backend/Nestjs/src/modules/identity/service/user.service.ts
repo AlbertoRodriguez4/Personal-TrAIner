@@ -1,8 +1,13 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { User } from '../entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { UserDto } from '../dto/user.dto';
@@ -36,10 +41,18 @@ export class UserService {
         // Usamos un "salt" de 10 rondas, que es el estándar de seguridad actual
         const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-        // 3. Crear el usuario fusionando los datos del DTO con la contraseña encriptada
+        // 3. Crear el usuario campo a campo. Nada de `...createUserDto`: el
+        // ValidationPipe no descartaba propiedades desconocidas, y un `id` en el
+        // cuerpo hacía que `save()` ACTUALIZASE la fila de ese usuario con el
+        // correo y la contraseña del atacante — secuestro de cuenta sin token.
         const newUser = this.userRepository.create({
-            ...createUserDto,
+            nombre_completo: createUserDto.nombre_completo,
+            email: createUserDto.email,
             password: hashedPassword,
+            fecha_nacimiento: createUserDto.fecha_nacimiento,
+            estatura_base_cm: createUserDto.estatura_base_cm,
+            peso_base_kg: createUserDto.peso_base_kg,
+            mapeo_identidad: createUserDto.mapeo_identidad,
         });
 
         // 4. Guardar en base de datos
@@ -56,13 +69,24 @@ export class UserService {
      * Busca al usuario y compara la contraseña desencriptada.
      */
     async login(email: string, pass: string) {
-        // 1. Buscar al usuario por email
-        const user = await this.userRepository.findOne({ 
-            where: { email } 
-        });
+        // 1. Buscar al usuario por email. El hash hay que pedirlo aparte: la
+        // columna es `select: false` para que no salga en ninguna otra consulta.
+        const user = await this.userRepository
+            .createQueryBuilder('user')
+            .addSelect('user.password')
+            .where('user.email = :email', { email })
+            .getOne();
 
         if (!user) {
             throw new UnauthorizedException('Credenciales incorrectas (Usuario no encontrado).');
+        }
+
+        // Las cuentas creadas con Google no tienen contraseña: sin esto,
+        // `bcrypt.compare` contra `null` lanzaba y el login respondía un 500.
+        if (!user.password) {
+            throw new UnauthorizedException(
+                'Esta cuenta se creó con Google: inicia sesión con Google.',
+            );
         }
 
         // 2. Comparar la contraseña ingresada con la encriptada en la base de datos
@@ -79,13 +103,31 @@ export class UserService {
     }
 
     async googleLogin(idToken: string) {
-        const ticket = await googleClient.verifyIdToken({
-            idToken,
-            audience: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
-        });
-        const payload = ticket.getPayload();
-        if (!payload) {
+        if (typeof idToken !== 'string' || !idToken) {
+            throw new BadRequestException('Falta el idToken de Google.');
+        }
+
+        // Un token caducado o manipulado hace que `verifyIdToken` lance: es un
+        // 401, no el 500 que salía sin capturarlo.
+        let payload: TokenPayload | undefined;
+        try {
+            const ticket = await googleClient.verifyIdToken({
+                idToken,
+                audience: '853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com',
+            });
+            payload = ticket.getPayload();
+        } catch {
             throw new UnauthorizedException('Token de Google inválido');
+        }
+        if (!payload?.email) {
+            throw new UnauthorizedException('Token de Google inválido');
+        }
+
+        // La cuenta se busca por correo, así que el correo tiene que estar
+        // verificado por Google: si no, cualquiera con una cuenta de Google a
+        // nombre de un correo ajeno entraría en la cuenta de su dueño.
+        if (payload.email_verified !== true) {
+            throw new UnauthorizedException('El correo de esta cuenta de Google no está verificado.');
         }
 
         const { email, name, sub } = payload;
@@ -123,26 +165,35 @@ export class UserService {
     }
 
     // --- MÉTODOS CRUD ESTÁNDAR ---
-
-    // Opcional: Puedes mantener este si necesitas crear usuarios internamente sin validaciones de Auth
-    async create(createUserDto: UserDto) {
-        const newUser = this.userRepository.create(createUserDto);
-        return await this.userRepository.save(newUser);
-    }
-
-    async findAll() {
-        return await this.userRepository.find();
-    }
+    //
+    // `create()` y `findAll()` se han retirado junto con `POST /users` y
+    // `GET /users` (ver UserController): el primero guardaba la contraseña sin
+    // hashear, y dejarlos aquí solo invitaba a volver a enchufarlos.
 
     async findOne(id: string) {
         return await this.userRepository.findOneBy({ id });
     }
 
-    /// El DTO se escribe tal cual en la tabla, así que solo puede traer campos
-    /// que sean seguros de guardar sin transformar. `UpdateUserDto` no incluye
-    /// la contraseña justamente por eso.
+    /// Solo los campos editables, copiados uno a uno. `UpdateUserDto` no trae la
+    /// contraseña, pero eso no bastaba: el ValidationPipe no descartaba lo que el
+    /// DTO no declara, así que un `password` en el cuerpo llegaba igual a la
+    /// tabla — en claro, junto a los hashes de bcrypt.
     async update(id: string, updateUserDto: UpdateUserDto) {
-        await this.userRepository.update(id, updateUserDto);
+        const { nombre_completo, fecha_nacimiento, estatura_base_cm, peso_base_kg } =
+            updateUserDto;
+        // Fuera lo que no llega y también `null`: las cuatro columnas son NOT
+        // NULL, y `@IsOptional()` deja pasar un null que acababa en un 500.
+        const cambios = Object.fromEntries(
+            Object.entries({
+                nombre_completo,
+                fecha_nacimiento,
+                estatura_base_cm,
+                peso_base_kg,
+            }).filter(([, valor]) => valor !== undefined && valor !== null),
+        );
+        if (Object.keys(cambios).length) {
+            await this.userRepository.update(id, cambios);
+        }
         return this.findOne(id);
     }
 

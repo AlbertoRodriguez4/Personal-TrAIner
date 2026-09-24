@@ -11,7 +11,10 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true })
+  /// `select: false`: el hash no sale en ninguna consulta salvo que se pida con
+  /// `addSelect` (solo lo hace `login`). Antes `GET /users/:id` y el `PUT` lo
+  /// devolvían dentro del usuario, y la app lo guardaba en su sesión local.
+  @Column({ nullable: true, select: false })
   password: string;
 
   @Column({ type: 'date' })

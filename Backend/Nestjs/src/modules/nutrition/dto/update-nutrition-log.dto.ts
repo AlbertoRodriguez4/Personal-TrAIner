@@ -1,4 +1,5 @@
-import { IsDateString, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { TIPOS_COMIDA } from './create-nutrition-log.dto';
 
 export class UpdateNutritionLogDto {
   @IsUUID()
@@ -36,4 +37,8 @@ export class UpdateNutritionLogDto {
   @IsString()
   @IsOptional()
   nombre_alimento?: string;
+
+  @IsIn(TIPOS_COMIDA)
+  @IsOptional()
+  tipo_comida?: string;
 }
