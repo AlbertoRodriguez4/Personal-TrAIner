@@ -21,16 +21,37 @@ export class TelemetryService {
     const path = this.configService.get<string>('AI_PYTHON_SET_PATH') ?? '/ai/analyze-set';
     const endpoint = new URL(path, baseUrl).toString();
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uid: dto.uid,
-        eid: dto.eid,
-        dur: dto.dur,
-        hr: dto.hr,
-      }),
-    });
+    // Python exige esta clave en todas sus rutas salvo /health (ver
+    // verificar_clave_interna en main.py). Sin ella la respuesta era siempre un
+    // 401 "No autorizado", y el análisis de cada serie en vivo fallaba con 502.
+    const claveInterna = this.configService.get<string>('INTERNAL_API_KEY');
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(claveInterna ? { 'X-Internal-Key': claveInterna } : {}),
+        },
+        body: JSON.stringify({
+          uid: dto.uid,
+          eid: dto.eid,
+          dur: dto.dur,
+          hr: dto.hr,
+        }),
+        // Es una heurística sobre la curva de pulso, sin modelo de por medio: si
+        // tarda más que esto es que algo va mal, y al otro lado hay alguien entre
+        // series esperando el resultado.
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      // Timeout o Python caído: sin esto `fetch` lanzaba y salía un 500 genérico.
+      const detalle = error instanceof Error ? error.message : String(error);
+      throw new BadGatewayException(
+        `No se pudo contactar con el servicio Python de IA: ${detalle}`,
+      );
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
