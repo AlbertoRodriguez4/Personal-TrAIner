@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,68 +12,16 @@ import 'package:provider/provider.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/health_service.dart';
 import '../../../../core/providers/daily_summary_provider.dart';
+import '../../../../core/providers/routine_provider.dart';
 import '../../../../core/theme/design_tokens.dart';
+import '../../../routine/presentation/screens/routine_view_page.dart';
+import '../../data/chat_history_store.dart';
+import '../../models/chat_message.dart';
+import '../../models/chat_mode.dart';
 
-enum ChatMode {
-  creadorRutina(
-    'creador_rutina',
-    'Creador de Rutina',
-    Icons.fitness_center,
-    'Crea y guarda rutinas por ti',
-    [
-      'Créame una rutina de 6 días de hipertrofia',
-      'Rutina rápida de 20 min en casa',
-    ],
-  ),
-  revisorRutina(
-    'revisor_rutina',
-    'Revisor de Rutina',
-    Icons.rate_review_outlined,
-    'Audita y mejora tu plan actual',
-    ['Revisa mi rutina actual', '¿Estoy entrenando poco el tren inferior?'],
-  ),
-  suenoRecuperacion(
-    'sueno_recuperacion',
-    'Sueño y Recuperación',
-    Icons.bedtime_outlined,
-    'Interpreta sueño, VFC y recuperación',
-    ['¿Cómo voy de recuperación hoy?', 'Analiza mi sueño de esta semana'],
-  ),
-  nutricion(
-    'nutricion',
-    'Nutrición',
-    Icons.restaurant_outlined,
-    'Registra comidas y consulta tus macros',
-    ['Plan de comida alta en proteína', '¿Cuánto llevo hoy de proteína?'],
-  ),
-  entrenamiento(
-    'entrenamiento',
-    'Diario de Entrenamiento',
-    Icons.event_available_outlined,
-    'Registra tus sesiones de entrenamiento',
-    ['Registra que entrené fuerza hoy', 'Anota mi sesión de cardio de ayer'],
-  ),
-  analisisFisico(
-    'analisis_fisico',
-    'Análisis Físico',
-    Icons.camera_alt_outlined,
-    'Sube una foto y analiza tu físico',
-    ['Analiza mi progreso físico', 'Interpreta esta foto de mi postura'],
-  );
-
-  const ChatMode(
-    this.value,
-    this.label,
-    this.icon,
-    this.tagline,
-    this.suggestions,
-  );
-  final String value;
-  final String label;
-  final IconData icon;
-  final String tagline;
-  final List<String> suggestions;
-}
+// Quien abre el chat en un módulo concreto (`AiCoachPage(initialMode: …)`)
+// importa esta pantalla; el enum vive ahora junto al enrutador de "Auto".
+export '../../models/chat_mode.dart';
 
 class AiCoachPage extends StatefulWidget {
   const AiCoachPage({super.key, this.embedded = false, this.initialMode});
@@ -93,7 +42,8 @@ class _AiCoachPageState extends State<AiCoachPage>
   final TextEditingController _questionController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _attachedPhotos = [];
-  final List<_ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
+  String? _userId;
   final ScrollController _scrollController = ScrollController();
   late ChatMode _selectedMode;
 
@@ -107,15 +57,81 @@ class _AiCoachPageState extends State<AiCoachPage>
   bool _isGenerating = false;
   late final AnimationController _pulseController;
 
+  /// Módulo que usó "Auto" en el último turno. Si el siguiente mensaje no trae
+  /// señal propia ("sí, aplícalo"), sigue en él: es el que tiene la
+  /// herramienta que el usuario está confirmando.
+  ChatMode? _ultimoModoAuto;
+
+  bool get _enAuto => _highlightedMode == null;
+
   @override
   void initState() {
     super.initState();
     _selectedMode = widget.initialMode ?? ChatMode.creadorRutina;
+    // Entrar desde otra pantalla ya en un módulo (p. ej. análisis físico)
+    // lo deja resaltado: si no, "Auto" podría mandar la pregunta a otro.
+    _highlightedMode = widget.initialMode;
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
     _logHealthData();
+    _cargarHistorial();
+  }
+
+  Future<void> _cargarHistorial() async {
+    final userId = ApiService.getCurrentUserId();
+    if (userId == null) return;
+    _userId = userId;
+    final guardados = await ChatHistoryStore.cargar(userId);
+    if (!mounted || guardados.isEmpty) return;
+    setState(() {
+      // Lo que se haya escrito mientras cargaba va detrás de lo guardado.
+      _messages.insertAll(0, guardados);
+      _ultimoModoAuto = guardados.lastWhere(
+        (m) => !m.isUser && m.modo != null,
+        orElse: () => guardados.last,
+      ).modo;
+    });
+    _scrollToBottom();
+  }
+
+  void _guardarHistorial() {
+    final userId = _userId;
+    if (userId == null) return;
+    // Sin await: guardar no puede frenar la conversación, y si falla solo se
+    // pierde el historial, no el mensaje.
+    ChatHistoryStore.guardar(userId, _messages).catchError((_) {});
+  }
+
+  Future<void> _nuevaConversacion() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Nueva conversación'),
+        content: const Text(
+          'Se borra esta conversación del móvil. Lo que Pulso haya guardado '
+          '(rutinas, comidas, sesiones) se queda donde está.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Empezar de nuevo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    setState(() {
+      _messages.clear();
+      _ultimoModoAuto = null;
+    });
+    final userId = _userId;
+    if (userId != null) await ChatHistoryStore.borrar(userId);
   }
 
   Future<void> _logHealthData() async {
@@ -252,7 +268,8 @@ class _AiCoachPageState extends State<AiCoachPage>
     return 'image/jpeg';
   }
 
-  Future<void> _submitQuestion() async {
+  Future<void> _submitQuestion({ChatMode? modoSugerencia}) async {
+    if (_isGenerating) return;
     final question = _questionController.text.trim();
     if (question.isEmpty && _attachedPhotos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -275,33 +292,63 @@ class _AiCoachPageState extends State<AiCoachPage>
       );
     }
 
-    final List<Map<String, String>> images = [];
-    for (final photo in photosToSend) {
-      final bytes = await photo.readAsBytes();
-      final mimeType = photo.mimeType ?? _mimeFromPath(photo.path);
-      images.add({'data': base64Encode(bytes), 'mimeType': mimeType});
-    }
+    // En "Auto" el módulo sale del propio mensaje (ver ChatModeRouter); si se
+    // eligió uno arriba, manda ese. Una sugerencia de un módulo va a su módulo.
+    final modo = modoSugerencia ??
+        (_enAuto
+            ? ChatModeRouter.detectar(
+                question,
+                conFotos: photosToSend.isNotEmpty,
+                anterior: _ultimoModoAuto,
+              )
+            : _selectedMode);
 
-    final userMsg = _ChatMessage(
+    final userMsg = ChatMessage(
       isUser: true,
       text: question.isNotEmpty ? question : null,
       photos: photosToSend,
       createdAt: DateTime.now(),
+      modo: modo,
+      autoDetectado: _enAuto,
     );
 
     setState(() {
       _messages.add(userMsg);
-      _isGenerating = true;
       _questionController.clear();
       _attachedPhotos.clear();
     });
+    await _enviar(userMsg);
+  }
 
+  /// Reintenta una pregunta que no llegó a contestarse, con su mismo módulo y
+  /// sus mismas fotos, sin tener que volver a escribirla.
+  Future<void> _reintentar(ChatMessage mensaje) async {
+    if (_isGenerating) return;
+    setState(() => mensaje.fallido = false);
+    await _enviar(mensaje);
+  }
+
+  Future<void> _enviar(ChatMessage userMsg) async {
+    final modo = userMsg.modo ?? _selectedMode;
+    setState(() {
+      _selectedMode = modo;
+      if (userMsg.autoDetectado) _ultimoModoAuto = modo;
+      _isGenerating = true;
+    });
+    _guardarHistorial();
     _scrollToBottom();
 
     try {
+      final images = <Map<String, String>>[];
+      for (final photo in userMsg.photos) {
+        final bytes = await photo.readAsBytes();
+        final mimeType = photo.mimeType ?? _mimeFromPath(photo.path);
+        images.add({'data': base64Encode(bytes), 'mimeType': mimeType});
+      }
+
       final userId = ApiService.getCurrentUserId() ?? '';
       Map<String, dynamic>? healthContext;
-      if (_selectedMode == ChatMode.suenoRecuperacion) {
+      if (modo == ChatMode.suenoRecuperacion) {
         final summary = await HealthService.fetchSleepAndReadiness();
         if (summary != null) {
           healthContext = {
@@ -311,15 +358,21 @@ class _AiCoachPageState extends State<AiCoachPage>
         }
       }
 
-      final history = _messages
-          .where((m) => m.text != null && m.text!.isNotEmpty)
+      // Solo los turnos ANTERIORES a esta pregunta, que ya viaja en
+      // `message`: antes iba también como último turno del historial, así que
+      // el modelo la recibía dos veces seguidas y gastaba presupuesto de Groq.
+      // Las que fallaron tampoco: no tuvieron respuesta.
+      final indice = _messages.indexOf(userMsg);
+      final previos = indice < 0 ? _messages : _messages.sublist(0, indice);
+      final history = previos
+          .where((m) => !m.fallido && m.text != null && m.text!.isNotEmpty)
           .map((m) => {'role': m.isUser ? 'user' : 'model', 'text': m.text!})
           .toList();
 
       final response = await ApiService.sendChatMessage(
         userId: userId,
-        mode: _selectedMode.value,
-        message: question,
+        mode: modo.value,
+        message: userMsg.text ?? '',
         history: history,
         healthContext: healthContext,
         images: images,
@@ -329,36 +382,70 @@ class _AiCoachPageState extends State<AiCoachPage>
       final actionsTaken = response['actions_taken'] as List<dynamic>? ?? [];
       setState(() {
         _messages.add(
-          _ChatMessage(
+          ChatMessage(
             isUser: false,
             text: response['reply']?.toString() ?? '',
             actionsTaken: actionsTaken,
             createdAt: DateTime.now(),
+            modo: modo,
+            autoDetectado: userMsg.autoDetectado,
           ),
         );
         _isGenerating = false;
       });
-
-      // registrar_comida guarda la comida en el backend en el mismo turno, pero
-      // DailySummaryProvider (macros del día en Inicio/Nutrición) no se entera solo:
-      // sin este reload, la comida queda guardada pero las barras de macros no se
-      // mueven hasta que el usuario sale y vuelve a entrar a Inicio.
-      if (actionsTaken.any(
-        (a) => a is Map && a['tool'] == 'registrar_comida',
-      )) {
-        if (mounted) {
-          await context.read<DailySummaryProvider>().load();
-        }
-      }
-    } on Exception catch (error) {
+      _guardarHistorial();
+      await _refrescarTrasAcciones(actionsTaken);
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _isGenerating = false);
+      setState(() {
+        _isGenerating = false;
+        userMsg.fallido = true;
+      });
+      _guardarHistorial();
+      // `$error` ya es el motivo legible (ApiException): sin red, IA
+      // saturada, respuesta demasiado grande…
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al consultar la IA: $error')),
+        SnackBar(
+          content: Text('Pulso no pudo responder: $error'),
+          // Con acción, el SnackBar se queda hasta que se pulsa; aquí sobra,
+          // porque el mensaje fallido ya lleva su propio "Reintentar".
+          persist: false,
+          action: SnackBarAction(
+            label: 'Reintentar',
+            onPressed: () => _reintentar(userMsg),
+          ),
+        ),
       );
     }
 
     _scrollToBottom();
+  }
+
+  /// Las acciones de la IA escriben en el backend, pero los providers de la
+  /// app no se enteran solos: sin esto, la comida registrada no movía las
+  /// barras de macros de Inicio, ni la rutina creada aparecía en Entrenar,
+  /// hasta salir y volver a entrar.
+  Future<void> _refrescarTrasAcciones(List<dynamic> actionsTaken) async {
+    final herramientas = {
+      for (final a in actionsTaken)
+        if (a is Map) a['tool'],
+    };
+    if (!mounted) return;
+    if (herramientas.contains('registrar_comida') ||
+        herramientas.contains('registrar_sesion_entrenamiento')) {
+      await context.read<DailySummaryProvider>().load();
+    }
+    if (!mounted) return;
+    if (herramientas.contains('crear_rutina_personalizada') ||
+        herramientas.contains('aplicar_cambios_rutina')) {
+      await context.read<RoutineProvider>().loadRoutines();
+    }
+  }
+
+  void _abrirRutina() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RoutineViewPage()),
+    );
   }
 
   @override
@@ -378,7 +465,15 @@ class _AiCoachPageState extends State<AiCoachPage>
                       highlightedMode: _highlightedMode,
                       onPick: (s) {
                         _questionController.text = s;
-                        _submitQuestion();
+                        // En "Auto" hay una sugerencia por módulo: cada una va
+                        // al suyo, no a lo que adivine el enrutador.
+                        final delModulo = ChatMode.values.where(
+                          (m) => m.suggestions.contains(s),
+                        );
+                        _submitQuestion(
+                          modoSugerencia:
+                              delModulo.isEmpty ? null : delModulo.first,
+                        );
                       },
                       onSelectModule: (mode) => setState(() {
                         _highlightedMode = mode;
@@ -395,9 +490,14 @@ class _AiCoachPageState extends State<AiCoachPage>
                             pulseController: _pulseController,
                           );
                         }
+                        final mensaje = _messages[index];
                         return _ChatBubble(
-                          message: _messages[index],
+                          message: mensaje,
                           onRemovePhoto: null,
+                          onReintentar: _isGenerating
+                              ? null
+                              : () => _reintentar(mensaje),
+                          onAbrirRutina: _abrirRutina,
                         );
                       },
                     ),
@@ -479,13 +579,15 @@ class _AiCoachPageState extends State<AiCoachPage>
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      _highlightedMode?.tagline ??
-                          'En línea · contexto de tus datos',
-                      overflow: TextOverflow.ellipsis,
-                      style: DesignTokens.bodyFont(
-                        fontSize: 11,
-                        color: DesignTokens.mutedForeground(b),
+                    Flexible(
+                      child: Text(
+                        _highlightedMode?.tagline ??
+                            'En línea · contexto de tus datos',
+                        overflow: TextOverflow.ellipsis,
+                        style: DesignTokens.bodyFont(
+                          fontSize: 11,
+                          color: DesignTokens.mutedForeground(b),
+                        ),
                       ),
                     ),
                   ],
@@ -493,6 +595,16 @@ class _AiCoachPageState extends State<AiCoachPage>
               ],
             ),
           ),
+          if (_messages.isNotEmpty)
+            IconButton(
+              tooltip: 'Nueva conversación',
+              onPressed: _isGenerating ? null : _nuevaConversacion,
+              icon: Icon(
+                LucideIcons.messageSquarePlus,
+                size: 18,
+                color: DesignTokens.foreground(b),
+              ),
+            ),
         ],
       ),
     );
@@ -629,12 +741,7 @@ class _AiCoachPageState extends State<AiCoachPage>
                               children: [
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(photo.path),
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                  ),
+                                  child: _foto(photo, 64),
                                 ),
                                 Positioned(
                                   top: 2,
@@ -681,7 +788,9 @@ class _AiCoachPageState extends State<AiCoachPage>
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: Text(
-                                  'Modo: ${_selectedMode.label}',
+                                  _enAuto
+                                      ? 'Modo: Automático · Pulso elige el módulo'
+                                      : 'Modo: ${_selectedMode.label}',
                                   style: DesignTokens.bodyFont(
                                     fontSize: 10.5,
                                     weight: FontWeight.w600,
@@ -700,8 +809,9 @@ class _AiCoachPageState extends State<AiCoachPage>
                                   color: fg,
                                 ),
                                 decoration: InputDecoration(
-                                  hintText:
-                                      'Pregunta a Pulso · ${_selectedMode.label}...',
+                                  hintText: _enAuto
+                                      ? 'Pregunta a Pulso...'
+                                      : 'Pregunta a Pulso · ${_selectedMode.label}...',
                                   hintStyle: DesignTokens.bodyFont(
                                     fontSize: 15,
                                     color: mutedFg,
@@ -967,22 +1077,6 @@ class _ModuleTile extends StatelessWidget {
   }
 }
 
-class _ChatMessage {
-  _ChatMessage({
-    required this.isUser,
-    this.text,
-    this.photos = const [],
-    this.actionsTaken = const [],
-    required this.createdAt,
-  });
-
-  final bool isUser;
-  final String? text;
-  final List<XFile> photos;
-  final List<dynamic> actionsTaken;
-  final DateTime createdAt;
-}
-
 /// Etiqueta del chip por tool que la IA ejecutó. Solo las que escriben algo:
 /// las de lectura se filtran antes de llegar acá.
 const Map<String, String> _actionLabels = {
@@ -994,11 +1088,30 @@ const Map<String, String> _actionLabels = {
   'guardar_analisis_fisico': '✅ Análisis físico guardado',
 };
 
-class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message, this.onRemovePhoto});
+/// Herramientas cuyo chip lleva a ver el resultado.
+const Set<String> _accionesDeRutina = {
+  'crear_rutina_personalizada',
+  'aplicar_cambios_rutina',
+};
 
-  final _ChatMessage message;
+/// La foto de un mensaje. En web el `path` de un XFile es una URL `blob:` que
+/// `File` no sabe abrir.
+Widget _foto(XFile x, double lado) => kIsWeb
+    ? Image.network(x.path, width: lado, height: lado, fit: BoxFit.cover)
+    : Image.file(File(x.path), width: lado, height: lado, fit: BoxFit.cover);
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({
+    required this.message,
+    this.onRemovePhoto,
+    this.onReintentar,
+    this.onAbrirRutina,
+  });
+
+  final ChatMessage message;
   final ValueChanged<int>? onRemovePhoto;
+  final VoidCallback? onReintentar;
+  final VoidCallback? onAbrirRutina;
 
   @override
   Widget build(BuildContext context) {
@@ -1006,6 +1119,7 @@ class _ChatBubble extends StatelessWidget {
     final isUser = message.isUser;
     final text = message.text ?? '';
     final images = message.photos;
+    final mutedFg = DesignTokens.mutedForeground(b);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1025,6 +1139,29 @@ class _ChatBubble extends StatelessWidget {
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: [
+                  // En "Auto", qué módulo contestó: si la respuesta no es la
+                  // esperada, el usuario ve por qué y puede elegir otro arriba.
+                  if (!isUser && message.autoDetectado && message.modo != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'vía ${message.modo!.label}',
+                        style: DesignTokens.bodyFont(
+                          fontSize: 11,
+                          weight: FontWeight.w600,
+                          color: mutedFg,
+                        ),
+                      ),
+                    ),
+                  // Fotos de una conversación guardada: los ficheros eran
+                  // temporales y ya no están, pero queda constancia.
+                  if (images.isEmpty && message.numFotos > 0)
+                    Text(
+                      message.numFotos == 1
+                          ? '📷 1 foto'
+                          : '📷 ${message.numFotos} fotos',
+                      style: DesignTokens.bodyFont(fontSize: 12, color: mutedFg),
+                    ),
                   if (images.isNotEmpty)
                     Wrap(
                       spacing: 6,
@@ -1036,12 +1173,7 @@ class _ChatBubble extends StatelessWidget {
                           .map(
                             (x) => ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.file(
-                                File(x.path),
-                                width: 140,
-                                height: 140,
-                                fit: BoxFit.cover,
-                              ),
+                              child: _foto(x, 140),
                             ),
                           )
                           .toList(),
@@ -1113,20 +1245,74 @@ class _ChatBubble extends StatelessWidget {
                           final label =
                               _actionLabels[tool] ?? '✅ Acción realizada';
                           final success = DesignTokens.success(b);
+                          final estilo = DesignTokens.bodyFont(
+                            fontSize: 12,
+                            color: success,
+                            weight: FontWeight.w600,
+                          );
 
-                          return Chip(
-                            label: Text(
-                              label,
-                              style: DesignTokens.bodyFont(
-                                fontSize: 12,
+                          // "Rutina guardada" lleva a verla: era un callejón
+                          // sin salida justo cuando más apetece mirar el plan.
+                          if (_accionesDeRutina.contains(tool) &&
+                              onAbrirRutina != null) {
+                            return ActionChip(
+                              onPressed: onAbrirRutina,
+                              avatar: Icon(
+                                LucideIcons.arrowRight,
+                                size: 14,
                                 color: success,
-                                weight: FontWeight.w600,
                               ),
-                            ),
-                            backgroundColor: success.withOpacity(0.12),
+                              label: Text('$label · Ver', style: estilo),
+                              backgroundColor: success.withValues(alpha: 0.12),
+                              side: BorderSide.none,
+                            );
+                          }
+                          return Chip(
+                            label: Text(label, style: estilo),
+                            backgroundColor: success.withValues(alpha: 0.12),
                             side: BorderSide.none,
                           );
                         }).toList(),
+                      ),
+                    ),
+                  if (isUser && message.fallido)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: InkWell(
+                        onTap: onReintentar,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.alertCircle,
+                                size: 13,
+                                color: DesignTokens.destructive(b),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'No se envió · ',
+                                style: DesignTokens.bodyFont(
+                                  fontSize: 12,
+                                  color: DesignTokens.destructive(b),
+                                ),
+                              ),
+                              Text(
+                                'Reintentar',
+                                style: DesignTokens.bodyFont(
+                                  fontSize: 12,
+                                  weight: FontWeight.w700,
+                                  color: DesignTokens.destructive(b),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                 ],
