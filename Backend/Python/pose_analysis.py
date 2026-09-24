@@ -14,6 +14,7 @@ Verificado en vivo (import + inferencia real con modelo descargado, sobre una
 foto real de una persona) contra mediapipe==1.0.0 en Windows — ver
 requirements.txt y vision_computacional_postura/SKILL.md sobre el riesgo de
 DLL en otras versiones."""
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -34,6 +35,12 @@ HOMBRO_IZQ, HOMBRO_DER = 11, 12
 CADERA_IZQ, CADERA_DER = 23, 24
 
 _landmarker = None  # singleton perezoso — crear el modelo es costoso, se reusa entre requests
+# Los endpoints de main.py corren en el threadpool de FastAPI, así que dos
+# análisis del físico pueden llegar aquí a la vez. MediaPipe no garantiza que
+# `detect()` sobre el mismo landmarker sea seguro entre hilos, y sin el lock la
+# creación perezosa podría además cargar el modelo dos veces. Solo serializa
+# la detección de pose (milisegundos), no la llamada al modelo que va después.
+_landmarker_lock = threading.Lock()
 
 
 def _asegurar_modelo() -> str:
@@ -76,7 +83,8 @@ def extraer_metricas_pose(imagen_bytes: bytes) -> dict | None:
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
 
-        resultado = _obtener_landmarker().detect(mp_image)
+        with _landmarker_lock:
+            resultado = _obtener_landmarker().detect(mp_image)
     except Exception:
         return None
 

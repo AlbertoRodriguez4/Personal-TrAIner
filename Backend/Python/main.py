@@ -1,3 +1,5 @@
+import hmac
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,7 +34,12 @@ app.add_middleware(
 async def verificar_clave_interna(request: Request, call_next):
     if request.url.path == "/health":
         return await call_next(request)
-    if not INTERNAL_API_KEY or request.headers.get("x-internal-key") != INTERNAL_API_KEY:
+    # compare_digest y no `!=`: la comparación normal corta en el primer
+    # carácter distinto, y el tiempo de respuesta delata cuánto se acertó.
+    recibida = request.headers.get("x-internal-key") or ""
+    if not INTERNAL_API_KEY or not hmac.compare_digest(
+        recibida.encode(), INTERNAL_API_KEY.encode()
+    ):
         return JSONResponse(status_code=401, content={"detail": "No autorizado"})
     return await call_next(request)
 
@@ -61,8 +68,13 @@ from chat_engine import (
 )
 from schemas import ChatRequest, ChatResponse
 
+# `def` y no `async def` en todas las rutas que esperan a algo de fuera (NestJS
+# por `requests`, Gemini, Groq, MediaPipe): ese código es bloqueante, y dentro
+# de un `async def` bloquea el event loop entero — mientras se analizaba un PDF,
+# el servicio no contestaba ni a /health (medido: 9,5 s con NestJS lento). Con
+# `def`, FastAPI las ejecuta en su threadpool y el resto sigue atendiéndose.
 @app.post("/api/ia/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     try:
         result = run_chat(
             user_id=request.user_id,
@@ -151,7 +163,7 @@ def _traducir_error_analisis(exc: Exception) -> HTTPException:
 
 
 @app.post("/api/ia/clinical-report")
-async def analyze_clinical_report(request: ClinicalReportRequest):
+def analyze_clinical_report(request: ClinicalReportRequest):
     try:
         return clinical_analysis.analizar_documento(
             user_id=request.user_id,
@@ -164,7 +176,7 @@ async def analyze_clinical_report(request: ClinicalReportRequest):
 
 
 @app.post("/api/ia/clinical-manual")
-async def analyze_clinical_manual(request: ClinicalManualRequest):
+def analyze_clinical_manual(request: ClinicalManualRequest):
     try:
         return clinical_analysis.analizar_valores_manuales(
             user_id=request.user_id,
@@ -176,7 +188,7 @@ async def analyze_clinical_manual(request: ClinicalManualRequest):
 
 
 @app.post("/api/ia/body-composition")
-async def register_body_composition(request: BodyCompositionRequest):
+def register_body_composition(request: BodyCompositionRequest):
     """Guarda una medición de composición corporal y devuelve su lectura.
 
     No pasa por ningún modelo: son cifras medidas y la clasificación sale de
@@ -206,7 +218,7 @@ async def register_body_composition(request: BodyCompositionRequest):
 
 
 @app.post("/api/ia/physique-analysis")
-async def analyze_physique(request: PhysiqueAnalysisRequest):
+def analyze_physique(request: PhysiqueAnalysisRequest):
     try:
         return physique_analysis.analizar_fotos(
             user_id=request.user_id,
@@ -218,7 +230,7 @@ async def analyze_physique(request: PhysiqueAnalysisRequest):
 
 
 @app.post("/api/ia/nutrition/food-estimate")
-async def estimate_food(request: FoodEstimateRequest):
+def estimate_food(request: FoodEstimateRequest):
     """Registro manual de comida (nutricion, sin foto): busca el alimento por
     nombre y escala sus macros a la cantidad pedida. No guarda nada — igual que
     estimar_comida en el chat, es la app la que llama a /nutrition-logs cuando
