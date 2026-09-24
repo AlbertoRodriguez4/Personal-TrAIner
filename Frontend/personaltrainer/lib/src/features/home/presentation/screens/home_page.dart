@@ -722,7 +722,7 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
       );
     }
 
-    final title = _readiness?.alertTitle ?? 'ESTADO � SIN DATOS HC';
+    final title = _readiness?.alertTitle ?? 'ESTADO · SIN DATOS HC';
     final body =
         _readiness?.alertBody ??
         'Activa Health Connect para ver tu alerta de readiness.';
@@ -1166,12 +1166,17 @@ class _HealthHubGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: _NavTile(tile: tiles[0])),
-            const SizedBox(width: 12),
-            Expanded(child: _NavTile(tile: tiles[1])),
-          ],
+        // IntrinsicHeight + stretch: las dos baldosas de la fila miden lo
+        // mismo aunque el texto de una ocupe más líneas.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _NavTile(tile: tiles[0], compacto: true)),
+              const SizedBox(width: 12),
+              Expanded(child: _NavTile(tile: tiles[1], compacto: true)),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _NavTile(tile: tiles[2]),
@@ -1181,8 +1186,13 @@ class _HealthHubGrid extends StatelessWidget {
 }
 
 class _NavTile extends StatelessWidget {
-  const _NavTile({required this.tile});
+  const _NavTile({required this.tile, this.compacto = false});
   final ({IconData icon, String title, String sub, VoidCallback onTap}) tile;
+
+  /// Para las rejillas de dos columnas: icono arriba y texto debajo. En fila,
+  /// a media anchura al título le quedaban ~80 px, y una palabra larga que no
+  /// cabe entera se parte por cualquier letra ("Recuperació" / "n").
+  final bool compacto;
 
   @override
   Widget build(BuildContext context) {
@@ -1190,6 +1200,36 @@ class _NavTile extends StatelessWidget {
     final card = DesignTokens.card(b);
     final fg = DesignTokens.foreground(b);
     final mutedFg = DesignTokens.mutedForeground(b);
+    final icono = Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: DesignTokens.aiGradient,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(tile.icon, size: 18, color: Colors.white),
+    );
+    final textos = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          tile.title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: fg,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          tile.sub,
+          style: TextStyle(fontSize: 11, color: mutedFg),
+        ),
+      ],
+    );
+    final flecha = Icon(LucideIcons.chevronRight, size: 18, color: mutedFg);
     return Material(
       color: card,
       borderRadius: BorderRadius.circular(20),
@@ -1199,43 +1239,24 @@ class _NavTile extends StatelessWidget {
         onTap: tile.onTap,
         child: Container(
           padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(tile.icon, size: 18, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+          child: compacto
+              ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      tile.title,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: fg,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      tile.sub,
-                      style: TextStyle(fontSize: 11, color: mutedFg),
-                    ),
+                    Row(children: [icono, const Spacer(), flecha]),
+                    const SizedBox(height: 10),
+                    textos,
+                  ],
+                )
+              : Row(
+                  children: [
+                    icono,
+                    const SizedBox(width: 12),
+                    Expanded(child: textos),
+                    flecha,
                   ],
                 ),
-              ),
-              Icon(LucideIcons.chevronRight, size: 18, color: mutedFg),
-            ],
-          ),
         ),
       ),
     );
@@ -1774,39 +1795,44 @@ class _RoutineShortcuts extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _NavTile(
-                tile: (
-                  icon: LucideIcons.dumbbell,
-                  title: 'Constructor',
-                  sub: 'Crea tu rutina semanal',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => RoutineBuilderPage(
-                        onSave: () =>
-                            context.read<RoutineProvider>().loadRoutines(),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _NavTile(
+                  compacto: true,
+                  tile: (
+                    icon: LucideIcons.dumbbell,
+                    title: 'Constructor',
+                    sub: 'Crea tu rutina semanal',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => RoutineBuilderPage(
+                          onSave: () =>
+                              context.read<RoutineProvider>().loadRoutines(),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _NavTile(
-                tile: (
-                  icon: LucideIcons.zap,
-                  title: 'Añadir rápido',
-                  sub: 'Catálogo con búsqueda',
-                  // Abre la alta rápida sobre el día de hoy. Antes caía en la
-                  // lista de rutinas, que no tiene nada que ver con "añadir".
-                  onTap: () => _openQuickAddForToday(context),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _NavTile(
+                  compacto: true,
+                  tile: (
+                    icon: LucideIcons.zap,
+                    title: 'Añadir rápido',
+                    sub: 'Catálogo con búsqueda',
+                    // Abre la alta rápida sobre el día de hoy. Antes caía en la
+                    // lista de rutinas, que no tiene nada que ver con "añadir".
+                    onTap: () => _openQuickAddForToday(context),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _NavTile(
@@ -1826,26 +1852,44 @@ class _RoutineShortcuts extends StatelessWidget {
   }
 }
 
+/// Resumen del día en la voz de Pulso. Solo dice lo que el resumen diario
+/// sabe de verdad: antes afirmaba "He analizado tu última sesión y ajustado
+/// tus métricas" (o "He ajustado tus métricas basándome en tu perfil" a quien
+/// acababa de registrarse) sin que nada se hubiera analizado ni ajustado, y
+/// lo firmaba como "MEMORIA CONTEXTUAL · RAG".
 class _RagBubble extends StatelessWidget {
+  /// "hoy", "ayer", "hace 3 días"… para la última sesión.
+  static String _haceCuanto(DateTime fecha) {
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    final dias = hoy.difference(DateUtils.dateOnly(fecha.toLocal())).inDays;
+    if (dias <= 0) return 'hoy';
+    if (dias == 1) return 'ayer';
+    return 'hace $dias días';
+  }
+
   @override
   Widget build(BuildContext context) {
     final summaryProv = context.watch<DailySummaryProvider>();
     final summary = summaryProv.summary;
 
     String textPart1 =
-        'Hola, he analizado tus métricas y estoy listo para guiar tu entrenamiento y nutrición de hoy.';
+        'Pregúntame por tu entreno, tu sueño o tus comidas: leo tus datos reales antes de responder.';
     String textPart2 = '';
 
     if (summary != null) {
-      if (summary.ultimaSesion != null) {
+      final sesion = summary.ultimaSesion;
+      if (sesion != null) {
         textPart1 =
-            'He analizado tu última sesión de ${summary.ultimaSesion!.tipoEntrenamiento.toLowerCase()} y ajustado tus métricas. ';
+            'Tu última sesión fue de ${sesion.tipoEntrenamiento.toLowerCase()}, ${_haceCuanto(sesion.fechaProgramada)}. ';
       } else {
-        textPart1 = 'He ajustado tus métricas basándome en tu perfil. ';
+        textPart1 = 'Todavía no hay sesiones registradas. ';
       }
-      if (summary.consumidoHoy.kcal > 0) {
-        textPart2 =
-            'Llevas ${summary.consumidoHoy.kcal.toInt()} kcal registradas hoy.';
+      final consumido = summary.consumidoHoy.kcal.round();
+      final objetivo = summary.objetivos.kcal.round();
+      if (consumido > 0) {
+        textPart2 = objetivo > 0
+            ? 'Llevas $consumido de $objetivo kcal hoy.'
+            : 'Llevas $consumido kcal registradas hoy.';
       } else {
         textPart2 = 'Aún no has registrado comidas hoy.';
       }
@@ -1889,7 +1933,7 @@ class _RagBubble extends StatelessWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  'MEMORIA CONTEXTUAL · RAG',
+                  'PULSO · TU DÍA',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -2934,7 +2978,7 @@ class _CameraViewer extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Visión MLLM · sin inputs manuales',
+                    'La IA estima calorías y macros por ti',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.6),

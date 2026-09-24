@@ -12,6 +12,14 @@ const _waterGradient = LinearGradient(
 );
 const _waterAccent = Color(0xFF0EA5E9); // sky-500
 
+/// Litros para enseñar: hasta dos decimales sin ceros de relleno y con la coma
+/// decimal del español — "0" y no "0.00", "1,5" y no "1.50" — igual en el
+/// consumido que en el objetivo que va al lado.
+String _litros(num ml) => (ml / 1000)
+    .toStringAsFixed(2)
+    .replaceFirst(RegExp(r'\.?0+$'), '')
+    .replaceAll('.', ',');
+
 /// Tarjeta de hidratación completa (pantalla de Nutrición): total del día,
 /// barra de progreso, los vasos del objetivo uno a uno, y los controles.
 class HydrationCard extends StatelessWidget {
@@ -21,8 +29,8 @@ class HydrationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     final intake = context.watch<IntakeProvider>();
-    final litres = (intake.waterMl / 1000).toStringAsFixed(2);
-    final goalLitres = (IntakeProvider.goalMl / 1000).toStringAsFixed(1);
+    final litres = _litros(intake.waterMl);
+    final goalLitres = _litros(IntakeProvider.goalMl);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -292,8 +300,8 @@ class HydrationMiniCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     final intake = context.watch<IntakeProvider>();
-    final litres = (intake.waterMl / 1000).toStringAsFixed(2);
-    final goalLitres = (IntakeProvider.goalMl / 1000).toStringAsFixed(1);
+    final litres = _litros(intake.waterMl);
+    final goalLitres = _litros(IntakeProvider.goalMl);
 
     return Container(
       padding: const EdgeInsets.all(14),
