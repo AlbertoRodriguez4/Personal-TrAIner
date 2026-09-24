@@ -260,6 +260,21 @@ class ApiService {
     }
   }
 
+  /// Cambia la contraseña de la cuenta con sesión. Lanza [ApiException] con el
+  /// motivo (contraseña actual incorrecta, cuenta de Google…) para enseñarlo
+  /// tal cual.
+  static Future<void> changePassword({
+    required String userId,
+    required String actual,
+    required String nueva,
+  }) async {
+    await _request(
+      method: 'PUT',
+      path: '/users/$userId/password',
+      body: {'actual': actual, 'nueva': nueva},
+    );
+  }
+
   static Future<void> logout() async {
     _authToken = null;
     _currentUser = null;

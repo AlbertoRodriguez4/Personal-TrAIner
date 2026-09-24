@@ -2,6 +2,7 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,7 @@ import { User } from '../entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { UserDto } from '../dto/user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 
 const googleClient = new OAuth2Client('853300599803-1tatkkepfmnkfavg8dqjk0b3dg648glt.apps.googleusercontent.com');
 
@@ -195,6 +197,38 @@ export class UserService {
             await this.userRepository.update(id, cambios);
         }
         return this.findOne(id);
+    }
+
+    /// Los fallos son 400 y no 401 a propósito: la app trata cualquier 401 de
+    /// una ruta con sesión como token caducado y manda al usuario al login, y
+    /// equivocarse al teclear la contraseña actual no debería echarle.
+    async changePassword(id: string, dto: ChangePasswordDto) {
+        const user = await this.userRepository
+            .createQueryBuilder('user')
+            .addSelect('user.password')
+            .where('user.id = :id', { id })
+            .getOne();
+        if (!user) {
+            throw new NotFoundException('Usuario no encontrado.');
+        }
+        // Cuenta creada con Google: no tiene contraseña que comprobar, y dejar
+        // poner una solo con el token daría una credencial nueva a quien lo
+        // hubiera robado.
+        if (!user.password) {
+            throw new BadRequestException(
+                'Esta cuenta entra con Google y no usa contraseña.',
+            );
+        }
+        if (!(await bcrypt.compare(dto.actual, user.password))) {
+            throw new BadRequestException('La contraseña actual no es correcta.');
+        }
+        if (dto.actual === dto.nueva) {
+            throw new BadRequestException('La nueva contraseña es igual a la actual.');
+        }
+        await this.userRepository.update(id, {
+            password: await bcrypt.hash(dto.nueva, 10),
+        });
+        return { message: 'Contraseña actualizada.' };
     }
 
     async remove(id: string) {

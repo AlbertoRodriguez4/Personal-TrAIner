@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseUUIDPipe, Put, Delete, HttpCode, HttpStatus } from '@nestjs/common';
 import { UserService } from '../service/user.service';
 import { UserDto } from '../dto/user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { LoginDto } from '../dto/login.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { Public } from '../../auth/public.decorator';
 
 @Controller('users')
@@ -49,6 +50,16 @@ export class UserController {
     @Put(':id')
     update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
         return this.userService.update(id, updateUserDto);
+    }
+
+    /// La guarda ya comprueba que `:id` es el usuario del token (lo saca de la
+    /// ruta `/users/<uuid>/…`), así que solo se puede cambiar la propia.
+    @Put(':id/password')
+    changePassword(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: ChangePasswordDto,
+    ) {
+        return this.userService.changePassword(id, dto);
     }
 
     @Delete(':id')

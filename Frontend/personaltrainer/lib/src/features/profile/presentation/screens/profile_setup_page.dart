@@ -6,6 +6,7 @@ import '../../../../core/ui/analysis_report.dart';
 import '../../../../core/ui/round_icon_button.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/notification_service.dart';
+import '../widgets/change_password_sheet.dart';
 import '../widgets/profile_fields.dart';
 
 /// Configurador de perfil. Se entra tocando la foto de perfil en Inicio.
@@ -373,6 +374,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   /* ─────────────── Identidad ─────────────── */
 
+  Future<void> _cambiarContrasena() async {
+    final cambiada = await showChangePasswordSheet(context);
+    if (!cambiada || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Contraseña actualizada.')),
+    );
+  }
+
   Widget _seccionIdentidad(Brightness b) {
     return ProfileSection(
       icon: LucideIcons.user,
@@ -387,12 +396,30 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           readOnly: true,
           hint: 'correo@email.com',
         ),
+        // Antes ponía "Se gestiona en ajustes de cuenta", pero esa pantalla no
+        // existe: lo que sí se puede gestionar desde aquí es la contraseña.
         Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            'Se gestiona en ajustes de cuenta',
-            style: DesignTokens.bodyFont(
-                fontSize: 10.5, color: DesignTokens.mutedForeground(b)),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'El correo no se puede cambiar',
+                  style: DesignTokens.bodyFont(
+                      fontSize: 10.5, color: DesignTokens.mutedForeground(b)),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _cambiarContrasena,
+                icon: const Icon(LucideIcons.keyRound, size: 14),
+                label: const Text('Cambiar contraseña'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: DesignTokens.bodyFont(
+                      fontSize: 12, weight: FontWeight.w600),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
