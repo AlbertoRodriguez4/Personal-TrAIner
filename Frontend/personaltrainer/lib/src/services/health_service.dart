@@ -358,7 +358,7 @@ class HealthService {
     // 2. Permiso de historial
     try {
       final h = await _health.isHealthDataHistoryAuthorized();
-      result['history_auth'] = h?.toString() ?? 'null';
+      result['history_auth'] = h.toString();
     } catch (e) {
       result['history_auth'] = 'no disponible';
     }

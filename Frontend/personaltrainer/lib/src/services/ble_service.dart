@@ -471,7 +471,7 @@ class BleService {
       );
     } catch (e) {
       debugPrint('[BLE] Error iniciando escaneo amplio: $e');
-      sub?.cancel();
+      sub.cancel();
       return found.values.toList();
     }
 

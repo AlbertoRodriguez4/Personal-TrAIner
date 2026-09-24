@@ -13,7 +13,6 @@ class AppTheme {
     final background = DesignTokens.background(b);
     final foreground = DesignTokens.foreground(b);
     final card = DesignTokens.card(b);
-    final muted = DesignTokens.muted(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final border = DesignTokens.border(b);
     final ring = DesignTokens.ring(b);

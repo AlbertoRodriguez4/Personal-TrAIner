@@ -11,7 +11,6 @@ class AuthPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
     final bg = DesignTokens.background(b);
-    final surface2 = DesignTokens.surface2of(b);
 
     return Scaffold(
       backgroundColor: bg,

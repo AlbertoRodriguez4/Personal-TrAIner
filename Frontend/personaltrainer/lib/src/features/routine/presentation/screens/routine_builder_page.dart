@@ -255,7 +255,9 @@ class _RoutineBuilderPageState extends State<RoutineBuilderPage> {
         builder: (_) => const ExerciseCatalogSheet(),
       );
 
-      if (catalogItem == null) return;
+      // El segundo sheet usa `context`: si la pantalla se cerró mientras el
+      // catálogo estaba abierto, abrirlo lanzaría sobre un contexto muerto.
+      if (catalogItem == null || !mounted) return;
 
       templateExercise = Exercise(
         name: catalogItem.nombre,
@@ -665,9 +667,7 @@ class _DayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = Theme.of(context).brightness;
-    final bg = DesignTokens.background(b);
     final card = DesignTokens.card(b);
-    final fg = DesignTokens.foreground(b);
     final border = DesignTokens.border(b);
     final mutedFg = DesignTokens.mutedForeground(b);
     final surface1 = DesignTokens.surface1(b);
