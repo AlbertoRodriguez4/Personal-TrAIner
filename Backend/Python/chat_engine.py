@@ -149,6 +149,8 @@ def run_chat(
     if mode not in TOOLS_BY_MODE:
         raise ValueError(f"Modo desconocido: {mode}")
 
+    history = _sin_pregunta_actual(history, message)
+
     # El perfil clínico/físico se lee una vez por turno y se antepone al system
     # prompt de cualquier modo: ver ai_profile para por qué no es una tool.
     perfil_prompt, _ = ai_profile.contexto_para_prompt(user_id)
@@ -265,6 +267,24 @@ def _run_chat_gemini(
         texto = ""
 
     return {"reply": texto or LIMITE_PASOS_MSG, "actions_taken": actions_taken}
+
+
+def _sin_pregunta_actual(history: list[dict], message: str) -> list[dict]:
+    """El historial sin la pregunta de este turno, si viene repetida al final.
+
+    `history` son los turnos previos, y la pregunta viaja aparte en `message`.
+    Pero la app, hasta que se corrigió, metía también la pregunta actual como
+    último turno del historial: el modelo la recibía dos veces seguidas, y
+    ocupaba uno de los MAX_TURNOS_HISTORIAL y tokens del presupuesto de Groq.
+    Se quita aquí porque las APK ya instaladas seguirán mandándola así."""
+    if history:
+        ultimo = history[-1]
+        if (
+            ultimo.get("role") == "user"
+            and (ultimo.get("text") or "").strip() == (message or "").strip()
+        ):
+            return history[:-1]
+    return history
 
 
 def _history_to_groq_messages(history: list[dict]) -> list[dict]:
