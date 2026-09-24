@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../theme/design_tokens.dart';
+import '../../services/api_exception.dart';
 
 /// Piezas compartidas por las dos pantallas que muestran un informe de la IA
 /// (Clínica y Físico): las dos renderizan el mismo tipo de respuesta — bloques
@@ -377,6 +378,8 @@ String readableDate(dynamic iso) {
 /// Mensaje de error listo para enseñar. El timeout es el caso frecuente y el
 /// texto crudo de la excepción no le dice nada al usuario.
 String analysisErrorMessage(Object e) {
+  // Lo que viene del backend ya trae su texto final (ver ApiException).
+  if (e is ApiException) return e.mensaje;
   final texto = e.toString().replaceFirst('Exception: ', '');
   if (texto.contains('TimeoutException')) {
     return 'El análisis está tardando más de lo normal. Vuelve a intentarlo en un momento.';

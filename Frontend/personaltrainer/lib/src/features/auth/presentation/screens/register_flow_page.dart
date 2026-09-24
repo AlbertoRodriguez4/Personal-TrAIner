@@ -235,19 +235,12 @@ class _RegisterFlowPageState extends State<RegisterFlowPage> {
         peso: _num(_peso.text)!,
       );
       if (!mounted) return;
+      // `register` ya deja la sesión abierta (la respuesta trae el token), y
+      // si falla lanza el motivo real — correo ya registrado, sin red… — que
+      // el `catch` de abajo enseña tal cual en vez de adivinarlo.
       if (alta == null) {
         setState(() => _error =
-            'No se pudo crear la cuenta. Puede que ese correo ya esté '
-            'registrado: prueba a iniciar sesión.');
-        return;
-      }
-
-      final sesion = await ApiService.login(email, _password.text);
-      if (!mounted) return;
-      if (sesion == null) {
-        setState(() => _error =
-            'La cuenta se creó pero no se pudo iniciar sesión. Entra desde la '
-            'pantalla de acceso.');
+            'No se pudo crear la cuenta: el servidor no devolvió el usuario.');
         return;
       }
 

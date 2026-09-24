@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'api_exception.dart';
+
+export 'api_exception.dart';
 
 class ApiService {
   /// Backend desplegado. Es el valor por defecto de las compilaciones en
@@ -34,6 +39,20 @@ class ApiService {
 
   static String? get authToken => _authToken;
   static Map<String, dynamic>? get currentUser => _currentUser;
+
+  /// Lo registra la app para volver al login cuando el backend rechaza el
+  /// token (caducó a los 30 días, o cambió `JWT_SECRET`). Sin esto la app se
+  /// quedaba dentro con la sesión muerta: cada pantalla fallaba con un 401 y
+  /// la única salida era encontrar el botón de cerrar sesión.
+  static void Function()? onSesionCaducada;
+
+  /// Rutas que responden 401 por credenciales incorrectas, no por sesión
+  /// caducada: un 401 aquí no debe echar a nadie.
+  static const _rutasDeAcceso = {
+    '/users/login',
+    '/users/register',
+    '/users/google-login',
+  };
 
   static Uri _buildUri(String path, [Map<String, String>? queryParams]) {
     return Uri.parse('$baseUrl$path').replace(queryParameters: queryParams);
@@ -110,94 +129,122 @@ class ApiService {
     Future<http.Response> conTimeout(Future<http.Response> peticion) =>
         peticion.timeout(timeout ?? _timeoutPorDefecto);
 
-    switch (method) {
-      case 'GET':
-        response = await conTimeout(http.get(uri, headers: _jsonHeaders));
-        break;
-      case 'POST':
-        response = await conTimeout(
-          http.post(
-            uri,
-            headers: _jsonHeaders,
-            body: body == null ? null : jsonEncode(body),
-          ),
-        );
-        break;
-      case 'PUT':
-        response = await conTimeout(
-          http.put(
-            uri,
-            headers: _jsonHeaders,
-            body: body == null ? null : jsonEncode(body),
-          ),
-        );
-        break;
-      case 'PATCH':
-        response = await conTimeout(
-          http.patch(
-            uri,
-            headers: _jsonHeaders,
-            body: body == null ? null : jsonEncode(body),
-          ),
-        );
-        break;
-      case 'DELETE':
-        response = await conTimeout(http.delete(uri, headers: _jsonHeaders));
-        break;
-      default:
-        throw ArgumentError('Metodo HTTP no soportado: $method');
+    // Los fallos de red se traducen aquí, una vez, a un mensaje que se puede
+    // enseñar tal cual: cada pantalla los pinta con `$e`, y antes eso volcaba
+    // "TimeoutException after 0:01:00.000000: Future not completed".
+    try {
+      switch (method) {
+        case 'GET':
+          response = await conTimeout(http.get(uri, headers: _jsonHeaders));
+          break;
+        case 'POST':
+          response = await conTimeout(
+            http.post(
+              uri,
+              headers: _jsonHeaders,
+              body: body == null ? null : jsonEncode(body),
+            ),
+          );
+          break;
+        case 'PUT':
+          response = await conTimeout(
+            http.put(
+              uri,
+              headers: _jsonHeaders,
+              body: body == null ? null : jsonEncode(body),
+            ),
+          );
+          break;
+        case 'PATCH':
+          response = await conTimeout(
+            http.patch(
+              uri,
+              headers: _jsonHeaders,
+              body: body == null ? null : jsonEncode(body),
+            ),
+          );
+          break;
+        case 'DELETE':
+          response = await conTimeout(http.delete(uri, headers: _jsonHeaders));
+          break;
+        default:
+          throw ArgumentError('Metodo HTTP no soportado: $method');
+      }
+    } on TimeoutException {
+      throw ApiException.timeout;
+    } on http.ClientException {
+      // `IOClient` envuelve aquí también los `SocketException` (sin red, DNS,
+      // conexión rechazada), y `BrowserClient` los errores de XHR.
+      throw ApiException.sinRed;
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeBody(response);
     }
 
-    throw Exception(_extractErrorMessage(response));
+    if (response.statusCode == 401 &&
+        _authToken != null &&
+        !_rutasDeAcceso.contains(path)) {
+      await _cerrarSesionCaducada();
+      throw ApiException.caducada;
+    }
+
+    throw ApiException(
+      _extractErrorMessage(response),
+      statusCode: response.statusCode,
+    );
   }
 
-  static Future<Map<String, dynamic>?> googleLogin(String idToken) async {
-    try {
-      final decoded = await _request(
-        method: 'POST',
-        path: '/users/google-login',
-        body: {'idToken': idToken},
-      );
-      final userData = _toMap(decoded);
-      if (userData == null) {
-        return null;
-      }
-      _currentUser = userData;
-      _authToken = userData['access_token']?.toString();
-      await _persistSession();
-      return userData;
-    } catch (_) {
+  /// Borra la sesión y avisa a la app una sola vez: si varias peticiones
+  /// vuelven con 401 a la vez, solo la primera encuentra el token puesto.
+  static Future<void> _cerrarSesionCaducada() async {
+    if (_authToken == null) return;
+    await logout();
+    onSesionCaducada?.call();
+  }
+
+  /// Guarda la sesión que devuelven login, registro y Google. Devuelve null si
+  /// la respuesta no trae usuario.
+  static Future<Map<String, dynamic>?> _adoptarSesion(dynamic decoded) async {
+    final userData = _toMap(decoded);
+    if (userData == null) {
       return null;
     }
+    _currentUser = userData;
+    _authToken = userData['access_token']?.toString();
+    await _persistSession();
+    return userData;
   }
 
+  /// Lanza [ApiException] con el motivo real: contraseña incorrecta, cuenta de
+  /// Google, servidor arrancando o sin red. Antes cualquier fallo devolvía null
+  /// y la pantalla decía "Credenciales incorrectas" aunque el problema fuera
+  /// que el backend estaba dormido.
+  static Future<Map<String, dynamic>?> googleLogin(String idToken) async {
+    final decoded = await _request(
+      method: 'POST',
+      path: '/users/google-login',
+      body: {'idToken': idToken},
+    );
+    return _adoptarSesion(decoded);
+  }
+
+  /// Ver [googleLogin]: lanza [ApiException] con el motivo real.
   static Future<Map<String, dynamic>?> login(
     String email,
     String password,
   ) async {
-    try {
-      final decoded = await _request(
-        method: 'POST',
-        path: '/users/login',
-        body: {'email': email, 'password': password},
-      );
-      final userData = _toMap(decoded);
-      if (userData == null) {
-        return null;
-      }
-      _currentUser = userData;
-      _authToken = userData['access_token']?.toString();
-      await _persistSession();
-      return userData;
-    } catch (_) {
-      return null;
-    }
+    final decoded = await _request(
+      method: 'POST',
+      path: '/users/login',
+      body: {'email': email, 'password': password},
+    );
+    return _adoptarSesion(decoded);
   }
 
+  /// Crea la cuenta y deja la sesión abierta: la respuesta del registro ya
+  /// trae el token, así que no hace falta un login aparte. Lanza
+  /// [ApiException] con el motivo real (correo ya registrado, sin red…).
   static Future<Map<String, dynamic>?> register({
     required String nombreCompleto,
     required String email,
@@ -206,23 +253,19 @@ class ApiService {
     required double estatura,
     required double peso,
   }) async {
-    try {
-      final decoded = await _request(
-        method: 'POST',
-        path: '/users/register',
-        body: {
-          'nombre_completo': nombreCompleto,
-          'email': email,
-          'password': password,
-          'fecha_nacimiento': fechaNacimiento,
-          'estatura_base_cm': estatura,
-          'peso_base_kg': peso,
-        },
-      );
-      return _toMap(decoded);
-    } catch (_) {
-      return null;
-    }
+    final decoded = await _request(
+      method: 'POST',
+      path: '/users/register',
+      body: {
+        'nombre_completo': nombreCompleto,
+        'email': email,
+        'password': password,
+        'fecha_nacimiento': fechaNacimiento,
+        'estatura_base_cm': estatura,
+        'peso_base_kg': peso,
+      },
+    );
+    return _adoptarSesion(decoded);
   }
 
   static Future<Map<String, dynamic>?> getUser(String userId) async {
@@ -296,23 +339,56 @@ class ApiService {
     try {
       final decoded = jsonDecode(raw);
       final userData = _toMap(decoded);
-      if (userData == null) {
+      final token = userData?['access_token']?.toString();
+      // Sin token, o con uno ya caducado, no hay sesión que restaurar: mejor
+      // abrir directamente el login que enseñar Inicio y echar al usuario en
+      // cuanto la primera petición vuelva con 401.
+      if (userData == null || token == null || tokenCaducado(token)) {
         await prefs.remove(_sessionKey);
         return;
       }
       _currentUser = userData;
-      _authToken = userData['access_token']?.toString();
+      _authToken = token;
     } catch (_) {
       await prefs.remove(_sessionKey);
     }
   }
 
+  /// Si el `exp` del JWT ya pasó. Un token que no se puede leer cuenta como
+  /// vigente: que decida el backend, que es quien lo valida de verdad.
+  static bool tokenCaducado(String token, {DateTime? ahora}) {
+    try {
+      final partes = token.split('.');
+      if (partes.length != 3) return false;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(partes[1]))),
+      );
+      final exp = payload is Map ? payload['exp'] : null;
+      if (exp is! num) return false;
+      final caduca = DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+      return !(ahora ?? DateTime.now()).isBefore(caduca);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Guarda el usuario junto con el token. El token va aparte a propósito:
+  /// `getUser`/`updateUser` sustituyen `_currentUser` por la respuesta de
+  /// `/users/:id`, que no lo trae, y guardarla tal cual dejaba la sesión sin
+  /// token — al abrir la app la siguiente vez, de vuelta al login justo
+  /// después de editar el perfil.
   static Future<void> _persistSession() async {
     if (_currentUser == null) {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_sessionKey, jsonEncode(_currentUser));
+    await prefs.setString(
+      _sessionKey,
+      jsonEncode({
+        ..._currentUser!,
+        if (_authToken != null) 'access_token': _authToken,
+      }),
+    );
   }
 
   static String? getCurrentUserName() {

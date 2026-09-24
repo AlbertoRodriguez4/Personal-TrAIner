@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../services/api_service.dart';
 import '../../../../core/theme/design_tokens.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -48,13 +47,15 @@ class _AuthCardState extends State<AuthCard> {
       );
       if (!mounted) return;
       if (userData == null) {
-        _showMessage('Credenciales incorrectas.');
+        _showMessage('El servidor respondió sin datos de usuario.');
       } else {
         await _checkProfileAndProceed();
       }
     } catch (e) {
+      // `ApiService.login` ya distingue contraseña incorrecta, cuenta de
+      // Google, servidor arrancando y falta de red: el mensaje va tal cual.
       if (!mounted) return;
-      _showMessage('Error: ${e.toString()}');
+      _showMessage('$e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -99,7 +100,11 @@ class _AuthCardState extends State<AuthCard> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showMessage('Error Google Sign-In: ${e.toString()}');
+      _showMessage(
+        e is ApiException
+            ? '$e'
+            : 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.',
+      );
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -147,6 +152,101 @@ class _AuthCardState extends State<AuthCard> {
 
   void _showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  /// No hay servidor de correo, así que no se puede mandar un enlace de
+  /// recuperación. En vez de un botón que no hace nada, se explica lo que sí
+  /// se puede hacer — que cubre los dos casos más comunes.
+  void _mostrarAyudaContrasena() {
+    final b = Theme.of(context).brightness;
+    final fg = DesignTokens.foreground(b);
+    final mutedFg = DesignTokens.mutedForeground(b);
+
+    Widget opcion(IconData icono, String titulo, String detalle) => Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, size: 18, color: fg),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: DesignTokens.bodyFont(
+                    fontSize: 14,
+                    weight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detalle,
+                  style: DesignTokens.bodyFont(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: mutedFg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: DesignTokens.card(b),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recuperar el acceso',
+                style: DesignTokens.bodyFont(
+                  fontSize: 18,
+                  weight: FontWeight.w700,
+                  color: fg,
+                ),
+              ),
+              const SizedBox(height: 16),
+              opcion(
+                LucideIcons.logIn,
+                '¿Creaste la cuenta con Google?',
+                'Entra con "Continuar con Google": esas cuentas no usan '
+                    'contraseña.',
+              ),
+              opcion(
+                LucideIcons.smartphone,
+                '¿Sigues con la sesión abierta en otro móvil?',
+                'Cámbiala desde allí en Perfil → Cambiar contraseña.',
+              ),
+              opcion(
+                LucideIcons.mailX,
+                'Recuperación por correo',
+                'Todavía no está disponible: la app no envía correos.',
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: const Text('Entendido'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -270,7 +370,7 @@ class _AuthCardState extends State<AuthCard> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {}, // TODO
+                  onPressed: _isLoading ? null : _mostrarAyudaContrasena,
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 0),
@@ -347,37 +447,20 @@ class _AuthCardState extends State<AuthCard> {
 
               const SizedBox(height: 24),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _SocialBtn(
-                      label: 'Apple',
-                      icon: Icon(
-                        PhosphorIcons.appleLogo(PhosphorIconsStyle.fill),
-                        size: 16,
-                        color: fg,
-                      ),
-                      cardColor: card,
-                      border: border,
-                      fg: fg,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SocialBtn(
-                      label: 'Google',
-                      icon: SvgPicture.asset(
-                        'assets/icons/google_logo.svg',
-                        width: 16,
-                        height: 16,
-                      ),
-                      cardColor: card,
-                      border: border,
-                      fg: fg,
-                      onTap: _isLoading ? null : _handleGoogleSignIn,
-                    ),
-                  ),
-                ],
+              // Solo Google: el botón de Apple no tenía nada detrás (la app es
+              // Android y no hay Sign in with Apple), y un botón que no hace
+              // nada al pulsarlo parece la app rota.
+              _SocialBtn(
+                label: 'Continuar con Google',
+                icon: SvgPicture.asset(
+                  'assets/icons/google_logo.svg',
+                  width: 16,
+                  height: 16,
+                ),
+                cardColor: card,
+                border: border,
+                fg: fg,
+                onTap: _isLoading ? null : _handleGoogleSignIn,
               ),
 
               const SizedBox(height: 32),
@@ -405,27 +488,12 @@ class _AuthCardState extends State<AuthCard> {
 
               const SizedBox(height: 12),
 
+              // Aquí había también un "VOLVER" que abría Inicio sin sesión: el
+              // login es la raíz, no hay nada detrás a lo que volver, y cada
+              // petición de Inicio acababa en 401.
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  InkWell(
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pushReplacementNamed('/home'), // TODO back logic
-                    child: Text(
-                      'VOLVER',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.4,
-                        color: mutedFg,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '  ·  ',
-                    style: TextStyle(fontSize: 11, color: mutedFg),
-                  ),
                   InkWell(
                     onTap: () => Navigator.of(context).pushNamed('/tour'),
                     child: Text(

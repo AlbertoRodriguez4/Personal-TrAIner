@@ -33,10 +33,39 @@ class PersonalTrainerApp extends StatefulWidget {
 class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
   late bool _isLoggedIn;
 
+  /// Para volver al login desde fuera de cualquier pantalla: la sesión caduca
+  /// en medio de una petición, y quien la hizo puede estar cinco rutas más
+  /// arriba en la pila.
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+
   @override
   void initState() {
     super.initState();
     _isLoggedIn = ApiService.isAuthenticated();
+    ApiService.onSesionCaducada = _handleSessionExpired;
+  }
+
+  @override
+  void dispose() {
+    ApiService.onSesionCaducada = null;
+    super.dispose();
+  }
+
+  /// El backend rechazó el token (caducó o cambió el secreto). `ApiService` ya
+  /// borró la sesión; aquí se saca al usuario al login y se le dice por qué,
+  /// en vez de dejarle dentro con cada pantalla fallando.
+  void _handleSessionExpired() {
+    if (!mounted) return;
+    _handleLogout();
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (r) => false);
+    _messengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Tu sesión ha caducado. Vuelve a iniciar sesión.'),
+        ),
+      );
   }
 
   void _handleLogin() {
@@ -68,6 +97,8 @@ class _PersonalTrainerAppState extends State<PersonalTrainerApp> {
           return MaterialApp(
             title: 'Personal TrAIner',
             debugShowCheckedModeBanner: false,
+            navigatorKey: _navigatorKey,
+            scaffoldMessengerKey: _messengerKey,
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.themeMode,
