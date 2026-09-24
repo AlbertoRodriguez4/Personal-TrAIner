@@ -1023,7 +1023,7 @@ class _ModuleTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            gradient: active ? DesignTokens.aiGradientSoft : null,
+            gradient: active ? DesignTokens.aiGradientSoftOf(b) : null,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: active ? Colors.transparent : DesignTokens.border(b),

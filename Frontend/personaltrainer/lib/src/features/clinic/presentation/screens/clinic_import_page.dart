@@ -539,7 +539,7 @@ class _ComposicionResumenCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: DesignTokens.aiGradientSoft,
+        gradient: DesignTokens.aiGradientSoftOf(b),
         borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
       ),
       child: Column(
@@ -632,7 +632,7 @@ class _MenuOption extends StatelessWidget {
               height: 48,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: DesignTokens.aiGradientSoft,
+                gradient: DesignTokens.aiGradientSoftOf(b),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(icon, size: 20, color: DesignTokens.foreground(b)),
@@ -749,7 +749,7 @@ class _FileDrop extends StatelessWidget {
                   height: 56,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    gradient: DesignTokens.aiGradientSoft,
+                    gradient: DesignTokens.aiGradientSoftOf(b),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(icon, size: 24, color: DesignTokens.foreground(b)),
@@ -1466,7 +1466,7 @@ class _ResultadoView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: DesignTokens.aiGradientSoft,
+            gradient: DesignTokens.aiGradientSoftOf(b),
             borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
           ),
           child: Row(

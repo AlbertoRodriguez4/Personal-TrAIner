@@ -69,6 +69,26 @@ class DesignTokens {
     colors: [Color(0xFFFBE8B0), Color(0xFFF4D785)],
   );
 
+  // Las dos "soft" de arriba son claras siempre, y encima van texto e iconos
+  // del tema (`foreground(b)`), que en modo oscuro es casi blanco: el contenido
+  // de esas tarjetas quedaba claro sobre claro, casi ilegible. Estas eligen
+  // según el tema; en oscuro son el mismo tinte sobre la tarjeta oscura.
+  static LinearGradient aiGradientSoftOf(Brightness b) =>
+      b == Brightness.dark ? _aiGradientSoftDark : aiGradientSoft;
+  static LinearGradient warnSoftOf(Brightness b) =>
+      b == Brightness.dark ? _warnSoftDark : warnSoft;
+
+  static const LinearGradient _aiGradientSoftDark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF342848), Color(0xFF22324A)],
+  );
+  static const LinearGradient _warnSoftDark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF3D3218), Color(0xFF4A3A12)],
+  );
+
   // ===== Color por tipo de actividad =====
   // Mismos valores que `ACTIVITY_COLORS` en routine.builder.tsx / quick-add.tsx
   // del repo de diseño. Estaban duplicados en routines_home_page y

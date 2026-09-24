@@ -718,7 +718,7 @@ class _ResumenComposicion extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: DesignTokens.aiGradientSoft,
+        gradient: DesignTokens.aiGradientSoftOf(b),
         borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
       ),
       child: Row(

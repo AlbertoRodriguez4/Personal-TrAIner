@@ -75,7 +75,7 @@ class _SupplementsCardState extends State<SupplementsCard> {
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
+                  gradient: DesignTokens.aiGradientSoftOf(b),
                   borderRadius: BorderRadius.circular(DesignTokens.radius2xl),
                 ),
                 child: Icon(LucideIcons.pill,

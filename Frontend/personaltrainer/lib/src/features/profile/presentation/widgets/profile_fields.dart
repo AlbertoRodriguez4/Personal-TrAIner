@@ -93,7 +93,7 @@ class ProfileSection extends StatelessWidget {
                 height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
+                  gradient: DesignTokens.aiGradientSoftOf(b),
                   borderRadius: BorderRadius.circular(DesignTokens.radiusXl),
                 ),
                 child: Icon(icon, size: 17, color: DesignTokens.foreground(b)),

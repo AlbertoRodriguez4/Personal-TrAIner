@@ -469,7 +469,7 @@ class _RoutineDayCard extends StatelessWidget {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    gradient: DesignTokens.aiGradientSoft,
+                                    gradient: DesignTokens.aiGradientSoftOf(b),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(

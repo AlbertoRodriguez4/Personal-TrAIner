@@ -1182,7 +1182,7 @@ class _EnlaceAccion extends StatelessWidget {
               height: 32,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: DesignTokens.aiGradientSoft,
+                gradient: DesignTokens.aiGradientSoftOf(b),
                 borderRadius: BorderRadius.circular(DesignTokens.radiusLg),
               ),
               child:
