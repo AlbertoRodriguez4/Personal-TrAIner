@@ -329,6 +329,23 @@ class ApiService {
     return _authToken != null && _currentUser != null;
   }
 
+  /// Despierta el backend mientras se pinta el login o Inicio.
+  ///
+  /// En el plan gratuito de Render el contenedor se duerme a los 15 minutos sin
+  /// tráfico y tarda en torno a un minuto en volver. Sin esto, esa espera se la
+  /// comía la primera acción del usuario —entrar, abrir Pulso—, que parecía
+  /// colgada. `/health` es público: no necesita sesión. Nunca lanza: si falla,
+  /// la petición de verdad ya dará su propio error.
+  static Future<void> despertarServidor() async {
+    try {
+      await _request(
+        method: 'GET',
+        path: '/health',
+        timeout: const Duration(seconds: 90),
+      );
+    } catch (_) {}
+  }
+
   static Future<void> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_sessionKey);

@@ -244,4 +244,27 @@ void main() {
       expect(ApiService.tokenCaducado('no-es-un-jwt', ahora: ahora), isFalse);
     });
   });
+
+  group('despertar el servidor', () {
+    test('llama a /health, que no pide sesión: va antes de restaurarla',
+        () async {
+      final rutas = <String>[];
+      await _conServidor((req) async {
+        rutas.add('${req.method} ${req.url.path}');
+        return _json({'status': 'ok'}, 200);
+      }, ApiService.despertarServidor);
+      expect(rutas, ['GET /health']);
+    });
+
+    test('nunca lanza: va sin await en el arranque', () async {
+      await _conServidor(
+        (_) async => throw http.ClientException('sin red'),
+        ApiService.despertarServidor,
+      );
+      await _conServidor(
+        (_) async => _json({'message': 'caído'}, 503),
+        ApiService.despertarServidor,
+      );
+    });
+  });
 }

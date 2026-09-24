@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'src/app.dart';
 import 'src/services/api_service.dart';
@@ -19,6 +21,10 @@ Future<void> main() async {
   // qué. Se sustituye antes de construir nada.
   ErrorWidget.builder = (details) =>
       _PantallaFallo(titulo: 'Error al dibujar', detalle: details.exceptionAsString());
+
+  // Sin esperarla: solo sirve para que el servidor, si dormía, vaya
+  // arrancando mientras el usuario mira la primera pantalla.
+  unawaited(ApiService.despertarServidor());
 
   final fallos = <String>[];
   await _sinTumbarElArranque('restaurar la sesión', fallos, ApiService.restoreSession);
