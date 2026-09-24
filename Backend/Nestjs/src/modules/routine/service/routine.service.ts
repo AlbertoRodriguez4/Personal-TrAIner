@@ -4,9 +4,16 @@ import { Repository } from 'typeorm';
 import { Routine } from '../entities/routine.entity';
 import { RoutineDay } from '../entities/routine_day.entity';
 import { Exercise } from '../entities/exercise.entity';
-import { CreateRoutineDto } from '../dto/create-routine.dto';
+import {
+  CreateExerciseDto,
+  CreateRoutineDayDto,
+  CreateRoutineDto,
+} from '../dto/create-routine.dto';
 import { UpdateRoutineDto } from '../dto/update-routine.dto';
-import { CreateRoutineFromAiDto } from '../dto/create-routine-from-ai.dto';
+import {
+  AiRoutineDayDto,
+  CreateRoutineFromAiDto,
+} from '../dto/create-routine-from-ai.dto';
 import { ExerciseCatalog } from '../../exercises_catalog/entities/exercise_catalog.entity';
 import {
   IDS_MUSCULOS,
@@ -17,6 +24,20 @@ import {
   normalizar,
   repartoEjercicio,
 } from '../../training_sessions/muscle_map';
+
+/// `day_of_week` tiene que ser un día real de la semana, escrito exactamente
+/// así: la app Flutter lo cruza contra su lista fija (Lunes..Domingo) para
+/// pintar el plan semanal. Cualquier otro valor —el viejo `Día N`— se guarda sin
+/// error, pero la pantalla de edición sale vacía y al guardar se pierden los días.
+const DIAS_SEMANA = [
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+];
 
 @Injectable()
 export class RoutineService {
@@ -31,32 +52,75 @@ export class RoutineService {
     private readonly exerciseCatalogRepository: Repository<ExerciseCatalog>,
   ) {}
 
-  async findAll(userId?: string) {
-    const whereCondition = userId ? { userId } : {};
+  /// Siempre por usuario: sin filtro, esto devolvía las rutinas de todos.
+  async findAll(userId: string) {
     return this.routineRepository.find({
-      where: whereCondition,
+      where: { userId },
       relations: ['days', 'days.exercises'],
       order: { updated_at: 'DESC' },
     });
   }
 
+  /// Un ejercicio nuevo con solo sus campos de datos, copiados uno a uno a
+  /// propósito: pasarle a `create()` el objeto del cliente entero dejaba
+  /// colarse un `id` (la app lo manda al reenviar una rutina que ya leyó), y
+  /// con él `save()` actualizaba la fila de ese id —aunque fuera un ejercicio
+  /// de la rutina de otro usuario— en vez de insertar una nueva.
+  private nuevoEjercicio(ex: CreateExerciseDto): Exercise {
+    return this.exerciseRepository.create({
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      weight: ex.weight,
+      duration: ex.duration,
+      notes: ex.notes,
+    });
+  }
+
+  private nuevosDias(days: CreateRoutineDayDto[]): RoutineDay[] {
+    return days.map((day) =>
+      this.dayRepository.create({
+        day_of_week: day.day_of_week,
+        focus: day.focus,
+        exercises: (day.exercises ?? []).map((ex) => this.nuevoEjercicio(ex)),
+      }),
+    );
+  }
+
+  /// Días de una rutina escrita por la IA, tanto al crearla como al
+  /// sobrescribirla con `aplicar_cambios_rutina`: los dos caminos pasan por aquí
+  /// para que ninguno vuelva a guardar el viejo `Día N` (ver DIAS_SEMANA). El
+  /// fallback por índice cubre el caso de que la IA no mande `dia_semana`.
+  private diasDesdeIa(dias: AiRoutineDayDto[]): RoutineDay[] {
+    return (dias ?? []).map((day, index) =>
+      this.dayRepository.create({
+        day_of_week:
+          day.dia_semana && DIAS_SEMANA.includes(day.dia_semana)
+            ? day.dia_semana
+            : DIAS_SEMANA[index % 7],
+        focus: `${day.nombre_dia} — ${day.grupo_muscular}`,
+        exercises: (day.ejercicios ?? []).map((ex) =>
+          this.exerciseRepository.create({
+            name: ex.nombre,
+            sets: ex.series,
+            reps: String(ex.repeticiones),
+            weight: ex.peso_sugerido_kg,
+            rest_seconds: ex.descanso_segundos,
+            notes: ex.notas,
+          }),
+        ),
+      }),
+    );
+  }
+
   async create(dto: CreateRoutineDto) {
     const routine = this.routineRepository.create({
-      userId: dto.userId, // Esperamos que se pase en el DTO temporalmente o manualmente
+      userId: dto.userId,
       name: dto.name,
       activity_type: dto.activity_type,
       description: dto.description,
       activa: true,
-      days: dto.days.map((day) =>
-        this.dayRepository.create({
-          day_of_week: day.day_of_week,
-          focus: day.focus,
-          exercises:
-            day.exercises?.map((ex) =>
-              this.exerciseRepository.create(ex),
-            ) ?? [],
-        }),
-      ),
+      days: this.nuevosDias(dto.days),
     });
 
     if (dto.userId) {
@@ -77,48 +141,13 @@ export class RoutineService {
       );
     }
 
-    // day_of_week tiene que ser un día real de la semana: la app Flutter lo cruza contra
-    // su lista fija (Lunes..Domingo) para pintar el plan semanal. El viejo `Día N` no
-    // casaba con ninguno, así que la rutina se guardaba pero la pantalla de edición
-    // salía vacía y al guardar se perdían los días. El fallback por índice cubre el caso
-    // de que la IA no mande dia_semana.
-    const DIAS_SEMANA = [
-      'Lunes',
-      'Martes',
-      'Miércoles',
-      'Jueves',
-      'Viernes',
-      'Sábado',
-      'Domingo',
-    ];
-
-    const days = (dto.dias_entrenamiento ?? []).map((day, index) =>
-      this.dayRepository.create({
-        day_of_week:
-          day.dia_semana && DIAS_SEMANA.includes(day.dia_semana)
-            ? day.dia_semana
-            : DIAS_SEMANA[index % 7],
-        focus: `${day.nombre_dia} — ${day.grupo_muscular}`,
-        exercises: (day.ejercicios ?? []).map((ex) =>
-          this.exerciseRepository.create({
-            name: ex.nombre,
-            sets: ex.series,
-            reps: String(ex.repeticiones),
-            weight: ex.peso_sugerido_kg,
-            rest_seconds: ex.descanso_segundos,
-            notes: ex.notas,
-          }),
-        ),
-      }),
-    );
-
     const routine = this.routineRepository.create({
       userId: dto.userId,
       name: dto.nombre_rutina,
       activity_type: dto.tipo_entrenamiento,
       description: dto.notas_adicionales,
       activa: true,
-      days,
+      days: this.diasDesdeIa(dto.dias_entrenamiento),
     });
 
     return this.routineRepository.save(routine);
@@ -178,44 +207,24 @@ export class RoutineService {
         await this.dayRepository.remove(routine.days);
       }
 
-      routine.days = dto.days.map((day) =>
-        this.dayRepository.create({
-          day_of_week: day.day_of_week,
-          focus: day.focus,
-          exercises:
-            day.exercises?.map((ex) =>
-              this.exerciseRepository.create(ex),
-            ) ?? [],
-        }),
-      );
+      routine.days = this.nuevosDias(dto.days);
     }
 
     return this.routineRepository.save(routine);
   }
 
-  async updateFromAiPayload(id: string, userId: string, dias_entrenamiento: any[]) {
+  async updateFromAiPayload(
+    id: string,
+    userId: string,
+    dias_entrenamiento: AiRoutineDayDto[],
+  ) {
     const routine = await this.findOneForUser(id, userId);
 
     if (routine.days && routine.days.length > 0) {
       await this.dayRepository.remove(routine.days);
     }
 
-    routine.days = (dias_entrenamiento ?? []).map((day) =>
-      this.dayRepository.create({
-        day_of_week: `Día ${day.numero_dia}`,
-        focus: `${day.nombre_dia} — ${day.grupo_muscular}`,
-        exercises: (day.ejercicios ?? []).map((ex: any) =>
-          this.exerciseRepository.create({
-            name: ex.nombre,
-            sets: ex.series,
-            reps: String(ex.repeticiones),
-            weight: ex.peso_sugerido_kg,
-            rest_seconds: ex.descanso_segundos,
-            notes: ex.notas,
-          }),
-        ),
-      }),
-    );
+    routine.days = this.diasDesdeIa(dias_entrenamiento);
 
     return this.routineRepository.save(routine);
   }

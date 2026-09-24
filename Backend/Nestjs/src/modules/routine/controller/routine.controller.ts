@@ -1,16 +1,32 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+} from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { RoutineService } from '../service/routine.service';
 import { CreateRoutineDto } from '../dto/create-routine.dto';
 import { UpdateRoutineDto } from '../dto/update-routine.dto';
-import { CreateRoutineFromAiDto } from '../dto/create-routine-from-ai.dto';
+import {
+  CreateRoutineFromAiDto,
+  UpdateRoutineFromAiDto,
+} from '../dto/create-routine-from-ai.dto';
 
 @Controller('api/routines')
 export class RoutineController {
   constructor(private readonly routineService: RoutineService) {}
 
+  /// Las rutinas del usuario de la sesión. Sin filtro devolvía las de TODOS
+  /// los usuarios a cualquier token válido.
   @Get()
-  findAll() {
-    return this.routineService.findAll();
+  findAll(@CurrentUser() userId: string) {
+    return this.routineService.findAll(userId);
   }
 
   @Get('user/:userId')
@@ -33,9 +49,11 @@ export class RoutineController {
     return this.routineService.getActiveMuscleLoad(userId);
   }
 
+  /// El dueño sale de la sesión, no del cuerpo: `userId` es opcional en el DTO
+  /// y sin él la rutina se guardaba huérfana, sin nadie que pudiera verla.
   @Post()
-  create(@Body() dto: CreateRoutineDto) {
-    return this.routineService.create(dto);
+  create(@Body() dto: CreateRoutineDto, @CurrentUser() userId: string) {
+    return this.routineService.create({ ...dto, userId });
   }
 
   @Post('ai')
@@ -44,14 +62,14 @@ export class RoutineController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Query('userId') userId: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
     return this.routineService.findOneForUser(id, userId);
   }
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
-    @Query('userId') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
     @Body() dto: UpdateRoutineDto,
   ) {
     return this.routineService.update(id, userId, dto);
@@ -59,20 +77,20 @@ export class RoutineController {
 
   @Put(':id/ai')
   updateFromAi(
-    @Param('id') id: string,
-    @Query('userId') userId: string,
-    @Body('dias_entrenamiento') dias: any[],
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateRoutineFromAiDto,
   ) {
-    return this.routineService.updateFromAiPayload(id, userId, dias);
+    return this.routineService.updateFromAiPayload(id, userId, dto.dias_entrenamiento);
   }
 
   @Put(':id/activate')
-  setAsActive(@Param('id') id: string, @Body('userId') userId: string) {
+  setAsActive(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
     return this.routineService.setAsActive(id, userId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Query('userId') userId: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
     return this.routineService.remove(id, userId);
   }
 }

@@ -86,3 +86,13 @@ export class CreateRoutineFromAiDto {
   @IsOptional()
   notas_adicionales?: string;
 }
+
+/// Cuerpo de `aplicar_cambios_rutina`: los mismos días que al crear (el
+/// servicio Python reutiliza el schema de `crear_rutina_personalizada`), así
+/// que pasan por la misma validación en vez de entrar sin revisar.
+export class UpdateRoutineFromAiDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AiRoutineDayDto)
+  dias_entrenamiento: AiRoutineDayDto[];
+}
