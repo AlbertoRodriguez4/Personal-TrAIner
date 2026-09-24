@@ -28,26 +28,32 @@ export class PostureEvaluationService {
     });
   }
 
-  async findOne(id: string) {
-    const evaluation = await this.postureEvaluationRepository.findOne({ where: { id } });
+  /// Filtra por dueño en la propia consulta: una evaluación de otro usuario
+  /// responde igual que una que no existe.
+  async findOne(id: string, userId: string) {
+    const evaluation = await this.postureEvaluationRepository.findOne({
+      where: { id, userId },
+    });
     if (!evaluation) {
       throw new NotFoundException('Evaluación postural no encontrada.');
     }
     return evaluation;
   }
 
-  async update(id: string, dto: UpdatePostureEvaluationDto) {
-    await this.findOne(id);
+  async update(id: string, userId: string, dto: UpdatePostureEvaluationDto) {
+    await this.findOne(id, userId);
+    // `userId` fuera: la fila no cambia de dueño por editarla.
+    const { userId: _dueno, ...cambios } = dto;
     await this.postureEvaluationRepository.update(id, {
-      ...dto,
+      ...cambios,
       fecha_evaluacion: dto.fecha_evaluacion ? new Date(dto.fecha_evaluacion) : undefined,
       analisis_ia: dto.analisis_ia ? this.normalizeAnalysis(dto.analisis_ia) : undefined,
     });
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
-  async remove(id: string) {
-    const evaluation = await this.findOne(id);
+  async remove(id: string, userId: string) {
+    const evaluation = await this.findOne(id, userId);
     await this.postureEvaluationRepository.remove(evaluation);
     return { message: 'Evaluación postural eliminada correctamente.' };
   }

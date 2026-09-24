@@ -54,20 +54,21 @@ export class BodyAnalysisService {
     });
   }
 
-  async findOne(id: string) {
-    const record = await this.bodyAnalysisRepository.findOne({ where: { id } });
+  /// Filtra por dueño en la propia consulta: un registro de otro usuario
+  /// responde igual que uno que no existe.
+  async findOne(id: string, userId: string) {
+    const record = await this.bodyAnalysisRepository.findOne({ where: { id, userId } });
     if (!record) {
       throw new NotFoundException('Registro de análisis físico no encontrado.');
     }
     return record;
   }
 
-  async update(id: string, dto: UpdateBodyAnalysisRecordDto) {
-    const record = await this.findOne(id);
+  /// `dto.userId` se ignora a propósito: editar un registro no puede pasarlo a
+  /// otro usuario.
+  async update(id: string, userId: string, dto: UpdateBodyAnalysisRecordDto) {
+    const record = await this.findOne(id, userId);
 
-    if (dto.userId !== undefined) {
-      record.userId = dto.userId;
-    }
     if (dto.fecha_analisis !== undefined) {
       record.fecha_analisis = new Date(dto.fecha_analisis);
     }
@@ -111,8 +112,8 @@ export class BodyAnalysisService {
     return this.bodyAnalysisRepository.save(record);
   }
 
-  async remove(id: string) {
-    const record = await this.findOne(id);
+  async remove(id: string, userId: string) {
+    const record = await this.findOne(id, userId);
     await this.bodyAnalysisRepository.remove(record);
     return { message: 'Registro de análisis físico eliminado correctamente.' };
   }

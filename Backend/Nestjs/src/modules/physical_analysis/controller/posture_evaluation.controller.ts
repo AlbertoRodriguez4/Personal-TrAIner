@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { PostureEvaluationService } from '../service/posture_evaluation.service';
 import { CreatePostureEvaluationDto } from '../dto/create-posture-evaluation.dto';
 import { UpdatePostureEvaluationDto } from '../dto/update-posture-evaluation.dto';
@@ -18,17 +19,21 @@ export class PostureEvaluationController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.postureEvaluationService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.postureEvaluationService.findOne(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePostureEvaluationDto) {
-    return this.postureEvaluationService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdatePostureEvaluationDto,
+  ) {
+    return this.postureEvaluationService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.postureEvaluationService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.postureEvaluationService.remove(id, userId);
   }
 }

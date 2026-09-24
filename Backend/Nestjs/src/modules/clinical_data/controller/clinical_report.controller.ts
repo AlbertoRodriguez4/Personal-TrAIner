@@ -1,30 +1,24 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
 } from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { ClinicalReportService } from '../service/clinical_report.service';
 import { CreateClinicalReportDto } from '../dto/create-clinical-report.dto';
 import { CreateClinicalMarkersDto } from '../dto/create-clinical-markers.dto';
 
-/// Sin capa de auth todavía: `userId` viaja explícito en cada request y el
-/// servicio compara contra el dueño de la fila antes de leer o borrar, igual
-/// que en `routine`, `nutrition` y `training_sessions`.
+/// Las rutas por `:id` reciben el usuario con `@CurrentUser()` (el del token)
+/// y el servicio compara contra el dueño de la fila antes de leer o borrar,
+/// igual que en `routine`, `nutrition` y `training_sessions`.
 @Controller('clinical-reports')
 export class ClinicalReportController {
   constructor(private readonly clinicalReportService: ClinicalReportService) {}
-
-  private requireUserId(userId?: string): string {
-    if (!userId) {
-      throw new BadRequestException('Falta el parámetro userId.');
-    }
-    return userId;
-  }
 
   @Post()
   create(@Body() dto: CreateClinicalReportDto) {
@@ -57,17 +51,17 @@ export class ClinicalReportController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Query('userId') userId?: string) {
-    return this.clinicalReportService.findReport(id, this.requireUserId(userId));
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.clinicalReportService.findReport(id, userId);
   }
 
   @Delete('markers/:id')
-  removeMarker(@Param('id') id: string, @Query('userId') userId?: string) {
-    return this.clinicalReportService.removeMarker(id, this.requireUserId(userId));
+  removeMarker(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.clinicalReportService.removeMarker(id, userId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Query('userId') userId?: string) {
-    return this.clinicalReportService.removeReport(id, this.requireUserId(userId));
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.clinicalReportService.removeReport(id, userId);
   }
 }

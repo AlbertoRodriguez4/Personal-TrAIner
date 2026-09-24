@@ -192,25 +192,29 @@ export class NutritionLogService {
     });
   }
 
-  async findOne(id: string) {
-    const nutritionLog = await this.nutritionLogRepository.findOne({ where: { id } });
+  /// Filtra por dueño en la propia consulta: una fila de otro usuario responde
+  /// igual que una que no existe, sin confirmar que el id es válido.
+  async findOne(id: string, userId: string) {
+    const nutritionLog = await this.nutritionLogRepository.findOne({ where: { id, userId } });
     if (!nutritionLog) {
       throw new NotFoundException('Registro nutricional no encontrado.');
     }
     return nutritionLog;
   }
 
-  async update(id: string, dto: UpdateNutritionLogDto) {
-    await this.findOne(id);
+  async update(id: string, userId: string, dto: UpdateNutritionLogDto) {
+    await this.findOne(id, userId);
+    // `userId` fuera: la fila no cambia de dueño por editarla.
+    const { userId: _dueno, ...cambios } = dto;
     await this.nutritionLogRepository.update(id, {
-      ...dto,
+      ...cambios,
       fecha_registro: dto.fecha_registro ? new Date(dto.fecha_registro) : undefined,
     });
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
-  async remove(id: string) {
-    const nutritionLog = await this.findOne(id);
+  async remove(id: string, userId: string) {
+    const nutritionLog = await this.findOne(id, userId);
     await this.nutritionLogRepository.remove(nutritionLog);
     return { message: 'Registro nutricional eliminado correctamente.' };
   }

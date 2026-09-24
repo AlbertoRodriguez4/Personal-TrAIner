@@ -1,16 +1,16 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
-  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { BodyAnalysisService } from '../service/body_analysis.service';
 import { PhysiquePhotoService } from '../service/physique_photo.service';
 import { CreateBodyAnalysisRecordDto } from '../dto/create-body-analysis-record.dto';
@@ -23,13 +23,6 @@ export class BodyAnalysisController {
     private readonly bodyAnalysisService: BodyAnalysisService,
     private readonly physiquePhotoService: PhysiquePhotoService,
   ) {}
-
-  private requireUserId(userId?: string): string {
-    if (!userId) {
-      throw new BadRequestException('Falta el parámetro userId.');
-    }
-    return userId;
-  }
 
   @Post()
   create(@Body() dto: CreateBodyAnalysisRecordDto) {
@@ -51,14 +44,11 @@ export class BodyAnalysisController {
   /// un id de análisis seguido del literal "photos".
   @Get('photos/:photoId')
   async getPhoto(
-    @Param('photoId') photoId: string,
+    @Param('photoId', ParseUUIDPipe) photoId: string,
     @Res() res: Response,
-    @Query('userId') userId?: string,
+    @CurrentUser() userId: string,
   ) {
-    const foto = await this.physiquePhotoService.findPhotoBytes(
-      photoId,
-      this.requireUserId(userId),
-    );
+    const foto = await this.physiquePhotoService.findPhotoBytes(photoId, userId);
     // Cabeceras a mano: con @Res() Nest cede el control de la respuesta, así
     // que el decorador @Header no llegaría a aplicarse.
     res.setHeader('Content-Type', foto.mime_type);
@@ -67,11 +57,8 @@ export class BodyAnalysisController {
   }
 
   @Get(':id/photos')
-  findPhotos(@Param('id') id: string, @Query('userId') userId?: string) {
-    return this.physiquePhotoService.findPhotoMetaByRecord(
-      id,
-      this.requireUserId(userId),
-    );
+  findPhotos(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.physiquePhotoService.findPhotoMetaByRecord(id, userId);
   }
 
   @Get('user/:userId')
@@ -90,17 +77,21 @@ export class BodyAnalysisController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.bodyAnalysisService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.bodyAnalysisService.findOne(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateBodyAnalysisRecordDto) {
-    return this.bodyAnalysisService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateBodyAnalysisRecordDto,
+  ) {
+    return this.bodyAnalysisService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.bodyAnalysisService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.bodyAnalysisService.remove(id, userId);
   }
 }

@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, ParseUUIDPipe } from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { SupplementService } from '../service/supplement.service';
 import { CreateSupplementDto } from '../dto/create-supplement.dto';
 import { UpdateSupplementDto } from '../dto/update-supplement.dto';
@@ -24,22 +25,22 @@ export class SupplementController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
-    @Query('userId') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
     @Body() dto: UpdateSupplementDto,
   ) {
     return this.service.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Query('userId') userId: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
     return this.service.remove(id, userId);
   }
 
   @Post(':id/toggle')
   toggleToday(
-    @Param('id') id: string,
-    @Body('userId') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
     @Body('fecha') fecha?: string,
   ) {
     return this.service.toggleToday(id, userId, fecha);

@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, Query } from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { NutritionLogService } from '../service/nutrition_log.service';
 import { CreateNutritionLogDto } from '../dto/create-nutrition-log.dto';
 import { UpdateNutritionLogDto } from '../dto/update-nutrition-log.dto';
@@ -38,17 +39,21 @@ export class NutritionLogController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.nutritionLogService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.nutritionLogService.findOne(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateNutritionLogDto) {
-    return this.nutritionLogService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateNutritionLogDto,
+  ) {
+    return this.nutritionLogService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.nutritionLogService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.nutritionLogService.remove(id, userId);
   }
 }

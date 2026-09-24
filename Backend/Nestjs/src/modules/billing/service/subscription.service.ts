@@ -33,8 +33,8 @@ export class SubscriptionService {
     return activeSubscription ?? null;
   }
 
-  async cancel(id: string) {
-    const subscription = await this.subscriptionRepository.findOne({ where: { id } });
+  async cancel(id: string, userId: string) {
+    const subscription = await this.subscriptionRepository.findOne({ where: { id, userId } });
     if (!subscription) {
       throw new NotFoundException('Suscripción no encontrada.');
     }

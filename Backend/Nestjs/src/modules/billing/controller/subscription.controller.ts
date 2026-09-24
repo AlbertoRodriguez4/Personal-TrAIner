@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { SubscriptionService } from '../service/subscription.service';
 import { CreateSubscriptionDto } from '../dto/create-subscription.dto';
 
@@ -17,7 +18,7 @@ export class SubscriptionController {
   }
 
   @Put(':id/cancel')
-  cancel(@Param('id') id: string) {
-    return this.subscriptionService.cancel(id);
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.subscriptionService.cancel(id, userId);
   }
 }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { timingSafeEqual } from 'crypto';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
@@ -20,6 +21,11 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 ///     pedir `/clinical-reports/user/<uuid-de-otro>` y leerlo entero. Los
 ///     servicios ya comparaban el `userId` contra la fila en algunos módulos,
 ///     pero no en todos, y aquí se cubre de una vez para toda la API.
+///
+/// Lo que esta guarda NO puede cubrir son las rutas que identifican un recurso
+/// por su propio `:id` (`PUT /nutrition-logs/:id`): ahí no hay `userId` que
+/// comparar, y el dueño está en la fila, no en la petición. Esas rutas reciben
+/// el usuario con `@CurrentUser()` y el servicio filtra la fila por él.
 ///
 /// El servicio Python entra por la puerta de al lado: llama a NestJS en nombre
 /// del usuario (`nest_client`) y no tiene su token, así que se identifica con
@@ -50,9 +56,13 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
 
-    // Vía interna: el servicio Python actuando en nombre del usuario.
+    // Vía interna: el servicio Python actuando en nombre del usuario. Se marca
+    // en la request porque `@CurrentUser()` solo acepta el `userId` explícito
+    // de la petición cuando viene por aquí — desde la app, el único que vale es
+    // el del token.
     const claveInterna = this.configService.get<string>('INTERNAL_API_KEY');
-    if (claveInterna && request.headers['x-internal-key'] === claveInterna) {
+    if (claveInterna && JwtAuthGuard.mismaClave(request.headers['x-internal-key'], claveInterna)) {
+      request.esInterna = true;
       return true;
     }
 
@@ -76,6 +86,16 @@ export class JwtAuthGuard implements CanActivate {
 
     this.comprobarPertenencia(request, userId);
     return true;
+  }
+
+  /// Comparación en tiempo constante: con `===` el tiempo de respuesta delata
+  /// cuántos caracteres del principio acertó quien prueba claves, y esta es la
+  /// que abre la API entera en nombre de cualquier usuario.
+  private static mismaClave(recibida: unknown, esperada: string): boolean {
+    if (typeof recibida !== 'string') return false;
+    const a = Buffer.from(recibida);
+    const b = Buffer.from(esperada);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 
   private extraerToken(request: {

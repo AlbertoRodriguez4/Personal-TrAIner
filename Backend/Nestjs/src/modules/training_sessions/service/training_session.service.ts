@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { TrainingSession } from '../entities/training_session.entity';
@@ -57,29 +57,32 @@ export class TrainingSessionService {
     });
   }
 
-  async findOne(id: string) {
-    const trainingSession = await this.trainingSessionRepository.findOne({ where: { id } });
+  /// Filtra por dueño en la propia consulta: una sesión de otro usuario
+  /// responde igual que una que no existe.
+  async findOne(id: string, userId: string) {
+    const trainingSession = await this.trainingSessionRepository.findOne({
+      where: { id, userId },
+    });
     if (!trainingSession) {
       throw new NotFoundException('Sesión de entrenamiento no encontrada.');
     }
     return trainingSession;
   }
 
-  async markAsCompleted(id: string) {
-    await this.findOne(id);
+  async markAsCompleted(id: string, userId: string) {
+    await this.findOne(id, userId);
     await this.trainingSessionRepository.update(id, {
       estado: 'completado',
       fecha_finalizacion: new Date(),
     });
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
-  async update(id: string, dto: UpdateTrainingSessionDto) {
-    const trainingSession = await this.findOne(id);
+  /// `dto.userId` se ignora a propósito: editar una sesión no puede pasarla a
+  /// otro usuario.
+  async update(id: string, userId: string, dto: UpdateTrainingSessionDto) {
+    const trainingSession = await this.findOne(id, userId);
 
-    if (dto.userId !== undefined) {
-      trainingSession.userId = dto.userId;
-    }
     if (dto.fecha_programada !== undefined) {
       trainingSession.fecha_programada = new Date(dto.fecha_programada);
     }
@@ -117,8 +120,8 @@ export class TrainingSessionService {
     return this.trainingSessionRepository.save(trainingSession);
   }
 
-  async remove(id: string) {
-    const trainingSession = await this.findOne(id);
+  async remove(id: string, userId: string) {
+    const trainingSession = await this.findOne(id, userId);
     await this.trainingSessionRepository.remove(trainingSession);
     return { message: 'Sesión de entrenamiento eliminada correctamente.' };
   }
@@ -153,10 +156,7 @@ export class TrainingSessionService {
   /// entrenar, y trocearlo por tipo de entrenamiento dejaría la media casi
   /// siempre calculada sobre 1-2 sesiones.
   async getAnalysis(id: string, userId: string) {
-    const sesion = await this.findOne(id);
-    if (sesion.userId !== userId) {
-      throw new ForbiddenException('Esta sesión no pertenece al usuario indicado.');
-    }
+    const sesion = await this.findOne(id, userId);
 
     const completadas = await this.trainingSessionRepository.find({
       where: { userId, estado: 'completado' },

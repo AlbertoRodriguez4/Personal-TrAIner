@@ -6,8 +6,11 @@ import { DailySummaryResponseDto } from '../dto/daily-summary.dto';
 export class DailySummaryController {
   constructor(private readonly service: DailySummaryService) {}
 
-  @Get(':uid')
-  getSummary(@Param('uid') uid: string): Promise<DailySummaryResponseDto> {
-    return this.service.getDailySummary(uid);
+  /// El parámetro se llama `userId` (antes `uid`) porque ese es el nombre que
+  /// `JwtAuthGuard` compara contra el token: con `uid` la comprobación no lo
+  /// veía y cualquier sesión válida leía el resumen diario de otro usuario.
+  @Get(':userId')
+  getSummary(@Param('userId') userId: string): Promise<DailySummaryResponseDto> {
+    return this.service.getDailySummary(userId);
   }
 }

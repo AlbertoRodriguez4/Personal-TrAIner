@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { CurrentUser } from '../../auth/current-user.decorator';
 import { TrainingSessionService } from '../service/training_session.service';
 import { CreateTrainingSessionDto } from '../dto/create-training-session.dto';
 import { UpdateTrainingSessionDto } from '../dto/update-training-session.dto';
@@ -31,27 +42,31 @@ export class TrainingSessionController {
   /// sesión de esa media. Antes de `:id` en las rutas para que Nest no lo
   /// confunda con `findOne(':id')`.
   @Get(':id/analysis')
-  getAnalysis(@Param('id') id: string, @Query('userId') userId: string) {
+  getAnalysis(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
     return this.trainingSessionService.getAnalysis(id, userId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.trainingSessionService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.trainingSessionService.findOne(id, userId);
   }
 
   @Put(':id/complete')
-  markAsCompleted(@Param('id') id: string) {
-    return this.trainingSessionService.markAsCompleted(id);
+  markAsCompleted(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.trainingSessionService.markAsCompleted(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateTrainingSessionDto) {
-    return this.trainingSessionService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateTrainingSessionDto,
+  ) {
+    return this.trainingSessionService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.trainingSessionService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() userId: string) {
+    return this.trainingSessionService.remove(id, userId);
   }
 }
