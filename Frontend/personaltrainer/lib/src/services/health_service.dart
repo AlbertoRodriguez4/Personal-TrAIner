@@ -44,7 +44,13 @@ class HealthService {
 
   static void _ensureConfigured() {
     if (!_isConfigured) {
-      _health.configure();
+      // Sin await a propósito: las lecturas del plugin rellenan el deviceId por
+      // su cuenta. Pero suelto, su fallo no lo recoge nadie: en la web (sin
+      // Health Connect) `Platform.isAndroid` lanza y salía como error sin
+      // capturar en cada pantalla que lee salud.
+      _health.configure().catchError((Object e) {
+        debugPrint('[HC] configure: $e');
+      });
       _isConfigured = true;
     }
   }
@@ -1182,6 +1188,14 @@ class ReadinessSummary {
   /// sin referencia propia, así que la UI oculta la fila en vez de inventar 0.
   final double? hrvDeltaPercent;
 
+  /// Ni sueño ni pulso de anoche: no hay con qué valorar la recuperación. Pasa
+  /// si el reloj no ha sincronizado, y también sin permisos: cada lectura falla
+  /// por separado, así que el resumen llega igual, vacío. Sin esto la
+  /// puntuación se quedaba en 0 y la tarjeta decía "Óptimo · listo para
+  /// entrenar a pleno rendimiento" sin un solo dato detrás.
+  bool get sinDatosNocturnos =>
+      sleepMinutes == 0 && avgNightHr == null && hrvRmssd == null;
+
   ReadinessLevel get level {
     int score = 0;
     if (sleepMinutes > 0 && sleepMinutes < 300)
@@ -1196,6 +1210,7 @@ class ReadinessSummary {
   }
 
   String get alertTitle {
+    if (sinDatosNocturnos) return 'ESTADO · SIN DATOS DE ANOCHE';
     switch (level) {
       case ReadinessLevel.fatigue:
         return 'ALERTA · CARGA ELEVADA';
@@ -1207,6 +1222,10 @@ class ReadinessSummary {
   }
 
   String get alertBody {
+    if (sinDatosNocturnos) {
+      return 'Health Connect no tiene sueño ni pulso de anoche. Sincroniza el '
+          'reloj para ver cómo llegas a hoy.';
+    }
     final h = sleepMinutes ~/ 60;
     final m = sleepMinutes % 60;
     final sleepStr = sleepMinutes > 0
@@ -1217,7 +1236,10 @@ class ReadinessSummary {
         : '';
     switch (level) {
       case ReadinessLevel.fatigue:
-        return '$sleepStr$hrStr · He reducido la carga de hoy un 20%.';
+        // Recomendación, no hecho consumado: antes decía "He reducido la carga
+        // de hoy un 20%", y nada en la app toca la rutina por este nivel.
+        return '$sleepStr$hrStr · Baja hoy la carga un 20 % o haz '
+            'recuperación activa.';
       case ReadinessLevel.warning:
         return '$sleepStr$hrStr · Prioriza la recuperación activa hoy.';
       case ReadinessLevel.ok:

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -75,6 +75,14 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
+                  // El Stack por defecto deja a cada pestaña el tamaño de su
+                  // contenido y la centra: una pestaña corta (Inicio sin
+                  // datos) aparecía despegada de la cabecera, con el mismo
+                  // hueco arriba y abajo. Así ocupan todo el alto.
+                  layoutBuilder: (actual, anteriores) => Stack(
+                    fit: StackFit.expand,
+                    children: [...anteriores, ?actual],
+                  ),
                   child: _buildScreen(routines),
                 ),
               ),
@@ -459,33 +467,61 @@ class _StepsPillState extends State<_StepsPill> {
 /// que vivía aquí (accesos rápidos, anillos de carga/macros, hidratación y
 /// suplementos, atajo de rutinas) ya tiene un hogar en sus propias pestañas
 /// (Nutrición, Progreso, Entrenar); duplicarlo en Inicio era ruido.
-class _DashboardScreen extends StatelessWidget {
+class _DashboardScreen extends StatefulWidget {
   const _DashboardScreen({required this.onOpenAiCoach});
 
   final void Function(BuildContext) onOpenAiCoach;
 
   @override
+  State<_DashboardScreen> createState() => _DashboardScreenState();
+}
+
+/// Inicio se puede refrescar deslizando hacia abajo. Sin esto, tras sincronizar
+/// el reloj no había forma de ver los datos nuevos sin salir de la pantalla:
+/// las tarjetas cargan una vez al construirse, y los entrenos además salen de
+/// una caché de 5 minutos.
+class _DashboardScreenState extends State<_DashboardScreen> {
+  /// Cambia en cada refresco: va en la `key` de las tarjetas, que así se
+  /// reconstruyen y vuelven a cargar.
+  int _recarga = 0;
+
+  Future<void> _refrescar() async {
+    setState(() => _recarga++);
+    await context.read<DailySummaryProvider>().load();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _AICoachCTA(onTalk: () => onOpenAiCoach(context)),
-          const SizedBox(height: 16),
-          _PredictiveAlert(),
-          const SizedBox(height: 16),
-          _NavTile(
-            tile: (
-              icon: LucideIcons.activity,
-              title: 'Dispositivos',
-              sub: 'Sync Center',
-              onTap: () => Navigator.pushNamed(context, '/devices'),
+    return RefreshIndicator(
+      onRefresh: _refrescar,
+      child: SingleChildScrollView(
+        // Siempre desplazable: si el contenido cabe en pantalla, sin esto no
+        // hay gesto de arrastrar y el RefreshIndicator no se puede activar.
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _AICoachCTA(onTalk: () => widget.onOpenAiCoach(context)),
+            const SizedBox(height: 16),
+            _PredictiveAlert(key: ValueKey('alerta-$_recarga')),
+            const SizedBox(height: 16),
+            _NavTile(
+              tile: (
+                icon: LucideIcons.activity,
+                title: 'Dispositivos',
+                sub: 'Sync Center',
+                onTap: () => Navigator.pushNamed(context, '/devices'),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const _RecentWorkoutsSection(),
-        ],
+            const SizedBox(height: 16),
+            _RecentWorkoutsSection(
+              key: ValueKey('entrenos-$_recarga'),
+              // Al refrescar a mano, saltarse la caché: es justo lo que se pide.
+              forzar: _recarga > 0,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -495,7 +531,10 @@ class _DashboardScreen extends StatelessWidget {
 /// compacto (a diferencia del antiguo `_WorkoutCard`, que mostraba solo el
 /// último a tamaño completo).
 class _RecentWorkoutsSection extends StatefulWidget {
-  const _RecentWorkoutsSection();
+  const _RecentWorkoutsSection({super.key, this.forzar = false});
+
+  /// Pedir los entrenos a Health Connect aunque haya caché reciente.
+  final bool forzar;
 
   @override
   State<_RecentWorkoutsSection> createState() => _RecentWorkoutsSectionState();
@@ -512,7 +551,7 @@ class _RecentWorkoutsSectionState extends State<_RecentWorkoutsSection> {
   }
 
   Future<void> _load() async {
-    final all = await HealthService.fetchWorkouts();
+    final all = await HealthService.fetchWorkouts(forceRefresh: widget.forzar);
     final valid = all.where((w) {
       if (w.value is WorkoutHealthValue) {
         return (w.value as WorkoutHealthValue).workoutActivityType !=
@@ -638,7 +677,7 @@ class _RecentWorkoutRow extends StatelessWidget {
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                gradient: DesignTokens.aiGradientSoft,
+                gradient: DesignTokens.aiGradientSoftOf(b),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(LucideIcons.heart, size: 16, color: fg),
@@ -682,6 +721,8 @@ class _RecentWorkoutRow extends StatelessWidget {
 }
 
 class _PredictiveAlert extends StatefulWidget {
+  const _PredictiveAlert({super.key});
+
   @override
   State<_PredictiveAlert> createState() => _PredictiveAlertState();
 }
@@ -693,23 +734,40 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
   @override
   void initState() {
     super.initState();
-    HealthService.fetchSleepAndReadiness().then((r) {
-      if (mounted) {
-        setState(() {
-          _readiness = r;
-          _loading = false;
-        });
-      }
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    ReadinessSummary? r;
+    try {
+      r = await HealthService.fetchSleepAndReadiness();
+    } catch (_) {/* se enseña como "sin datos" */}
+    if (!mounted) return;
+    setState(() {
+      _readiness = r;
+      _loading = false;
     });
+  }
+
+  /// Sin datos, la tarjeta decía "Activa Health Connect" pero no dejaba
+  /// hacerlo desde ella: había que saber que eso estaba en otra pantalla.
+  Future<void> _activarHealthConnect() async {
+    setState(() => _loading = true);
+    try {
+      await HealthService.requestPermissions();
+    } catch (_) {/* sigue sin datos: la tarjeta lo dice */}
+    await _cargar();
   }
 
   @override
   Widget build(BuildContext context) {
+    final b = Theme.of(context).brightness;
     if (_loading) {
       return Container(
         height: 72,
         decoration: BoxDecoration(
-          gradient: DesignTokens.warnSoft,
+          // Neutro: en ámbar, la tarjeta parecía un aviso antes de saber nada.
+          gradient: DesignTokens.aiGradientSoftOf(b),
           borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
         ),
         child: const Center(
@@ -722,35 +780,52 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
       );
     }
 
+    final fg = DesignTokens.foreground(b);
+    final oscuro = b == Brightness.dark;
+
+    // null si Health Connect no se pudo leer (no está, o en la web, donde no
+    // existe). Sin datos no hay nivel que enseñar: ni el verde de "óptimo" ni
+    // un aviso, sino un estado neutro que dice qué falta.
+    final sinConexion = _readiness == null;
+    final sinDatos = sinConexion || _readiness!.sinDatosNocturnos;
     final title = _readiness?.alertTitle ?? 'ESTADO · SIN DATOS HC';
     final body =
         _readiness?.alertBody ??
-        'Activa Health Connect para ver tu alerta de readiness.';
-    final level = _readiness?.level ?? ReadinessLevel.ok;
+        (kIsWeb
+            ? 'Tu alerta de readiness sale de Health Connect, que está en la '
+                  'app de Android.'
+            : 'Conecta Health Connect para ver tu alerta de readiness.');
+    final level = sinDatos ? ReadinessLevel.ok : _readiness!.level;
 
-    final iconColor = level == ReadinessLevel.fatigue
+    final neutro = DesignTokens.mutedForeground(b);
+    final iconColor = sinDatos
+        ? neutro
+        : level == ReadinessLevel.fatigue
         ? const Color(0xFFC2410C)
         : level == ReadinessLevel.warning
         ? const Color(0xFFD97706)
         : const Color(0xFF059669);
-    final titleColor = level == ReadinessLevel.fatigue
-        ? const Color(0xFF9A3412)
+    // Tonos oscuros sobre el fondo claro; en modo oscuro el fondo también lo
+    // es, y hacen falta los claros de la misma familia.
+    final titleColor = sinDatos
+        ? neutro
+        : level == ReadinessLevel.fatigue
+        ? (oscuro ? const Color(0xFFFDBA74) : const Color(0xFF9A3412))
         : level == ReadinessLevel.warning
-        ? const Color(0xFF92400E)
-        : const Color(0xFF065F46);
-    final iconData = level == ReadinessLevel.ok
+        ? (oscuro ? const Color(0xFFFCD34D) : const Color(0xFF92400E))
+        : (oscuro ? const Color(0xFF6EE7B7) : const Color(0xFF065F46));
+    final iconData = sinDatos
+        ? LucideIcons.watch
+        : level == ReadinessLevel.ok
         ? LucideIcons.checkCircle
         : LucideIcons.alertTriangle;
-
-    final b = Theme.of(context).brightness;
-    final fg = DesignTokens.foreground(b);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: level == ReadinessLevel.ok
-            ? DesignTokens.aiGradientSoft
-            : DesignTokens.warnSoft,
+            ? DesignTokens.aiGradientSoftOf(b)
+            : DesignTokens.warnSoftOf(b),
         borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
         boxShadow: DesignTokens.shadowCard(b),
       ),
@@ -792,6 +867,23 @@ class _PredictiveAlertState extends State<_PredictiveAlert> {
                     height: 1.35,
                   ),
                 ),
+                // Sin datos de anoche también puede ser falta de permisos: cada
+                // lectura falla por separado y el resumen llega vacío igual.
+                if (sinDatos && !kIsWeb) ...[
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: _activarHealthConnect,
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(LucideIcons.link, size: 14),
+                    label: Text(
+                      sinConexion ? 'Conectar Health Connect' : 'Revisar permisos',
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1433,7 +1525,7 @@ class _TodayRoutineHero extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  gradient: DesignTokens.aiGradientSoft,
+                  gradient: DesignTokens.aiGradientSoftOf(b),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -1902,7 +1994,7 @@ class _RagBubble extends StatelessWidget {
       margin: const EdgeInsets.only(right: 40),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: DesignTokens.aiGradientSoft,
+        gradient: DesignTokens.aiGradientSoftOf(b),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(8),
           topRight: Radius.circular(24),
