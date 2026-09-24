@@ -168,9 +168,11 @@ to Clinic; the progress ring is driven by `completitud.recomendados` from `/ai-c
 matched **by the exact backend strings** (`_recomendados` in that file). Change a string in
 `ai_context.service.ts` and the checkmark silently stops lighting up.
 
-`PUT /users/:id` takes `UpdateUserDto`, which deliberately **omits the password**: `update()`
-writes the DTO straight to the table, so a password arriving here would be stored unhashed next
-to the bcrypt hashes from registration.
+`PUT /users/:id` takes `UpdateUserDto`, which deliberately **omits the password**, and `update()`
+copies only the four editable fields: a password arriving here would otherwise be stored unhashed
+next to the bcrypt hashes from registration. `register()` builds the row field by field for the
+same reason — spreading the DTO let an `id` in the body overwrite that user's row (account
+takeover without a token). The `password` column is `select: false`; only `login` asks for it.
 
 **Clinic adds data, Salud (Home tab) shows it.** `clinic_import_page.dart` is only entry points
 (register composition, upload a document, manual blood values) — it has no history view. The combined
@@ -243,13 +245,25 @@ a mano o las fotos dan 401. Las migraciones
 en producción van con `migration:run:prod` (contra `dist/`): `ts-node` es
 devDependency y no está en la imagen final.
 
-**Ownership pattern (pre-JWT, aún vigente en los servicios).** Además de la guarda global, los
-servicios siguen recibiendo el `userId` explícito como
-query/body param on every request (e.g. `GET /routine/user/:userId`, `PATCH /routine/:id?userId=...`) and
-services verify ownership by comparing it against the row's `userId` before mutating. When adding a new
-user-scoped endpoint, follow this exact pattern (explicit `userId` param + ownership check in the
-service), matching `nutrition`, `training_sessions`, and `routine`. Routines were global/unscoped until a
-recent fix added `userId` + ownership checks — don't reintroduce an entity that's missing `userId`.
+**Ownership pattern.** The guard only sees a `userId` that travels in the request, so it covers
+`GET /x/user/:userId` but **not routes that reach a row by its own `:id`** (`PUT /nutrition-logs/:id`):
+there the owner is in the row. Those routes take the user with `@CurrentUser()`
+(`modules/auth/current-user.decorator.ts`) — the token's `sub` from the app, the explicit `userId`
+only when the internal key is used — and the service filters by it (`where: { id, userId }`, 404 if
+it isn't theirs). A client-sent `?userId=` is still accepted (the guard checks it) but never trusted
+on its own: when it was, omitting it let any valid token read, edit or delete anyone's nutrition
+logs, sessions, physique records, posture evaluations and subscriptions. When adding a user-scoped
+endpoint: `:userId` in the path for lists, `@CurrentUser()` + owner filter for `:id` routes,
+`ParseUUIDPipe` on the id, and never let an update move a row to another `userId`. Name the path
+param exactly `userId` (`/daily/:uid` escaped the guard until it was renamed). Don't reintroduce an
+entity that's missing `userId`.
+
+**`ValidationPipe({ whitelist: true })`.** Anything a DTO doesn't declare is stripped before the
+service sees it — that's what stops an `id`/`password`/`userId` sneaking into `create()`/`update()`.
+The flip side: **every field of an input DTO needs at least one class-validator decorator**
+(`@IsOptional()` is enough), or it silently disappears. Nested arrays declared with only `@IsArray()`
+(e.g. `ejercicios`, `valores`, `history`) pass through untouched; with `@ValidateNested` + `@Type`
+their items are whitelisted too.
 
 **Health Connect (Flutter):** `lib/src/services/health_service.dart` handles Health Connect,
 `smartwatch_service.dart` handles Mi Fitness-specific sync, `ble_service.dart` is raw Bluetooth. Known
@@ -293,9 +307,10 @@ duplicar una rutina o pasársela a alguien. Tres cosas del lector no son cosmét
   `RoutineService.createFromAiPayload` en el backend y por el mismo motivo: la app cruza ese
   texto contra su lista fija, así que cualquier otra cosa se guarda pero deja el plan semanal
   vacío. De ahí que acepte tildes, abreviaturas, inglés y números, pero normalice.
-- **Los `id` que traiga el JSON se tiran** (y `encode` no los escribe). El `ValidationPipe` de
-  NestJS va sin `whitelist`, así que un `id` colado en un ejercicio llegaría hasta
-  `exerciseRepository.create()` y pisaría la fila de otra rutina.
+- **Los `id` que traiga el JSON se tiran** (y `encode` no los escribe). El backend ya los
+  descarta por su cuenta (`whitelist` + `RoutineService.nuevoEjercicio` copia campo a campo),
+  pero un `id` que llegase a `exerciseRepository.create()` pisaría la fila de otra rutina, así
+  que el lector no se fía de que lo haga.
 - **Dos bloques del mismo día se funden en uno.** Guardar dos filas "Lunes" no da error, pero
   la app solo mira la primera (`days.indexWhere`) y la otra mitad de los ejercicios
   desaparecería sin decir nada.
@@ -364,6 +379,12 @@ Ollama/local model anywhere. When touching `chat_engine.py`, never default Groq 
 `llama-3.3-70b-versatile` or `qwen/qwen3-32b` — both deprecated; `openai/gpt-oss-120b` is the current
 recommended replacement. `analyze_failure()` (`skills.py`) is a separate deterministic heuristic
 (Python `statistics` module on heart-rate curves), not AI-based.
+
+**FastAPI routes that wait on anything are `def`, not `async def`.** Everything they call blocks
+(`requests` to NestJS, the Gemini/Groq SDKs, MediaPipe); inside `async def` that blocks the event
+loop, so one PDF analysis froze every other request — `/health` included (measured 9.5 s). As
+`def`, FastAPI runs them in its threadpool. Consequence: shared state must be thread-safe —
+`pose_analysis` guards its MediaPipe landmarker with a lock.
 
 ## Google Sign-In
 
