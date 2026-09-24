@@ -29,7 +29,12 @@ class _RecoveryPageState extends State<RecoveryPage> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    // `_error` se limpia aquí: si no, tras un fallo el reintento podía ir bien
+    // y la pantalla seguía mostrando el error de la vez anterior.
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       _r = await HealthService.fetchSleepAndReadiness();
     } catch (e) {
@@ -37,6 +42,16 @@ class _RecoveryPageState extends State<RecoveryPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Pide los permisos de forma explícita antes de recargar: las lecturas ya
+  /// no vuelven a abrir la pantalla de Health Connect por su cuenta si se
+  /// pidieron en esta ejecución, y un permiso denegado es la causa más común.
+  Future<void> _reintentar() async {
+    try {
+      await HealthService.requestPermissions();
+    } catch (_) {/* la recarga enseña lo que haya */}
+    await _load();
   }
 
   @override
@@ -65,7 +80,8 @@ class _RecoveryPageState extends State<RecoveryPage> {
                       style: DesignTokens.bodyFont(
                           fontSize: 14, color: DesignTokens.foreground(b))),
                   const SizedBox(height: 16),
-                  FilledButton(onPressed: _load, child: const Text('Reintentar')),
+                  FilledButton(
+                      onPressed: _reintentar, child: const Text('Reintentar')),
                 ],
               ),
             ),

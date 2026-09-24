@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -33,6 +34,14 @@ class _PermissionsGatePageState extends State<PermissionsGatePage> {
   static const _permissionTimeout = Duration(seconds: 15);
 
   Future<void> _checkAndRequestPermissions() async {
+    // En web no hay Bluetooth ni Health Connect: pedirlos solo podía acabar en
+    // la pantalla de error ("Permission.bluetoothScan … not supported on
+    // web"), que es lo primero que veía quien arrancaba el proyecto en Chrome
+    // con iniciar_proyecto.
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _irAInicio());
+      return;
+    }
     try {
       setState(() => _statusMessage = 'Permisos de Bluetooth...');
       await Permission.bluetoothScan.request().timeout(
@@ -50,15 +59,9 @@ class _PermissionsGatePageState extends State<PermissionsGatePage> {
         onTimeout: () => false,
       );
 
-      if (!mounted) return;
-
       // Si todo va bien (o si el usuario deniega pero queremos dejarle entrar igual)
       // Redirigimos a HomePage
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => HomePage(onSessionClosed: widget.onSessionClosed),
-        ),
-      );
+      _irAInicio();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -67,6 +70,15 @@ class _PermissionsGatePageState extends State<PermissionsGatePage> {
         });
       }
     }
+  }
+
+  void _irAInicio() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => HomePage(onSessionClosed: widget.onSessionClosed),
+      ),
+    );
   }
 
   @override
@@ -99,13 +111,7 @@ class _PermissionsGatePageState extends State<PermissionsGatePage> {
                 child: const Text('Reintentar'),
               ),
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => HomePage(onSessionClosed: widget.onSessionClosed),
-                    ),
-                  );
-                },
+                onPressed: _irAInicio,
                 child: Text('Continuar de todos modos', style: TextStyle(color: muted)),
               ),
             ]

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -2155,7 +2156,13 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton.icon(
+                          // Pide los permisos de forma explícita: las lecturas
+                          // de `_fetchData` ya no vuelven a abrir la pantalla de
+                          // Health Connect si se pidieron en esta ejecución.
                           onPressed: () async {
+                            try {
+                              await HealthService.requestPermissions();
+                            } catch (_) {/* se ve abajo: sigue sin datos */}
                             _fetchData();
                           },
                           icon: const Icon(Icons.key, size: 18),
@@ -2166,17 +2173,21 @@ class _XiaomiWorkoutsState extends State<_XiaomiWorkouts> {
                             elevation: 0,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: _runDiagnostic,
-                          icon: const Icon(Icons.troubleshoot, size: 18),
-                          label: const Text('Debug'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E1E1E),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
+                        // El volcado de Health Connect es para quien desarrolla:
+                        // en la APK de release no se enseña.
+                        if (!kReleaseMode) ...[
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _runDiagnostic,
+                            icon: const Icon(Icons.troubleshoot, size: 18),
+                            label: const Text('Debug'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1E1E1E),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],

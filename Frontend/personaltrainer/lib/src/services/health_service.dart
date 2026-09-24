@@ -52,7 +52,47 @@ class HealthService {
   // ─────────────────────────────────────────────────────────────────────────
   // PERMISOS
   // ─────────────────────────────────────────────────────────────────────────
-  static Future<bool> requestPermissions() async {
+  /// La petición de permisos en curso. Inicio lanza a la vez varias lecturas
+  /// (pasos, pulso, sueño, entrenos…) y cada una pedía permisos por su cuenta:
+  /// con algún permiso denegado, eso eran varias pantallas de Health Connect
+  /// seguidas. Así todas esperan a la misma.
+  static Future<bool>? _peticionEnCurso;
+
+  /// Ya se pidieron en esta ejecución de la app (al arrancar, en el registro o
+  /// en la primera lectura). Las lecturas no vuelven a abrir la pantalla de
+  /// permisos: a quien denegó algo se la enseñaban en cada carga de Inicio.
+  static bool _pedidosEnEstaSesion = false;
+
+  /// Lo que esperan las lecturas a los permisos. El mismo tope que la puerta de
+  /// permisos: en MIUI la pantalla nativa puede no volver nunca.
+  static const _timeoutPermisos = Duration(seconds: 15);
+
+  /// Pide los permisos siempre (la puerta de arranque y el paso de Health
+  /// Connect del registro lo hacen a propósito). Las lecturas usan
+  /// [_asegurarPermisos].
+  static Future<bool> requestPermissions() {
+    return _peticionEnCurso ??= _pedirPermisos().whenComplete(() {
+      _peticionEnCurso = null;
+      _pedidosEnEstaSesion = true;
+    });
+  }
+
+  /// Lo que llaman las lecturas antes de consultar Health Connect: pide los
+  /// permisos si nadie lo ha hecho aún en esta ejecución, nunca lanza y nunca
+  /// espera más de [_timeoutPermisos]. Antes cada lectura esperaba a
+  /// `requestPermissions()` fuera de su `try`: un fallo o un cuelgue ahí dejaba
+  /// su tarjeta cargando para siempre (los entrenos de Inicio, el calendario de
+  /// Progreso).
+  static Future<void> _asegurarPermisos() async {
+    if (_pedidosEnEstaSesion) return;
+    try {
+      await requestPermissions().timeout(_timeoutPermisos);
+    } catch (e) {
+      debugPrint('[HC] Permisos no disponibles: $e');
+    }
+  }
+
+  static Future<bool> _pedirPermisos() async {
     _ensureConfigured();
 
     if (Platform.isAndroid) {
@@ -129,7 +169,7 @@ class HealthService {
       }
     }
 
-    await requestPermissions();
+    await _asegurarPermisos();
 
     final now = DateTime.now();
     final start = now.subtract(const Duration(days: 90));
@@ -415,7 +455,7 @@ class HealthService {
     DateTime end,
   ) async {
     _ensureConfigured();
-    await requestPermissions();
+    await _asegurarPermisos();
     try {
       final hrData = await _health.getHealthDataFromTypes(
         startTime: start,
@@ -560,7 +600,7 @@ class HealthService {
   // ─────────────────────────────────────────────────────────────────────────
   static Future<int> fetchTodaySteps() async {
     _ensureConfigured();
-    await requestPermissions();
+    await _asegurarPermisos();
     try {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
@@ -610,7 +650,7 @@ class HealthService {
   // ─────────────────────────────────────────────────────────────────────────
   static Future<int?> fetchLatestHeartRate() async {
     _ensureConfigured();
-    await requestPermissions();
+    await _asegurarPermisos();
     try {
       final now = DateTime.now();
       final start = now.subtract(const Duration(hours: 24));
@@ -648,7 +688,7 @@ class HealthService {
   /// Devuelve `null` si no hay al menos 7 días de datos.
   static Future<({int pct, String label})?> fetchPhysicalLoadScore() async {
     _ensureConfigured();
-    await requestPermissions();
+    await _asegurarPermisos();
     try {
       final now = DateTime.now();
       final start28 = DateTime(
@@ -785,7 +825,7 @@ class HealthService {
   // ─────────────────────────────────────────────────────────────────────────
   static Future<SleepBreakdown> fetchSleepBreakdown() async {
     _ensureConfigured();
-    await requestPermissions();
+    await _asegurarPermisos();
     final now = DateTime.now();
     final yesterday = now.subtract(const Duration(days: 1));
     final sleepStart = DateTime(
@@ -983,7 +1023,7 @@ class HealthService {
       print('[HC] fetchSleepAndReadiness permisos: $hasPerm');
       if (hasPerm != true) {
         print('[HC] Permisos de sueño/HR insuficientes, solicitando...');
-        await requestPermissions();
+        await _asegurarPermisos();
       }
 
       // 1. Sueño: probar SLEEP_SESSION en Android, SLEEP_ASLEEP/IN_BED en iOS

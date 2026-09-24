@@ -130,13 +130,28 @@ class _ProgressRouteState extends State<ProgressRoute> {
     _load();
   }
 
+  /// Tope para Health Connect. Sin él, un fallo o un cuelgue suyo (MIUI puede
+  /// no devolver nunca la pantalla de permisos, y en web ni siquiera existe)
+  /// dejaba la pestaña Progreso entera en "Cargando calendario…" para
+  /// siempre — incluida la parte de nutrición, que no depende de él.
+  static const _timeoutHealthConnect = Duration(seconds: 20);
+
+  Future<List<WorkoutCalendarDay>> _loadTrainingMonth(DateTime month) async {
+    try {
+      return await HealthService.fetchMonthlyWorkoutCalendar(
+        year: month.year,
+        month: month.month,
+      ).timeout(_timeoutHealthConnect);
+    } catch (e) {
+      debugPrint('[progreso] calendario de entrenos sin Health Connect: $e');
+      return const [];
+    }
+  }
+
   Future<void> _load() async {
     final month = _selectedMonth;
     final results = await Future.wait([
-      HealthService.fetchMonthlyWorkoutCalendar(
-        year: month.year,
-        month: month.month,
-      ),
+      _loadTrainingMonth(month),
       _loadNutritionMonth(month),
     ]);
     // El usuario pudo cambiar de mes otra vez mientras este fetch estaba en
